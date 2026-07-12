@@ -1,0 +1,94 @@
+# Deployment
+
+The backend is one container with a SQLite volume; the web client is a second
+container (or `npm run start` anywhere Node runs). Mobile/TV apps are
+installed on devices and pointed at your server URL.
+
+## 1. Docker Compose (recommended)
+
+```bash
+git clone https://github.com/installation-04/streamrd.git
+cd streamrd/infra
+cp ../server/.env.example .env         # edit JWT_SECRET at minimum
+docker compose up -d --build
+```
+
+Services:
+
+| Service | Port | Notes |
+|---|---|---|
+| `backend` | 4000 | Express API; SQLite persisted in the `backend-data` volume |
+| `web` | 3000 | Next.js UI; `NEXT_PUBLIC_API_BASE_URL` is baked at build time |
+| `proxy` | 80/443 | Caddy; automatic HTTPS when `DOMAIN` is a public hostname |
+
+The backend runs `prisma db push` on boot, so the schema is applied
+automatically. Seed demo titles with:
+
+```bash
+docker compose exec backend npx tsx prisma/seed.ts   # or: npm run db:seed in dev
+```
+
+## 2. LAN mode
+
+Skip the proxy (comment it out of `docker-compose.yml`). Clients use:
+
+- Web: `http://<lan-ip>:3000` (build web with `API_BASE_URL=http://<lan-ip>:4000`)
+- Mobile/TV: set Server URL to `http://<lan-ip>:4000` in the app settings
+
+Remember `CORS_ORIGINS` should include the web origin (or stay `*`), and
+plain-HTTP LAN URLs may need cleartext/ATS exceptions in production mobile
+builds (dev builds and Expo Go are fine).
+
+## 3. Reverse proxy + HTTPS
+
+**Caddy** (bundled): set `DOMAIN=media.example.com` in `infra/.env`, point
+the domain's DNS at your host, open ports 80/443, and `docker compose up -d`.
+Caddy provisions Let's Encrypt certificates automatically and routes
+`/api/*` → backend, everything else → web.
+
+Set `API_BASE_URL=https://media.example.com` so the web build calls the API
+through the same origin (no CORS involved), and use that URL in mobile/TV
+settings.
+
+**Nginx**: use `infra/reverse-proxy/nginx.conf` as a starting point together
+with certbot for certificates. Keep `proxy_buffering off` for the API — it
+returns redirect-style stream URLs quickly, but log streaming and large
+exports benefit from unbuffered responses.
+
+## 4. VPN
+
+Run WireGuard or Tailscale on the host and treat it exactly like LAN with the
+tunnel IP (`http://100.x.y.z:4000` for Tailscale). This is the easiest way to
+get remote access without exposing anything publicly; HTTPS is optional
+because the tunnel is already encrypted.
+
+## Environment variables
+
+Backend (`server/.env`):
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `PORT` | API port | `4000` |
+| `DATABASE_URL` | Prisma datasource (`file:` for SQLite) | `file:./data/streamrd.db` |
+| `JWT_SECRET` | Session signing key — **change it** | dev value |
+| `JWT_EXPIRES_IN` | Session lifetime | `7d` |
+| `API_BASE_URL` / `LAN_URL` / `PUBLIC_URL` | Reachability hints for docs/clients | localhost |
+| `CORS_ORIGINS` | Comma-separated allowed origins or `*` | `*` |
+| `ADMIN_EMAIL` | Auto-promote this account to admin | empty |
+
+Web (`web/.env` or build arg): `NEXT_PUBLIC_API_BASE_URL` — must be the URL
+**the browser** uses, not a Docker-internal hostname.
+
+## Backups
+
+- Database: copy the SQLite file from the `backend-data` volume
+  (`docker compose cp backend:/app/data/streamrd.db ./backup/`).
+- Configuration & catalog: Admin → Server → **Export config**, or
+  `GET /api/admin/export/config`; the JSON re-imports via
+  `POST /api/admin/import/config` and versions nicely in git.
+
+## Health checks
+
+`GET /api/health` is unauthenticated and returns `503` when the database is
+unreachable — suitable for Docker healthchecks (already wired in compose),
+uptime monitors and every client's "Test connection" button.

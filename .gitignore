@@ -1,0 +1,26 @@
+# Dependencies & builds
+node_modules/
+dist/
+.next/
+out/
+build/
+
+# Environment & data
+.env
+.env.local
+*.db
+*.db-journal
+server/data/
+
+# Tooling
+.DS_Store
+*.log
+*.tsbuildinfo
+next-env.d.ts
+
+# Mobile/TV native artifacts
+mobile/.expo/
+tv/android-tv/android/
+tv/android-tv/ios/
+*.xcodeproj
+*.xcworkspace
