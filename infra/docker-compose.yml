@@ -1,0 +1,63 @@
+# StreamRD stack: backend API + web client + Caddy reverse proxy.
+#
+#   cp ../server/.env.example .env      # then edit JWT_SECRET etc.
+#   docker compose up -d --build
+#
+# LAN mode:   comment out the proxy service and hit backend on :4000 / web on :3000.
+# HTTPS mode: set DOMAIN in .env, point DNS at this host, keep the proxy.
+
+services:
+  backend:
+    build: ../server
+    restart: unless-stopped
+    environment:
+      PORT: "4000"
+      DATABASE_URL: "file:/app/data/streamrd.db"
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:4000}
+      LAN_URL: ${LAN_URL:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    volumes:
+      - backend-data:/app/data
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: ../web
+      args:
+        # Must be reachable from the *browser*, not from inside Docker.
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-http://localhost:4000}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+      - web
+
+volumes:
+  backend-data:
+  caddy-data:
+  caddy-config:
