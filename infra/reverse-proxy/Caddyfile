@@ -1,0 +1,21 @@
+# Caddy reverse proxy for StreamRD.
+# Set DOMAIN=media.example.com for automatic HTTPS via Let's Encrypt;
+# DOMAIN=localhost serves a self-signed cert for local testing.
+
+{$DOMAIN:localhost} {
+	# API goes to the backend…
+	handle /api/* {
+		reverse_proxy backend:4000
+	}
+	# …everything else to the Next.js web client.
+	handle {
+		reverse_proxy web:3000
+	}
+
+	encode gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
