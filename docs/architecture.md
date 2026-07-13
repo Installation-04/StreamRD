@@ -17,9 +17,9 @@
                                 └───────────────────────────────────────────┘
 
    Reachability options (same API for every client):
-     LAN            http://192.168.x.x:4000
+     LAN            http://192.168.x.x:47821
      Reverse proxy  https://media.example.com   (Caddy/Nginx → backend + web)
-     VPN            http://10.x.x.x:4000        (WireGuard/Tailscale tunnel)
+     VPN            http://10.x.x.x:47821        (WireGuard/Tailscale tunnel)
 ```
 
 Every client is a thin REST consumer: the browser, phones and TVs all speak
@@ -102,7 +102,7 @@ minimal (a read-only health view on mobile, none on TV).
 
 The backend binds one port; how clients reach it is deployment choice:
 
-- **LAN** — expose port 4000, clients use `http://<lan-ip>:4000`.
+- **LAN** — expose port 47821, clients use `http://<lan-ip>:47821`.
 - **Reverse proxy** — Caddy or Nginx terminates TLS on a domain and routes
   `/api/*` to the backend and everything else to the web app
   (`/infra/reverse-proxy/`).

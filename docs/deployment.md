@@ -17,7 +17,7 @@ Services:
 
 | Service | Port | Notes |
 |---|---|---|
-| `backend` | 4000 | Express API; SQLite persisted in the `backend-data` volume |
+| `backend` | 47821 | Express API; SQLite persisted in the `backend-data` volume |
 | `web` | 3000 | Next.js UI; `NEXT_PUBLIC_API_BASE_URL` is baked at build time |
 | `proxy` | 80/443 | Caddy; automatic HTTPS when `DOMAIN` is a public hostname |
 
@@ -32,8 +32,8 @@ docker compose exec backend npx tsx prisma/seed.ts   # or: npm run db:seed in de
 
 Skip the proxy (comment it out of `docker-compose.yml`). Clients use:
 
-- Web: `http://<lan-ip>:3000` (build web with `API_BASE_URL=http://<lan-ip>:4000`)
-- Mobile/TV: set Server URL to `http://<lan-ip>:4000` in the app settings
+- Web: `http://<lan-ip>:3000` (build web with `API_BASE_URL=http://<lan-ip>:47821`)
+- Mobile/TV: set Server URL to `http://<lan-ip>:47821` in the app settings
 
 Remember `CORS_ORIGINS` should include the web origin (or stay `*`), and
 plain-HTTP LAN URLs may need cleartext/ATS exceptions in production mobile
@@ -58,7 +58,7 @@ exports benefit from unbuffered responses.
 ## 4. VPN
 
 Run WireGuard or Tailscale on the host and treat it exactly like LAN with the
-tunnel IP (`http://100.x.y.z:4000` for Tailscale). This is the easiest way to
+tunnel IP (`http://100.x.y.z:47821` for Tailscale). This is the easiest way to
 get remote access without exposing anything publicly; HTTPS is optional
 because the tunnel is already encrypted.
 
@@ -68,7 +68,7 @@ Backend (`server/.env`):
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `PORT` | API port | `4000` |
+| `PORT` | API port | `47821` |
 | `DATABASE_URL` | Prisma datasource (`file:` for SQLite) | `file:./data/streamrd.db` |
 | `JWT_SECRET` | Session signing key — **change it** | dev value |
 | `JWT_EXPIRES_IN` | Session lifetime | `7d` |

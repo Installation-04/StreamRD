@@ -6,7 +6,7 @@ final class ApiClient {
     static let shared = ApiClient()
 
     var baseURL: String {
-        get { UserDefaults.standard.string(forKey: "sr_server_url") ?? "http://192.168.1.50:4000" }
+        get { UserDefaults.standard.string(forKey: "sr_server_url") ?? "http://192.168.1.50:47821" }
         set { UserDefaults.standard.set(newValue, forKey: "sr_server_url") }
     }
 

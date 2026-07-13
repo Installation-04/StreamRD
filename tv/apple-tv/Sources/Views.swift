@@ -17,7 +17,7 @@ struct LoginView: View {
                 .font(.system(size: 56, weight: .black))
                 .foregroundStyle(.red)
 
-            TextField("Server URL (http://192.168.1.50:4000)", text: $serverURL)
+            TextField("Server URL (http://192.168.1.50:47821)", text: $serverURL)
                 .textInputAutocapitalization(.never)
                 .frame(maxWidth: 700)
             Button("Save & test connection") {

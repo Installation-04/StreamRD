@@ -1,6 +1,6 @@
 # REST API schema
 
-Base URL: your server root (e.g. `http://192.168.1.50:4000` or `https://media.example.com`).
+Base URL: your server root (e.g. `http://192.168.1.50:47821` or `https://media.example.com`).
 All bodies are JSON. Authenticate with `Authorization: Bearer <jwt>` (the web
 client may also send the token via the `sr_token` cookie).
 

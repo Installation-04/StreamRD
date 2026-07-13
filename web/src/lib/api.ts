@@ -6,7 +6,7 @@
  * proxy, or a VPN tunnel.
  */
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:47821";
 
 const TOKEN_COOKIE = "sr_token";
 const ROLE_COOKIE = "sr_role";
