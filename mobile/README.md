@@ -22,8 +22,8 @@ Requirements: Node 18+, and Xcode (iOS) or Android Studio (Android), or the
 Expo Go app on a physical device on the same network.
 
 On first launch, open **Server settings** on the login screen and point the
-app at your backend (e.g. `http://192.168.1.50:4000`). The Android emulator
-reaches your host machine at `http://10.0.2.2:4000`.
+app at your backend (e.g. `http://192.168.1.50:47821`). The Android emulator
+reaches your host machine at `http://10.0.2.2:47821`.
 
 ## Build installable binaries (APK / IPA)
 

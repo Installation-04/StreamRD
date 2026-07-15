@@ -69,7 +69,7 @@ Admin → Catalog.
 Run pieces directly during development:
 
 ```bash
-# API on :4000
+# API on :47821
 cd server && npm install && npx prisma generate && npx prisma db push && npm run dev
 
 # Web on :3000
@@ -117,7 +117,7 @@ logs, and config export/import. Full walkthrough:
 
 [docs/deployment.md](docs/deployment.md) covers the three reachability modes:
 
-- **LAN** — expose ports, point clients at `http://<lan-ip>:4000`
+- **LAN** — expose ports, point clients at `http://<lan-ip>:47821`
 - **Reverse proxy + HTTPS** — bundled Caddy (automatic Let's Encrypt) or the
   Nginx example in `infra/reverse-proxy/`
 - **VPN** — WireGuard/Tailscale; treat tunnel IPs like LAN

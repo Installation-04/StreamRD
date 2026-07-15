@@ -17,6 +17,6 @@ COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 # SQLite database lives on a volume mounted at /app/data
 RUN mkdir -p /app/data
-EXPOSE 4000
+EXPOSE 47821
 # Apply the schema on boot (idempotent), then start.
 CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]

@@ -163,7 +163,7 @@ export default function App() {
           style={s.input}
           value={server}
           onChangeText={setServer}
-          placeholder="http://192.168.1.50:4000"
+          placeholder="http://192.168.1.50:47821"
           placeholderTextColor={colors.dim}
           autoCapitalize="none"
         />
