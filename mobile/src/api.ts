@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const SERVER_KEY = "sr_server_url";
 const TOKEN_KEY = "sr_token";
 
-export const DEFAULT_SERVER = "http://192.168.1.50:4000";
+export const DEFAULT_SERVER = "http://192.168.1.50:47821";
 
 export async function getServerUrl(): Promise<string> {
   return (await AsyncStorage.getItem(SERVER_KEY)) ?? DEFAULT_SERVER;

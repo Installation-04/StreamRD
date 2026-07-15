@@ -96,7 +96,7 @@ export function SettingsScreen({
       <TextInput
         style={styles.input}
         autoCapitalize="none"
-        placeholder="http://192.168.1.50:4000"
+        placeholder="http://192.168.1.50:47821"
         placeholderTextColor={colors.dim}
         value={server}
         onChangeText={setServer}

@@ -5,7 +5,7 @@ COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
 # Baked into the client bundle at build time; override with --build-arg.
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:47821
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN npm run build
 

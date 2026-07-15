@@ -1,10 +1,10 @@
 /** Static process configuration read from environment variables. */
 export const config = {
-  port: parseInt(process.env.PORT ?? "4000", 10),
+  port: parseInt(process.env.PORT ?? "47821", 10),
   jwtSecret: process.env.JWT_SECRET ?? "streamrd-dev-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   /** Base URL the API is reachable at (LAN, reverse proxy or VPN address). */
-  apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:4000",
+  apiBaseUrl: process.env.API_BASE_URL ?? "http://localhost:47821",
   lanUrl: process.env.LAN_URL ?? "",
   publicUrl: process.env.PUBLIC_URL ?? "",
   /** Comma-separated list of allowed CORS origins; "*" allows any. */

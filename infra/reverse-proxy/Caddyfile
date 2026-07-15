@@ -5,7 +5,7 @@
 {$DOMAIN:localhost} {
 	# API goes to the backend…
 	handle /api/* {
-		reverse_proxy backend:4000
+		reverse_proxy backend:47821
 	}
 	# …everything else to the Next.js web client.
 	handle {
