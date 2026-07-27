@@ -22,7 +22,7 @@ services:
     volumes:
       - backend-data:/app/data
     ports:
-      - "61337:61337"
+      - "${API_PORT:-61337}:61337"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:61337/api/health"]
       interval: 30s
@@ -37,7 +37,7 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-http://localhost:61337}
     restart: unless-stopped
     ports:
-      - "3100:3100"
+      - "${WEB_PORT:-3100}:3100"
     depends_on:
       - backend
 

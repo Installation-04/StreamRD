@@ -12,6 +12,7 @@ build/
 *.db-journal
 server/data/
 phosphor/server/data/
+.install-manifest
 
 # Tooling
 .DS_Store
