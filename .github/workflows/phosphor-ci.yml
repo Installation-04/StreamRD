@@ -1,0 +1,58 @@
+name: Phosphor CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml"]
+  pull_request:
+    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml"]
+
+jobs:
+  server:
+    name: Phosphor server — lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phosphor/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: phosphor/server/package-lock.json
+      - run: npm ci || npm install
+      - run: npx prisma generate
+      - name: Typecheck
+        run: npm run lint
+      - name: Tests
+        run: npm test
+
+  web:
+    name: Phosphor web — lint & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phosphor/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: phosphor/web/package-lock.json
+      - run: npm ci || npm install
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Phosphor Docker images build
+    runs-on: ubuntu-latest
+    needs: [server, web]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -t phosphor-server ./phosphor/server
+      - name: Build web image
+        run: docker build -t phosphor-web ./phosphor/web

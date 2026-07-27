@@ -1,0 +1,88 @@
+// Phosphor data model.
+// SQLite by default for a zero-dependency self-hosted setup; switch the
+// provider to "postgresql" and update DATABASE_URL for larger deployments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  hashedPassword String
+  displayName    String
+  role           String         @default("user") // "user" | "admin"
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  debridConfig   DebridConfig?
+  downloadJobs   DownloadJob[]
+}
+
+model DebridConfig {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryProvider  String   @default("realdebrid") // "realdebrid" | "alldebrid" | "premiumize" | "torbox"
+  fallbackOrder    String   @default("[]") // JSON array of provider ids; empty = use global order
+  realDebridToken  String?
+  allDebridApiKey  String?
+  premiumizeApiKey String?
+  torboxApiKey     String?
+  updatedAt        DateTime @updatedAt
+}
+
+// A Torznab-compatible search endpoint, i.e. a Jackett indexer feed or a
+// Prowlarr indexer's Torznab URL. Server-wide, managed by admins.
+model IndexerConfig {
+  id        String   @id @default(cuid())
+  name      String
+  baseUrl   String // full Torznab endpoint, e.g. http://jackett:9117/api/v2.0/indexers/all/results/torznab/api
+  apiKey    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One search-result-to-stream pipeline: added by a user, tracked through
+// the debrid provider until a playable link is resolved.
+model DownloadJob {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  sourceUrl      String // magnet URI or hoster/direct link from the search result
+  sizeBytes      Int       @default(0)
+  seeders        Int       @default(0)
+  indexerName    String?
+  provider       String // provider id this job is running against
+  providerRef    String? // provider-side torrent/transfer id, for status polling
+  status         String    @default("queued") // "queued" | "downloading" | "finished" | "error"
+  progress       Int       @default(0)
+  streamUrl      String?
+  filename       String?
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model LogEvent {
+  id        String   @id @default(cuid())
+  level     String   @default("info") // "info" | "warn" | "error"
+  type      String // "signup" | "login" | "search" | "download" | "provider_error" | ...
+  message   String
+  userId    String?
+  provider  String?
+  meta      String? // JSON blob
+  createdAt DateTime @default(now())
+}
+
+// Key/value store for mutable server + provider settings managed via the admin API.
+model Setting {
+  key   String @id
+  value String // JSON-encoded
+}
