@@ -1,0 +1,76 @@
+# Phosphor stack: backend API + web client + Caddy reverse proxy.
+# Optionally uncomment the `jackett` service to run an indexer aggregator
+# alongside Phosphor (add its Torznab "all" feed under Admin → Indexers
+# once it's running: http://jackett:9117/api/v2.0/indexers/all/results/torznab/api).
+#
+#   cp ../server/.env.example .env      # then edit JWT_SECRET etc.
+#   docker compose up -d --build
+
+services:
+  backend:
+    build: ../server
+    restart: unless-stopped
+    environment:
+      PORT: "61337"
+      DATABASE_URL: "file:/app/data/phosphor.db"
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:61337}
+      LAN_URL: ${LAN_URL:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    volumes:
+      - backend-data:/app/data
+    ports:
+      - "61337:61337"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:61337/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: ../web
+      args:
+        # Must be reachable from the *browser*, not from inside Docker.
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-http://localhost:61337}
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    depends_on:
+      - backend
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+      - web
+
+  # jackett:
+  #   image: linuxserver/jackett:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     PUID: "1000"
+  #     PGID: "1000"
+  #     TZ: "Etc/UTC"
+  #   volumes:
+  #     - jackett-config:/config
+  #   ports:
+  #     - "9117:9117"
+
+volumes:
+  backend-data:
+  caddy-data:
+  caddy-config:
+  # jackett-config:
