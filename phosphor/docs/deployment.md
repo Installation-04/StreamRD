@@ -4,7 +4,28 @@ The backend is one container with a SQLite volume; the web client is a
 second container (or `npm run start` anywhere Node runs). TV/desktop clients
 are installed on devices and pointed at your server/web URL.
 
-## 1. Docker Compose (recommended)
+## 0. One-line installer (Debian/Ubuntu)
+
+```bash
+git clone https://github.com/installation-04/streamrd.git
+cd streamrd/phosphor/infra
+sudo ./install.sh
+```
+
+Installs Docker if it isn't already present, picks a free host port for the
+API and web app (starting from 61337/3100, walking upward if either is
+already bound by something else on the box), generates a random
+`JWT_SECRET`, writes `.env`, and starts the backend + web containers. Prints
+the URLs to open when it's done. Override the starting ports with
+`--api-port`/`--web-port` if you want specific ones tried first.
+
+To remove it: `sudo ./uninstall.sh` (add `--purge-data` to also delete the
+database, or `--purge-images` to also remove the built images).
+
+The installer skips the Caddy reverse-proxy/HTTPS service — see step 3
+below to add that manually once you've picked a domain.
+
+## 1. Docker Compose (manual)
 
 ```bash
 git clone https://github.com/installation-04/streamrd.git

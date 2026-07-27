@@ -49,6 +49,16 @@ providers' terms of service and your local law.
 
 Prerequisites: Docker (for the stack) or Node.js ≥ 20 (to run pieces directly).
 
+On Debian/Ubuntu, `infra/install.sh` does the rest of this section for you —
+installs Docker if needed, picks free ports, and starts the stack:
+
+```bash
+git clone https://github.com/installation-04/streamrd.git
+cd streamrd/infra && sudo ./install.sh   # sudo ./uninstall.sh to remove it
+```
+
+Or set it up by hand:
+
 ```bash
 git clone https://github.com/installation-04/streamrd.git
 cd streamrd

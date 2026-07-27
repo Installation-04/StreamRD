@@ -54,6 +54,16 @@ Use it within the providers' terms of service and your local law.
 
 ## Quick start
 
+On Debian/Ubuntu, `infra/install.sh` does the rest of this section for you —
+installs Docker if needed, picks free ports, and starts the stack:
+
+```bash
+git clone https://github.com/installation-04/streamrd.git
+cd streamrd/phosphor/infra && sudo ./install.sh   # sudo ./uninstall.sh to remove it
+```
+
+Or set it up by hand:
+
 ```bash
 git clone https://github.com/installation-04/streamrd.git
 cd streamrd/phosphor/infra
