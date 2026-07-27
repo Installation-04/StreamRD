@@ -139,6 +139,14 @@ for behavior changes (`npm test` in `server/` must pass); run `npm run lint`
 in the workspace you touched. For a new debrid provider, follow
 [docs/providers.md](docs/providers.md#adding-another-provider).
 
+## Related projects
+
+This monorepo also hosts **[Phosphor](phosphor/README.md)** — a separate,
+retro terminal-styled debrid app: instead of an admin-curated catalog, you
+search your own Torznab indexers (Jackett/Prowlarr) and one-click add
+results to Real-Debrid, AllDebrid, Premiumize, or Torbox. Own server, own
+clients, own port (61337) — see `phosphor/README.md` to get started.
+
 ## License
 
 [MIT](LICENSE).
