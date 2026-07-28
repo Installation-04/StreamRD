@@ -7,7 +7,13 @@
 export class TtlCache<T> {
   private store = new Map<string, { value: T; expiresAt: number }>();
 
-  constructor(private ttlMs: number) {}
+  /**
+   * @param maxEntries Once the cache holds this many keys, adding a new one
+   * evicts the least-recently-set entry (Map preserves insertion order, and
+   * re-setting an existing key bumps it to the back). Bounds memory growth
+   * from a flood of distinct queries/indexers.
+   */
+  constructor(private ttlMs: number, private maxEntries = 1000) {}
 
   get(key: string): T | undefined {
     const entry = this.store.get(key);
@@ -20,6 +26,12 @@ export class TtlCache<T> {
   }
 
   set(key: string, value: T): void {
+    if (this.store.has(key)) {
+      this.store.delete(key); // re-inserted below, moving it to the back
+    } else if (this.store.size >= this.maxEntries) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey !== undefined) this.store.delete(oldestKey);
+    }
     this.store.set(key, { value, expiresAt: Date.now() + this.ttlMs });
   }
 

@@ -1,5 +1,6 @@
 import request from "supertest";
 import { beforeAll, describe, expect, it } from "vitest";
+import { db } from "../src/db";
 import { app, auth, resetDb, signup } from "./helpers";
 
 describe("auth & account flows", () => {
@@ -150,5 +151,47 @@ describe("auth & account flows", () => {
       .set(auth(user.token))
       .send({ name: "One too many" });
     expect(sixth.status).toBe(409);
+  });
+
+  it("supports adding, listing, and removing favorites, scoped to the owning account", async () => {
+    const user = await signup("favs");
+    const other = await signup("favs-other");
+    const title = await db.title.create({ data: { name: "Fav Movie" } });
+
+    const empty = await request(app).get("/api/account/favorites").set(auth(user.token));
+    expect(empty.status).toBe(200);
+    expect(empty.body.titles).toEqual([]);
+
+    const add = await request(app)
+      .post(`/api/account/favorites/${title.id}`)
+      .set(auth(user.token));
+    expect(add.status).toBe(201);
+
+    // Adding twice is idempotent, not an error.
+    const addAgain = await request(app)
+      .post(`/api/account/favorites/${title.id}`)
+      .set(auth(user.token));
+    expect(addAgain.status).toBe(201);
+
+    const list = await request(app).get("/api/account/favorites").set(auth(user.token));
+    expect(list.status).toBe(200);
+    expect(list.body.titles).toHaveLength(1);
+    expect(list.body.titles[0].id).toBe(title.id);
+
+    // Another account's list is unaffected.
+    const otherList = await request(app).get("/api/account/favorites").set(auth(other.token));
+    expect(otherList.body.titles).toEqual([]);
+
+    const missing = await request(app)
+      .post("/api/account/favorites/does-not-exist")
+      .set(auth(user.token));
+    expect(missing.status).toBe(404);
+
+    const remove = await request(app)
+      .delete(`/api/account/favorites/${title.id}`)
+      .set(auth(user.token));
+    expect(remove.status).toBe(200);
+    const afterRemove = await request(app).get("/api/account/favorites").set(auth(user.token));
+    expect(afterRemove.body.titles).toEqual([]);
   });
 });

@@ -5,9 +5,18 @@ import { db } from "../db";
 import { signSession } from "../auth/jwt";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { logEvent } from "../logger";
+import { rateLimit } from "../util/rateLimit";
 import { parseBody, publicUser } from "./helpers";
 
 export const authRouter = Router();
+
+// Generous enough for a household signing up several accounts, tight enough
+// to blunt a scripted brute-force loop against a single self-hosted server.
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: "Too many attempts, please try again later",
+});
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -15,7 +24,7 @@ const signupSchema = z.object({
   displayName: z.string().min(1).max(80),
 });
 
-authRouter.post("/signup", async (req, res) => {
+authRouter.post("/signup", authRateLimit, async (req, res) => {
   const body = parseBody(signupSchema, req.body, res);
   if (!body) return;
   const email = body.email.toLowerCase();
@@ -46,7 +55,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", authRateLimit, async (req, res) => {
   const body = parseBody(loginSchema, req.body, res);
   if (!body) return;
   const user = await db.user.findUnique({ where: { email: body.email.toLowerCase() } });

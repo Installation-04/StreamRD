@@ -4,7 +4,7 @@ import { requireAuth } from "../auth/middleware";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { db } from "../db";
 import { PROVIDER_IDS } from "../providers/types";
-import { parseBody, publicUser } from "./helpers";
+import { parseBody, publicTitle, publicUser } from "./helpers";
 
 export const accountRouter = Router();
 accountRouter.use(requireAuth);
@@ -164,4 +164,63 @@ accountRouter.put("/debrid", async (req, res) => {
     update: data,
   });
   res.json({ ok: true });
+});
+
+/** GET /api/account/favorites — "My List", most recently added first. */
+accountRouter.get("/favorites", async (req, res) => {
+  const favorites = await db.favorite.findMany({
+    where: { userId: req.session!.sub },
+    include: { title: true },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ titles: favorites.map((f) => publicTitle(f.title)) });
+});
+
+/** POST /api/account/favorites/:titleId — idempotent add to "My List". */
+accountRouter.post("/favorites/:titleId", async (req, res) => {
+  const title = await db.title.findUnique({ where: { id: req.params.titleId } });
+  if (!title) {
+    res.status(404).json({ error: "Title not found" });
+    return;
+  }
+  await db.favorite.upsert({
+    where: { userId_titleId: { userId: req.session!.sub, titleId: title.id } },
+    create: { userId: req.session!.sub, titleId: title.id },
+    update: {},
+  });
+  res.status(201).json({ ok: true });
+});
+
+accountRouter.delete("/favorites/:titleId", async (req, res) => {
+  await db.favorite.deleteMany({
+    where: { userId: req.session!.sub, titleId: req.params.titleId },
+  });
+  res.json({ ok: true });
+});
+
+const CONTINUE_WATCHING_LIMIT = 20;
+
+/**
+ * GET /api/account/continue-watching — titles this user has successfully
+ * played before, most recent first, deduped so each title appears once.
+ */
+accountRouter.get("/continue-watching", async (req, res) => {
+  const logs = await db.playbackLog.findMany({
+    where: { userId: req.session!.sub, success: true },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { titleId: true },
+  });
+  const orderedIds: string[] = [];
+  const seen = new Set<string>();
+  for (const log of logs) {
+    if (seen.has(log.titleId)) continue;
+    seen.add(log.titleId);
+    orderedIds.push(log.titleId);
+    if (orderedIds.length >= CONTINUE_WATCHING_LIMIT) break;
+  }
+  const titles = await db.title.findMany({ where: { id: { in: orderedIds } } });
+  const byId = new Map(titles.map((title) => [title.id, title]));
+  const ordered = orderedIds.map((id) => byId.get(id)).filter((t): t is (typeof titles)[number] => !!t);
+  res.json({ titles: ordered.map((title) => publicTitle(title)) });
 });

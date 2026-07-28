@@ -120,6 +120,26 @@ describe("catalog & playback integration", () => {
     expect(res.body.stream.url).toBe("https://ad.example/stream.mp4");
   });
 
+  it("continue-watching lists successfully played titles once each, most recent first", async () => {
+    const res = await request(app)
+      .get("/api/account/continue-watching")
+      .set(auth(user.token));
+    expect(res.status).toBe(200);
+    // Two successful plays happened above (primary, then fallback) — deduped to one entry.
+    expect(res.body.titles).toHaveLength(1);
+    expect(res.body.titles[0].id).toBe(titleId);
+    // A user with no playback history gets an empty list, not an error.
+    const other = await request(app).post("/api/auth/signup").send({
+      email: "no-history@test.local",
+      password: "password123",
+      displayName: "No History",
+    });
+    const empty = await request(app)
+      .get("/api/account/continue-watching")
+      .set(auth(other.body.token));
+    expect(empty.body.titles).toEqual([]);
+  });
+
   it("fails with 502 and logs when every provider fails", async () => {
     vi.stubGlobal(
       "fetch",

@@ -24,6 +24,7 @@ model User {
   debridConfig   DebridConfig?
   profiles       Profile[]
   playbackLogs   PlaybackLog[]
+  favorites      Favorite[]
 }
 
 model DebridConfig {
@@ -64,6 +65,20 @@ model Title {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   playbackLogs PlaybackLog[]
+  favoritedBy  Favorite[]
+}
+
+// "My List" — a user's saved titles, Netflix-style.
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleId   String
+  title     Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, titleId])
+  @@index([userId])
 }
 
 model PlaybackLog {

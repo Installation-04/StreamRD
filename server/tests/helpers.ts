@@ -7,6 +7,7 @@ export const app: Express = createApp();
 
 /** Wipes every table so each test file starts from a clean slate. */
 export async function resetDb(): Promise<void> {
+  await db.favorite.deleteMany();
   await db.playbackLog.deleteMany();
   await db.logEvent.deleteMany();
   await db.profile.deleteMany();

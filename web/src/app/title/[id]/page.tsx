@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { get } from "@/lib/api";
+import { del, get, post } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { Title } from "@/lib/types";
 
@@ -11,12 +11,27 @@ export default function TitleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [title, setTitle] = useState<Title | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     get<{ title: Title }>(`/api/catalog/title/${id}`)
       .then((res) => setTitle(res.title))
       .catch((err: Error) => setError(err.message));
+    get<{ titles: Title[] }>("/api/account/favorites")
+      .then((res) => setIsFavorite(res.titles.some((fav) => fav.id === id)))
+      .catch(() => {});
   }, [id]);
+
+  async function toggleFavorite() {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    try {
+      if (next) await post(`/api/account/favorites/${id}`);
+      else await del(`/api/account/favorites/${id}`);
+    } catch {
+      setIsFavorite(!next);
+    }
+  }
 
   if (error) return <main className="container"><p className="error-text">{error}</p></main>;
   if (!title) return <main className="container"><p className="dim" style={{ marginTop: 40 }}>Loading…</p></main>;
@@ -46,9 +61,16 @@ export default function TitleDetailPage() {
             </span>
           </p>
           <p className="dim" style={{ marginBottom: 22, lineHeight: 1.6 }}>{title.description}</p>
-          <Link href={`/watch/${title.id}`} className="btn" style={{ display: "inline-block" }}>
+          <Link href={`/watch/${title.id}`} className="btn" style={{ display: "inline-block", marginRight: 10 }}>
             ▶ {t("title.play")}
           </Link>
+          <button
+            type="button"
+            className={`favorite-toggle-large${isFavorite ? " is-favorite" : ""}`}
+            onClick={toggleFavorite}
+          >
+            {isFavorite ? "♥" : "♡"} {isFavorite ? t("title.removeFromList") : t("title.addToList")}
+          </button>
         </div>
       </div>
     </main>

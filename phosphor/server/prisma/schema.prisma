@@ -22,6 +22,7 @@ model User {
   updatedAt      DateTime       @updatedAt
   debridConfig   DebridConfig?
   downloadJobs   DownloadJob[]
+  savedSearches  SavedSearch[]
 }
 
 model DebridConfig {
@@ -74,6 +75,22 @@ model DownloadJob {
   @@index([userId])
   @@index([userId, status])
   @@index([createdAt])
+}
+
+// A user's saved search — the query text plus the filters/sort they had
+// set, so it can be one-click re-run later.
+model SavedSearch {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  query      String
+  minSeeders Int?
+  maxSizeGb  Float?
+  sort       String   @default("seeders") // "seeders" | "size" | "date"
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }
 
 model LogEvent {
