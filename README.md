@@ -23,11 +23,12 @@ providers' terms of service and your local law.
   one pluggable `DebridProvider` interface, with per-user primary provider
   and automatic fallback ordering (per-user or global).
 - **Accounts & RBAC** — signup/login (JWT), `user`/`admin` roles, per-user
-  debrid keys (stored server-side, returned only as redacted hints).
+  debrid keys (stored server-side, returned only as redacted hints),
+  Netflix-style viewing profiles (up to 5 per account).
 - **Admin dashboard** — users, catalog CRUD with debrid source mappings,
   global provider order/toggles, timeouts & retry caps, access toggles,
   connectivity tests, health stats, structured logs, config export/import.
-- **Every screen** — Netflix-style web UI (dark theme, light toggle, i18n-ready),
+- **Every screen** — Netflix-style web UI (dark/light/system theme, i18n-ready),
   Expo mobile app, remote-first Android TV / Fire TV app, SwiftUI Apple TV app.
 - **Deploy anywhere** — Dockerized backend + web, Caddy/Nginx reverse-proxy
   examples with HTTPS, works identically over LAN or VPN; every client has a
@@ -48,6 +49,16 @@ providers' terms of service and your local law.
 ## Quick start
 
 Prerequisites: Docker (for the stack) or Node.js ≥ 20 (to run pieces directly).
+
+On Debian/Ubuntu, `infra/install.sh` does the rest of this section for you —
+installs Docker if needed, picks free ports, and starts the stack:
+
+```bash
+git clone https://github.com/installation-04/streamrd.git
+cd streamrd/infra && sudo ./install.sh   # sudo ./uninstall.sh to remove it
+```
+
+Or set it up by hand:
 
 ```bash
 git clone https://github.com/installation-04/streamrd.git
