@@ -149,6 +149,18 @@ downloadsRouter.post("/:id/refresh", async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/downloads/clear-completed — bulk-remove every finished/errored
+ * job in one query, instead of the client firing N individual deletes.
+ * Registered before the `/:id` route below so it isn't swallowed as an id.
+ */
+downloadsRouter.delete("/clear-completed", async (req, res) => {
+  const { count } = await db.downloadJob.deleteMany({
+    where: { userId: req.session!.sub, status: { in: ["finished", "error"] } },
+  });
+  res.json({ removed: count });
+});
+
 downloadsRouter.delete("/:id", async (req, res) => {
   const job = await db.downloadJob.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
   if (!job) {

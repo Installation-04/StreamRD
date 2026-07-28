@@ -36,11 +36,12 @@ Use it within the providers' terms of service and your local law.
 - **Admin dashboard** — users, indexers (add/test/enable), global provider
   order & toggles, health stats, structured logs, config export/import.
 - **Every screen** — web, Android TV / Fire TV, Apple TV, and a thin Tauri
-  desktop wrapper — all retro terminal / CRT themed (green phosphor glow,
-  scanlines, monospace, blinking cursor; an original design, not copied
-  from anywhere).
+  desktop wrapper — all retro terminal / CRT themed (scanlines, monospace,
+  blinking cursor; an original design, not copied from anywhere), with
+  three classic monitor color variants — green, amber, and white phosphor.
 - **Deploy anywhere** — Dockerized backend + web, Caddy/Nginx reverse-proxy
-  examples with HTTPS, works over LAN, reverse proxy, or VPN.
+  examples with HTTPS, works over LAN, reverse proxy, or VPN. Debian/Ubuntu
+  install/uninstall scripts pick free ports automatically.
 
 ## Tech stack
 

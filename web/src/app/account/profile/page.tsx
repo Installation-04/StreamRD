@@ -47,6 +47,8 @@ export default function ProfilePage() {
         <Link href="/account/settings" style={{ textDecoration: "underline" }}>{t("account.settings")}</Link>
         {" · "}
         <Link href="/account/debrid" style={{ textDecoration: "underline" }}>{t("account.debrid")}</Link>
+        {" · "}
+        <Link href="/account/profiles" style={{ textDecoration: "underline" }}>Profiles</Link>
       </p>
       <form className="card" onSubmit={save}>
         <div className="field">

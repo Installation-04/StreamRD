@@ -1,4 +1,6 @@
-/* Phosphor — retro terminal / CRT theme. Green phosphor by default. */
+/* Phosphor — retro terminal / CRT theme. Green phosphor by default; classic
+   amber and white (P4) monochrome-monitor variants are selectable from the
+   nav and swap only these custom properties. */
 :root {
   --bg: #050806;
   --bg-raised: #0a120c;
@@ -11,6 +13,28 @@
   --warn: #ffcc33;
   --ok: #33ff66;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+:root[data-phosphor="amber"] {
+  --bg: #080502;
+  --bg-raised: #120c05;
+  --bg-hover: #201607;
+  --fg: #ffb000;
+  --fg-dim: #b37600;
+  --fg-bright: #ffd699;
+  --border: #b37600;
+  --ok: #ffb000;
+}
+
+:root[data-phosphor="white"] {
+  --bg: #070707;
+  --bg-raised: #101010;
+  --bg-hover: #1c1c1c;
+  --fg: #e8e8e8;
+  --fg-dim: #8f8f8f;
+  --fg-bright: #ffffff;
+  --border: #8f8f8f;
+  --ok: #e8e8e8;
 }
 
 * {

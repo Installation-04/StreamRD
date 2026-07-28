@@ -43,6 +43,10 @@ missing, `409` conflict, `502` provider failure).
 | GET | `/api/account/profile` | `{ user, profiles }` |
 | PUT | `/api/account/update` | Update `displayName` / `avatarUrl` |
 | POST | `/api/account/change-password` | `{ currentPassword, newPassword }` |
+| GET | `/api/account/profiles` | `{ profiles: [Profile] }` — Netflix-style viewing profiles, up to 5 per account |
+| POST | `/api/account/profiles` | `{ name, avatarUrl? }` → 201 `{ profile }`; 409 once the cap is reached |
+| PATCH | `/api/account/profiles/:id` | Partial update; 404 for another account's profile |
+| DELETE | `/api/account/profiles/:id` | 404 for another account's profile |
 | GET | `/api/account/debrid` | Debrid config; keys are redacted to hints (`"****abcd"`) |
 | PUT | `/api/account/debrid` | Update config (below) |
 

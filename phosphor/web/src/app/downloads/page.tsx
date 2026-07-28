@@ -40,10 +40,24 @@ export default function DownloadsPage() {
     load();
   };
 
+  const clearCompleted = async () => {
+    await del("/api/downloads/clear-completed");
+    load();
+  };
+
+  const hasCompleted = jobs.some((j) => j.status === "finished" || j.status === "error");
+
   return (
     <main className="container">
-      <div className="panel-title" style={{ margin: "24px 0 16px" }}>
-        Download queue
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "24px 0 16px" }}>
+        <div className="panel-title" style={{ margin: 0 }}>
+          Download queue
+        </div>
+        {hasCompleted && (
+          <button className="btn btn-sm" onClick={clearCompleted}>
+            clear finished/errored
+          </button>
+        )}
       </div>
       {error && <p className="error-text">{error}</p>}
       {jobs.length === 0 && <p className="dim">Queue is empty. Add something from Search.</p>}
