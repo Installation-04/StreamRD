@@ -286,6 +286,40 @@ textarea {
   width: 90px;
 }
 
+.saved-searches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.saved-search-chip {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-raised);
+  font-size: 12px;
+  overflow: hidden;
+}
+.saved-search-chip button {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: inherit;
+}
+.saved-search-chip button:hover {
+  background: var(--bg-hover);
+  color: var(--fg-bright);
+}
+.saved-search-chip .saved-search-delete {
+  border-left: 1px solid var(--border);
+  color: var(--fg-dim);
+  padding: 4px 8px;
+}
+
 .result-row {
   display: flex;
   align-items: center;

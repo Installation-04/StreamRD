@@ -8,7 +8,8 @@ Roles: **public** (no auth), **user** (any active account), **admin**.
 
 Errors are always `{ "error": "message" }` with an appropriate HTTP status
 (`400` validation, `401` unauthenticated/inactive, `403` forbidden, `404`
-missing, `409` conflict, `502` provider failure).
+missing, `409` conflict, `429` rate limited (with a `Retry-After` header,
+on `/api/auth/*`), `502` provider failure).
 
 ## Health
 
@@ -49,6 +50,10 @@ missing, `409` conflict, `502` provider failure).
 | DELETE | `/api/account/profiles/:id` | 404 for another account's profile |
 | GET | `/api/account/debrid` | Debrid config; keys are redacted to hints (`"****abcd"`) |
 | PUT | `/api/account/debrid` | Update config (below) |
+| GET | `/api/account/favorites` | `{ titles: [Title] }` — "My List", most recently added first |
+| POST | `/api/account/favorites/:titleId` | Idempotent add → 201 `{ ok: true }`; 404 if the title doesn't exist |
+| DELETE | `/api/account/favorites/:titleId` | Remove (no-op if absent) → `{ ok: true }` |
+| GET | `/api/account/continue-watching` | `{ titles: [Title] }` — titles this user has successfully played, deduped, most recent first (max 20) |
 
 `PUT /api/account/debrid`
 

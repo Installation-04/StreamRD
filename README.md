@@ -25,6 +25,10 @@ providers' terms of service and your local law.
 - **Accounts & RBAC** — signup/login (JWT), `user`/`admin` roles, per-user
   debrid keys (stored server-side, returned only as redacted hints),
   Netflix-style viewing profiles (up to 5 per account).
+- **My List** — one-click favorite/unfavorite from any title card or the
+  detail page; a "My List" row appears on the home page whenever it's non-empty.
+- **Continue Watching** — a row of previously-played titles (deduped, most
+  recent first) at the top of the home page.
 - **Admin dashboard** — users, catalog CRUD with debrid source mappings,
   global provider order/toggles, timeouts & retry caps, access toggles,
   connectivity tests, health stats, structured logs, config export/import.
@@ -34,7 +38,8 @@ providers' terms of service and your local law.
   examples with HTTPS, works identically over LAN or VPN; every client has a
   server-URL setting with a connectivity test.
 - **Operable** — structured event log (stdout + queryable via admin API),
-  playback metrics per provider, `/api/health` for probes, JSON config backup.
+  playback metrics per provider, `/api/health` for probes, JSON config backup,
+  per-IP rate limiting on signup/login.
 
 ## Tech stack
 

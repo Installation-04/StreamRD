@@ -9,7 +9,8 @@ Roles: **user** (any active account), **admin**.
 
 Errors are always `{ "error": "message" }` with an appropriate HTTP status
 (`400` validation, `401` unauthenticated/inactive, `403` forbidden, `404`
-missing, `409` conflict, `502` provider/indexer failure).
+missing, `409` conflict, `429` rate limited (with a `Retry-After` header,
+on `/api/auth/*`), `502` provider/indexer failure).
 
 ## Health
 
@@ -39,6 +40,9 @@ deactivated, 401 if wrong credentials).
 | POST | `/api/account/change-password` | `{ currentPassword, newPassword }` |
 | GET | `/api/account/debrid` | `{ primaryProvider, fallbackOrder, keys }` — keys redacted to `"****abcd"` hints |
 | PUT | `/api/account/debrid` | Update config (below) |
+| GET | `/api/account/saved-searches` | `{ savedSearches: [SavedSearch] }`, newest first |
+| POST | `/api/account/saved-searches` | `{ name, query, minSeeders?, maxSizeGb?, sort? }` → 201 `{ savedSearch }`; 409 past 20 per account |
+| DELETE | `/api/account/saved-searches/:id` | 200 no-op if it doesn't belong to the caller |
 
 ```json
 // PUT /api/account/debrid

@@ -94,3 +94,51 @@ accountRouter.put("/debrid", async (req, res) => {
   });
   res.json({ ok: true });
 });
+
+const MAX_SAVED_SEARCHES_PER_USER = 20;
+
+/** GET /api/account/saved-searches — this user's saved searches, newest first. */
+accountRouter.get("/saved-searches", async (req, res) => {
+  const savedSearches = await db.savedSearch.findMany({
+    where: { userId: req.session!.sub },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ savedSearches });
+});
+
+const savedSearchSchema = z.object({
+  name: z.string().min(1).max(60),
+  query: z.string().min(1).max(200),
+  minSeeders: z.number().int().min(0).nullable().optional(),
+  maxSizeGb: z.number().min(0).nullable().optional(),
+  sort: z.enum(["seeders", "size", "date"]).optional(),
+});
+
+/** POST /api/account/saved-searches — save a query + filters for one-click re-run. */
+accountRouter.post("/saved-searches", async (req, res) => {
+  const body = parseBody(savedSearchSchema, req.body, res);
+  if (!body) return;
+  const count = await db.savedSearch.count({ where: { userId: req.session!.sub } });
+  if (count >= MAX_SAVED_SEARCHES_PER_USER) {
+    res.status(409).json({ error: `You can have at most ${MAX_SAVED_SEARCHES_PER_USER} saved searches` });
+    return;
+  }
+  const savedSearch = await db.savedSearch.create({
+    data: {
+      userId: req.session!.sub,
+      name: body.name,
+      query: body.query,
+      minSeeders: body.minSeeders ?? null,
+      maxSizeGb: body.maxSizeGb ?? null,
+      sort: body.sort ?? "seeders",
+    },
+  });
+  res.status(201).json({ savedSearch });
+});
+
+accountRouter.delete("/saved-searches/:id", async (req, res) => {
+  await db.savedSearch.deleteMany({
+    where: { id: req.params.id, userId: req.session!.sub },
+  });
+  res.json({ ok: true });
+});
