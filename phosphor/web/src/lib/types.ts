@@ -75,6 +75,16 @@ export interface IndexerConfig {
   createdAt: string;
 }
 
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string;
+  minSeeders: number | null;
+  maxSizeGb: number | null;
+  sort: "seeders" | "size" | "date";
+  createdAt: string;
+}
+
 export interface LogEntry {
   id: string;
   level: string;

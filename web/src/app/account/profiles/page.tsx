@@ -94,6 +94,7 @@ export default function ProfilesPage() {
               <img
                 src={p.avatarUrl}
                 alt={p.name}
+                loading="lazy"
                 style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", margin: "0 auto 10px" }}
               />
             ) : (

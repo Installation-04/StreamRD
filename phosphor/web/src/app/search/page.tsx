@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { get, post } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { del, get, post } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
-import { SearchResult } from "@/lib/types";
+import { SavedSearch, SearchResult } from "@/lib/types";
 
 type SortKey = "seeders" | "size" | "date";
 
@@ -19,6 +19,13 @@ export default function SearchPage() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+
+  useEffect(() => {
+    get<{ savedSearches: SavedSearch[] }>("/api/account/saved-searches")
+      .then((res) => setSavedSearches(res.savedSearches))
+      .catch(() => {});
+  }, []);
 
   const runSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +43,43 @@ export default function SearchPage() {
       setErrors([(err as Error).message]);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveSearch = async () => {
+    if (!q.trim()) return;
+    const name = window.prompt("name this saved search:", q);
+    if (!name) return;
+    try {
+      const res = await post<{ savedSearch: SavedSearch }>("/api/account/saved-searches", {
+        name,
+        query: q,
+        minSeeders: minSeeders ? parseInt(minSeeders, 10) : undefined,
+        maxSizeGb: maxSizeGb ? parseFloat(maxSizeGb) : undefined,
+        sort,
+      });
+      setSavedSearches((prev) => [res.savedSearch, ...prev]);
+    } catch (err) {
+      setMessage(`> failed to save: ${(err as Error).message}`);
+    }
+  };
+
+  const runSaved = (s: SavedSearch) => {
+    setQ(s.query);
+    setMinSeeders(s.minSeeders != null ? String(s.minSeeders) : "0");
+    setMaxSizeGb(s.maxSizeGb != null ? String(s.maxSizeGb) : "");
+    setSort(s.sort);
+    setTimeout(() => {
+      document.querySelector<HTMLFormElement>(".search-bar")?.requestSubmit();
+    }, 0);
+  };
+
+  const deleteSaved = async (id: string) => {
+    setSavedSearches((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await del(`/api/account/saved-searches/${id}`);
+    } catch {
+      // best-effort; a stale row in the list is harmless, refresh will fix it
     }
   };
 
@@ -89,6 +133,9 @@ export default function SearchPage() {
             <option value="date">date</option>
           </select>
         </label>
+        <button type="button" className="btn btn-sm" disabled={!q.trim()} onClick={saveSearch}>
+          ★ save search
+        </button>
         <button
           type="button"
           className="btn btn-sm"
@@ -98,6 +145,21 @@ export default function SearchPage() {
           view queue →
         </button>
       </div>
+
+      {savedSearches.length > 0 && (
+        <div className="saved-searches">
+          {savedSearches.map((s) => (
+            <span className="saved-search-chip" key={s.id}>
+              <button type="button" onClick={() => runSaved(s)}>
+                ⟲ {s.name}
+              </button>
+              <button type="button" className="saved-search-delete" onClick={() => deleteSaved(s.id)} title="delete">
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {message && <p className="ok-text">{message}</p>}
       {errors.map((e, i) => (

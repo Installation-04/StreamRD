@@ -30,9 +30,11 @@ Use it within the providers' terms of service and your local law.
   Torbox behind one pluggable `DebridProvider` interface.
 - **One-click add → download queue → play** — add a magnet, poll its
   progress, play the resolved stream the moment it's ready.
-- **Accounts & RBAC** — signup/login (JWT), `user`/`admin` roles, per-user
-  debrid keys stored server-side (never returned in full, only as
-  `****abcd` hints).
+- **Saved searches** — save a query plus its filters/sort (up to 20 per
+  account) and re-run it in one click from the search page.
+- **Accounts & RBAC** — signup/login (JWT, per-IP rate limited), `user`/`admin`
+  roles, per-user debrid keys stored server-side (never returned in full,
+  only as `****abcd` hints).
 - **Admin dashboard** — users, indexers (add/test/enable), global provider
   order & toggles, health stats, structured logs, config export/import.
 - **Every screen** — web, Android TV / Fire TV, Apple TV, and a thin Tauri
