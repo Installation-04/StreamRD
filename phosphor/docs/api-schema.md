@@ -67,7 +67,11 @@ deactivated, 401 if wrong credentials).
 `GET /api/search?q=<query>&minSeeders=&maxSizeGb=&sort=seeders|size|date`
 
 Fans out to every enabled indexer in parallel, merges, filters, sorts.
-Indexer failures are reported per-indexer, not fatal.
+Indexer failures are reported per-indexer, not fatal. Raw per-indexer results
+(before the seeders/size filter and sort, which are cheap and applied fresh
+per request) are cached in-process for 30s per `(indexer, query text)` pair,
+so adjusting filters/sort without changing the query doesn't re-hit your
+Jackett/Prowlarr instance.
 
 ```json
 {
@@ -91,6 +95,7 @@ Indexer failures are reported per-indexer, not fatal.
 | GET | `/api/downloads/:id` | `{ job }` |
 | POST | `/api/downloads` | Add a magnet or direct link (below) |
 | POST | `/api/downloads/:id/refresh` | Poll the provider for an active job |
+| DELETE | `/api/downloads/clear-completed` | Bulk-remove every `finished`/`error` job in one query → `{ removed: number }` |
 | DELETE | `/api/downloads/:id` | Remove a job from the queue |
 
 ```json

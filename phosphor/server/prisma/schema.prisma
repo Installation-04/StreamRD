@@ -46,6 +46,8 @@ model IndexerConfig {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([enabled])
 }
 
 // One search-result-to-stream pipeline: added by a user, tracked through
@@ -68,6 +70,10 @@ model DownloadJob {
   error          String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([createdAt])
 }
 
 model LogEvent {
@@ -79,6 +85,10 @@ model LogEvent {
   provider  String?
   meta      String? // JSON blob
   createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([level])
+  @@index([createdAt])
 }
 
 // Key/value store for mutable server + provider settings managed via the admin API.

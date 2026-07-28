@@ -38,12 +38,15 @@ model DebridConfig {
 }
 
 model Profile {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   userId      String
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   avatarUrl   String?
-  preferences String  @default("{}") // JSON blob (subtitle language, maturity, ...)
+  preferences String   @default("{}") // JSON blob (subtitle language, maturity, ...)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Title {
@@ -74,6 +77,10 @@ model PlaybackLog {
   durationMs   Int      @default(0)
   error        String?
   createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([titleId])
+  @@index([createdAt])
 }
 
 model LogEvent {
@@ -85,6 +92,10 @@ model LogEvent {
   provider  String?
   meta      String? // JSON blob
   createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([level])
+  @@index([createdAt])
 }
 
 // Key/value store for mutable server + provider settings managed via the admin API.
