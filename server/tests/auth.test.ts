@@ -93,4 +93,62 @@ describe("auth & account flows", () => {
     expect(get.body.keys.premiumize).toBeNull();
     expect(JSON.stringify(get.body)).not.toContain("rd-secret-token-1234");
   });
+
+  it("supports full profile CRUD, scoped to the owning account", async () => {
+    const user = await signup("profiles");
+    const other = await signup("profiles-other");
+
+    const empty = await request(app).get("/api/account/profiles").set(auth(user.token));
+    expect(empty.body.profiles).toEqual([]);
+
+    const created = await request(app)
+      .post("/api/account/profiles")
+      .set(auth(user.token))
+      .send({ name: "Kids" });
+    expect(created.status).toBe(201);
+    const profileId = created.body.profile.id;
+
+    const renamed = await request(app)
+      .patch(`/api/account/profiles/${profileId}`)
+      .set(auth(user.token))
+      .send({ name: "Kids Room" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.profile.name).toBe("Kids Room");
+
+    // Another account cannot see or modify someone else's profile.
+    const otherList = await request(app).get("/api/account/profiles").set(auth(other.token));
+    expect(otherList.body.profiles).toEqual([]);
+    const otherPatch = await request(app)
+      .patch(`/api/account/profiles/${profileId}`)
+      .set(auth(other.token))
+      .send({ name: "Hijacked" });
+    expect(otherPatch.status).toBe(404);
+    const otherDelete = await request(app)
+      .delete(`/api/account/profiles/${profileId}`)
+      .set(auth(other.token));
+    expect(otherDelete.status).toBe(404);
+
+    const del = await request(app)
+      .delete(`/api/account/profiles/${profileId}`)
+      .set(auth(user.token));
+    expect(del.status).toBe(200);
+    const afterDelete = await request(app).get("/api/account/profiles").set(auth(user.token));
+    expect(afterDelete.body.profiles).toEqual([]);
+  });
+
+  it("caps profiles per account at 5", async () => {
+    const user = await signup("profile-cap");
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post("/api/account/profiles")
+        .set(auth(user.token))
+        .send({ name: `Profile ${i}` });
+      expect(res.status).toBe(201);
+    }
+    const sixth = await request(app)
+      .post("/api/account/profiles")
+      .set(auth(user.token))
+      .send({ name: "One too many" });
+    expect(sixth.status).toBe(409);
+  });
 });

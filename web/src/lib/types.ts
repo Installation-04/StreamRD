@@ -10,6 +10,15 @@ export interface User {
   createdAt: string;
 }
 
+export interface Profile {
+  id: string;
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  preferences: string;
+  createdAt: string;
+}
+
 export type ProviderId = "realdebrid" | "alldebrid" | "premiumize";
 export const PROVIDER_IDS: ProviderId[] = ["realdebrid", "alldebrid", "premiumize"];
 export const PROVIDER_NAMES: Record<ProviderId, string> = {

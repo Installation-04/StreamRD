@@ -5,11 +5,22 @@ import { searchIndexer } from "../indexers/torznab";
 import { IndexerSearchResult } from "../indexers/types";
 import { logEvent } from "../logger";
 import { getServerSettings } from "../settings";
+import { TtlCache } from "../util/ttlCache";
 
 export const searchRouter = Router();
 searchRouter.use(requireAuth);
 
 type SortKey = "seeders" | "size" | "date";
+
+// Caches raw per-indexer results (before the seeders/size filter and sort,
+// which are cheap and applied per-request) so tweaking filters/sort without
+// changing the query text doesn't re-hit the user's Jackett/Prowlarr.
+const searchCache = new TtlCache<IndexerSearchResult[]>(30_000);
+
+/** Exposed for tests, which stub `fetch` per-case and need a clean cache. */
+export function clearSearchCache(): void {
+  searchCache.clear();
+}
 
 /**
  * GET /api/search?q=&indexerId=&minSeeders=&maxSizeGb=&sort=seeders|size|date
@@ -38,7 +49,9 @@ searchRouter.get("/", async (req, res) => {
 
   const outcomes = await Promise.allSettled(
     indexers.map((idx) =>
-      searchIndexer(idx, q, { timeoutMs: settings.providerTimeoutMs, limit: settings.maxResultsPerIndexer })
+      searchCache.getOrSet(`${idx.id}:${q.toLowerCase()}`, () =>
+        searchIndexer(idx, q, { timeoutMs: settings.providerTimeoutMs, limit: settings.maxResultsPerIndexer })
+      )
     )
   );
 
