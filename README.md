@@ -137,6 +137,9 @@ logs, and config export/import. Full walkthrough:
 - **Reverse proxy + HTTPS** — bundled Caddy (automatic Let's Encrypt) or the
   Nginx example in `infra/reverse-proxy/`
 - **VPN** — WireGuard/Tailscale; treat tunnel IPs like LAN
+- **Netlify (web client only)** — `web/netlify.toml` is ready to go; the
+  backend still needs to run somewhere else reachable over HTTPS (see
+  [docs/deployment.md](docs/deployment.md#3b-web-client-on-netlify))
 
 ## Tests & CI
 
