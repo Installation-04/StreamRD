@@ -76,6 +76,35 @@ with certbot for certificates. Keep `proxy_buffering off` for the API — it
 returns redirect-style stream URLs quickly, but log streaming and large
 exports benefit from unbuffered responses.
 
+## 3b. Web client on Netlify
+
+Netlify hosts the Next.js frontend (`web/`) only — it can't run the
+Express/Prisma/SQLite backend, so run the backend anywhere reachable over
+HTTPS first (steps 0–1 above, a VPS, etc.) and point the web build at it.
+
+`web/netlify.toml` is already set up (build command, publish dir,
+`@netlify/plugin-nextjs`, which turns API routes/middleware into Netlify
+Functions/Edge Functions). To deploy:
+
+**Via the Netlify UI** — New site from Git → pick this repo → set
+**Base directory** to `web` (Netlify then picks up `web/netlify.toml`
+automatically) → add the `NEXT_PUBLIC_API_BASE_URL` environment variable
+(your backend's public URL, e.g. `https://api.example.com`) → Deploy.
+
+**Via the CLI**:
+
+```bash
+cd web
+npx netlify init          # link to a new or existing Netlify site
+npx netlify env:set NEXT_PUBLIC_API_BASE_URL https://api.example.com
+npx netlify deploy --build --prod
+```
+
+Also set `CORS_ORIGINS` on the backend to your Netlify site's URL (or keep
+it `*`) so the browser can call the API cross-origin — Netlify and the
+backend are different origins unless you put both behind the same reverse
+proxy/domain.
+
 ## 4. VPN
 
 Run WireGuard or Tailscale on the host and treat it exactly like LAN with the
