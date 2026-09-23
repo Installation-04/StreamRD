@@ -20,7 +20,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "fast-xml-parser": "^4.5.1",
+    "fast-xml-parser": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
     "zod": "^3.24.1"
   },
@@ -35,6 +35,6 @@
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^5.0.1"
   }
 }
