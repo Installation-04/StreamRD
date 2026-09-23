@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.23.1",
-    "expo": "~51.0.0",
+    "expo": "^57.0.24",
     "expo-av": "~14.0.7",
     "expo-status-bar": "~1.12.1",
     "react": "18.2.0",
-    "react-native": "0.74.5"
+    "react-native": "^0.87.1"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
