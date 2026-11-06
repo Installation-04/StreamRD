@@ -49,6 +49,13 @@ synthetic sizes/seeders and an example magnet ID. No live indexer/debrid account
 are queried. The simulated queue outage is a browser response fixture, followed
 by recovery against the real API.
 
+## CI host compatibility
+
+The first GitHub run passed server tests and web builds but could not install the
+pinned Chromium tooling on the newly updated Ubuntu 26.04 runner. Browser/Docker
+jobs now explicitly use supported Ubuntu 24.04; the application runtime remains
+Node 22 in its Debian-based images.
+
 ## Scope
 
 This is regression/workflow evidence, not a complete accessibility audit,

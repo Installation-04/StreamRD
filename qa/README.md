@@ -27,3 +27,7 @@ loading/error recovery, desktop/mobile overflow, and browser page errors. This i
 workflow coverage, not a complete WCAG audit, native-client test, or live-provider
 validation. The separate backend filesystem suite verifies original preservation,
 collisions, mount outages, and path confinement.
+
+CI pins the browser/Docker jobs to Ubuntu 24.04, which supports the pinned
+Playwright 1.57.0 browser packages. Do not switch those jobs to a newer runner OS
+until its browser support has been verified.

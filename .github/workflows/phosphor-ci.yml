@@ -47,7 +47,7 @@ jobs:
 
   docker:
     name: Phosphor Docker images build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [server, web]
     steps:
       - uses: actions/checkout@v4

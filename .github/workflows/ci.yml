@@ -47,7 +47,7 @@ jobs:
 
   docker:
     name: Docker images build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [server, web]
     # Build and validate images without publishing them.
     steps:
