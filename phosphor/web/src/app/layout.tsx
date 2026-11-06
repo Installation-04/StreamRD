@@ -14,14 +14,14 @@ const COLOR_INIT_SCRIPT = `
 (function () {
   try {
     var saved = localStorage.getItem("ph_color");
-    if (saved && saved !== "green") document.documentElement.dataset.phosphor = saved;
+    if (["green", "amber", "white"].indexOf(saved) !== -1 && saved !== "green") document.documentElement.dataset.phosphor = saved;
   } catch (e) {}
 })();
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: COLOR_INIT_SCRIPT }} />
       </head>

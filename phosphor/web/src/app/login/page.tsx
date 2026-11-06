@@ -32,14 +32,14 @@ export default function LoginPage() {
       <form className="panel auth-panel" onSubmit={submit}>
         <div className="panel-title">Sign in</div>
         <div className="field">
-          <label>Email</label>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label htmlFor="login-email">Email</label>
+          <input id="login-email" autoComplete="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="field">
-          <label>Password</label>
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label htmlFor="login-password">Password</label>
+          <input id="login-password" autoComplete="current-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        {error && <p className="error-text">{error}</p>}
+        {error && <p className="error-text" role="alert">{error}</p>}
         <button className="btn" disabled={busy} style={{ width: "100%" }}>
           {busy ? "..." : "> connect"}
         </button>

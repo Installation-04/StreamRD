@@ -1,69 +1,25 @@
 "use client";
-
 import Link from "next/link";
+import { useState } from "react";
 import { useDownloadQueue } from "@/lib/useDownloadQueue";
 import { formatBytes } from "@/lib/format";
-
 const ACTIVE = new Set(["queued", "downloading"]);
-
 export default function DownloadsPage() {
-  const { jobs, error, busy, remove, refreshOne, clearCompleted } = useDownloadQueue();
-
-  const hasCompleted = jobs.some((j) => j.status === "finished" || j.status === "error");
-
-  return (
-    <main className="container">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "24px 0 16px" }}>
-        <div className="panel-title" style={{ margin: 0 }}>
-          Download queue
-        </div>
-        {hasCompleted && (
-          <button className="btn btn-sm" disabled={busy.has("clear")} onClick={clearCompleted}>
-            clear finished/errored
-          </button>
-        )}
-      </div>
-      {error && <p className="error-text">{error}</p>}
-      {jobs.length === 0 && <p className="dim">Queue is empty. Add something from Search.</p>}
-      {jobs.map((job) => (
-        <div className="job-row" key={job.id}>
-          <div className="job-top">
-            <span className="job-title">{job.title}</span>
-            <span
-              className={`pill ${
-                job.status === "finished" ? "pill-ok" : job.status === "error" ? "pill-err" : "pill-warn"
-              }`}
-            >
-              {job.status}
-            </span>
-          </div>
-          <div className="progress-track" style={{ marginBottom: 8 }}>
-            <div className="progress-fill" style={{ width: `${job.progress}%` }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <span className="dim" style={{ fontSize: 12 }}>
-              {formatBytes(job.sizeBytes)} · {job.seeders} seeds · {job.provider}
-              {job.indexerName ? ` · ${job.indexerName}` : ""}
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {job.status === "finished" && job.streamUrl && (
-                <Link href={`/watch/${job.id}`} className="btn btn-sm">
-                  ▶ play
-                </Link>
-              )}
-              {ACTIVE.has(job.status) && (
-                <button className="btn btn-sm" disabled={busy.has(job.id)} onClick={() => refreshOne(job.id)}>
-                  refresh
-                </button>
-              )}
-              <button className="btn btn-sm btn-danger" disabled={busy.has(job.id)} onClick={() => remove(job.id)}>
-                remove
-              </button>
-            </div>
-          </div>
-          {job.error && <p className="error-text" style={{ marginTop: 8 }}>{job.error}</p>}
-        </div>
-      ))}
-    </main>
-  );
+  const { jobs, error, busy, loading, reload, remove, refreshOne, clearCompleted } = useDownloadQueue();
+  const [filter, setFilter] = useState("all"), [confirmClear, setConfirmClear] = useState(false), [removeId, setRemoveId] = useState<string | null>(null);
+  const counts = { active: jobs.filter(job => ACTIVE.has(job.status)).length, finished: jobs.filter(job => job.status === "finished").length, error: jobs.filter(job => job.status === "error").length };
+  const visible = jobs.filter(job => filter === "all" || (filter === "active" ? ACTIVE.has(job.status) : job.status === filter));
+  return <main className="container workspace">
+    <header className="page-heading"><div><p className="eyebrow">YOUR SIGNAL / DOWNLOAD QUEUE</p><h1>From found to ready<span className="accent">.</span></h1><p className="page-description">Your debrid jobs, in one place. Refreshes pause while this tab is hidden.</p></div><Link href="/search" className="btn btn-primary">Find something new ↗</Link></header>
+    <div className="queue-summary" aria-label="Queue summary">{[["active", "In progress"], ["finished", "Ready to watch"], ["error", "Need attention"]].map(([key, label]) => <div key={key}><strong>{loading || (error && !jobs.length) ? "—" : counts[key as keyof typeof counts]}</strong><span>{label}</span></div>)}</div>
+    <div className="queue-toolbar"><div className="queue-tabs" role="group" aria-label="Filter queue">{[["all", "All jobs"], ["active", "In progress"], ["finished", "Ready"], ["error", "Attention"]].map(([id, label]) => <button key={id} aria-pressed={filter === id} onClick={() => setFilter(id)} className={filter === id ? "active" : ""}>{label}</button>)}</div><div className="queue-controls"><button className="btn btn-quiet btn-sm" onClick={reload}>Refresh queue</button>{Boolean(counts.finished + counts.error) && <button className="btn btn-quiet btn-sm" disabled={busy.has("clear")} onClick={() => setConfirmClear(true)}>Clear finished / errored</button>}</div></div>
+    {confirmClear && <div className="notice"><p>Remove completed and errored jobs from this queue? This does not delete provider files.</p><button className="btn btn-sm" disabled={busy.has("clear")} onClick={() => { clearCompleted(); setConfirmClear(false); }}>Clear jobs</button><button className="btn btn-quiet btn-sm" onClick={() => setConfirmClear(false)}>Keep them</button></div>}
+    {error && <div role="alert" className="notice notice-error"><p>{error}</p><button className="btn btn-quiet btn-sm" onClick={reload}>Try again</button></div>}
+    {loading ? <div className="results-loading" role="status">Loading your queue…</div> : !visible.length ? <div className="empty-state"><span className="empty-symbol" aria-hidden="true">↗</span><h3>{jobs.length ? "Nothing in this view." : error ? "Your queue is unavailable." : "Good things are worth finding."}</h3><p>{jobs.length ? "Try another queue filter to see your other jobs." : error ? "Check the connection and try again. Existing jobs are kept on the server." : "Add a search result to your debrid account and follow its progress here. No jobs have been added yet."}</p><Link href="/search" className="btn btn-primary">Discover your next watch ↗</Link></div> : <div className="queue-list">{visible.map(job => <article className="queue-job" key={job.id}>
+      <div className="queue-job-heading"><div><span className="eyebrow">{job.provider}{job.indexerName ? ` / ${job.indexerName}` : ""}</span><h2>{job.title}</h2></div><span className={`pill ${job.status === "finished" ? "pill-ok" : job.status === "error" ? "pill-err" : "pill-warn"}`}>{job.status === "finished" ? "Ready" : job.status}</span></div>
+      <progress className="queue-progress" value={Math.max(0, Math.min(100, job.progress))} max={100} aria-label={`${job.title} progress`} /><div className="queue-job-footer"><span>{formatBytes(job.sizeBytes)} · {Math.round(job.progress)}% · {job.seeders} seeds</span><div>{job.status === "finished" && job.streamUrl && <Link href={`/watch/${job.id}`} className="btn btn-primary btn-sm">▶ Watch now</Link>}{ACTIVE.has(job.status) && <button className="btn btn-sm" disabled={busy.has(job.id)} onClick={() => refreshOne(job.id)}>Refresh</button>}<button className="btn btn-quiet btn-sm" disabled={busy.has(job.id)} onClick={() => setRemoveId(job.id)} aria-label={`Remove ${job.title}`}>Remove</button></div></div>
+      {job.error && <p className="notice notice-error">{job.error}</p>}{removeId === job.id && <div className="notice"><p>Remove this queue entry? Provider files will be kept.</p><button className="btn btn-sm" disabled={busy.has(job.id)} onClick={() => { remove(job.id); setRemoveId(null); }}>Remove entry</button><button className="btn btn-quiet btn-sm" onClick={() => setRemoveId(null)}>Cancel</button></div>}
+    </article>)}</div>}
+    <footer className="workspace-footer"><span>PHOSPHOR / YOUR QUEUE, YOUR PACE</span><Link href="/setup">Connection checklist ↗</Link></footer>
+  </main>;
 }

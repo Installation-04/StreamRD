@@ -15,6 +15,7 @@ const THEME_INIT_SCRIPT = `
 (function () {
   try {
     var pref = localStorage.getItem("sr_theme") || "dark";
+    if (["dark", "light", "system"].indexOf(pref) === -1) pref = "dark";
     var resolved = pref === "system"
       ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
       : pref;
@@ -25,14 +26,14 @@ const THEME_INIT_SCRIPT = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
         <AuthProvider>
           <Nav />
-          {children}
+          <div id="main-content" tabIndex={-1}>{children}</div>
         </AuthProvider>
       </body>
     </html>

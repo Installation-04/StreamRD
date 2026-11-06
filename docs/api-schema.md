@@ -397,3 +397,27 @@ schema and use a stable, non-placeholder JWT_SECRET before deployment.
 Administrator-only mounted-file exports use `/api/admin/library`. See the
 [endpoint contract and filesystem requirements](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md#api).
 No database schema changes are required for these filesystem manifests.
+
+## Community setup checklist
+
+`GET /api/account/setup` requires login and returns product, current role,
+`configurationReady`, `connectionVerified: false`, progress, provider configuration
+booleans (never keys/hints), and role-aware next-action checks. Optional library
+configuration is visible only to admins; members receive administrator guidance
+without admin links or filesystem paths. Responses are private/no-store. No
+provider/indexer requests are made, so configured does not mean verified.
+
+## Mounted-media browsing and reviewed batch export
+
+- `GET /api/admin/library/files?path=&cursor=&limit=50` returns the relative path,
+  parentPath, directory/video items with editable filename suggestions, and an
+  opaque nextCursor. Limit is 1–100. Cursors belong to the root/directory; hidden
+  children and escaping symlinks are omitted. Browsing does not write media.
+- `POST /api/admin/library/entries/batch` accepts `{items: [...]}` with 1–100
+  existing library-input objects. HTTP 200 returns indexed per-file exported/error
+  outcomes and `{exported, failed}` summary. Successes persist when another item
+  fails; retries of the same mapping are idempotent. Admin review is explicit.
+
+Both routes require administrator access and preserve existing single-file APIs.
+Directory traversal has bounded retained candidates but still enumerates the
+directory per page; remote mount latency remains dependent on the mount.

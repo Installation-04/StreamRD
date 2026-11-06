@@ -6,10 +6,11 @@ const ACTIVE = new Set(["queued", "downloading"]);
 const fingerprint = (jobs: DownloadJob[]) => JSON.stringify(jobs.map(job => [job.id, job.status, job.progress, job.streamUrl, job.error]));
 
 export function useDownloadQueue() {
+  const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
-  const actions = useRef<{ remove: (id: string) => void; refresh: (id: string) => void; clear: () => void } | null>(null);
+  const actions = useRef<{ remove: (id: string) => void; refresh: (id: string) => void; clear: () => void; reload: () => void } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     let closed = false, cycleQueued = false, rerun = false, delay = 4000;
@@ -69,7 +70,7 @@ export function useDownloadQueue() {
           failed = true; fatal = err instanceof ApiError && err.status === 401;
           errors.push((err as Error).message);
         } finally {
-          if (!closed) setError(errors.length ? [...new Set(errors)].join("; ") : null);
+          if (!closed) { setError(errors.length ? [...new Set(errors)].join("; ") : null); setLoading(false); }
           delay = failed || before === fingerprint(current) ? Math.min(60000, delay * 2) : 4000;
           delay = Math.max(delay, Math.min(60000, retryAfter));
           cycleQueued = false;
@@ -94,6 +95,7 @@ export function useDownloadQueue() {
       });
     }
     actions.current = {
+      reload: requestCycle,
       remove: id => mutate(id, async () => { await call(`/api/downloads/${id}`, "DELETE"); update(current.filter(job => job.id !== id)); }),
       refresh: id => mutate(id, async () => { merge((await call<{ job: DownloadJob }>(`/api/downloads/${id}/refresh`, "POST")).job); }),
       clear: () => mutate("clear", async () => { await call("/api/downloads/clear-completed", "DELETE"); update(current.filter(job => ACTIVE.has(job.status))); }),
@@ -110,5 +112,5 @@ export function useDownloadQueue() {
       document.removeEventListener("visibilitychange", visibility); window.removeEventListener("focus", visibility);
     };
   }, []);
-  return { jobs, error, busy, remove: (id: string) => actions.current?.remove(id), refreshOne: (id: string) => actions.current?.refresh(id), clearCompleted: () => actions.current?.clear() };
+  return { jobs, error, busy, loading, reload: () => actions.current?.reload(), remove: (id: string) => actions.current?.remove(id), refreshOne: (id: string) => actions.current?.refresh(id), clearCompleted: () => actions.current?.clear() };
 }

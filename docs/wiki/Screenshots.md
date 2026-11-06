@@ -1,74 +1,103 @@
-# Screenshots — v0.2.0
+# Community Edition screenshots — v0.3.0
 
-Captured from the actual production web images using disposable demo accounts,
-with no browser page errors. Screens are 1440 pixels wide; full pages may be taller.
-See [fixture provenance](https://github.com/Installation-04/StreamRD/blob/v0.2.0/docs/screenshots/README.md)
-for exactly which data is synthetic. No real debrid credentials or private users
-appear in these screenshots.
+Sixteen captures from actual production images, with twelve passing browser journeys
+and no page errors. All accounts/data are disposable fixtures. Read the
+[provenance and validation](https://github.com/Installation-04/StreamRD/blob/v0.3.0/docs/screenshots/v0.3.0/README.md)
+for what is real and what is synthetic.
 
-## StreamRD library
+## StreamRD discovery
 
-Account/profile selection, Continue Watching, and favorites. Progress is seeded demo data.
+A real curated catalog, original poster fallbacks, and a saved favorite.
 
-![StreamRD library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-library.png)
+![StreamRD discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-discover.png)
 
-## StreamRD title
+## StreamRD light theme
 
-Open-movie catalog metadata and My List controls; no poster artwork configured.
+The same catalog with the actual light-theme control.
 
-![StreamRD title](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-title.png)
+![StreamRD light theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-discover-light.png)
 
-## StreamRD profiles
+## StreamRD on mobile
 
-A disposable Family viewing profile.
+390px viewport with responsive navigation and discovery.
 
-![StreamRD profiles](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-profiles.png)
+![StreamRD on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-discover-mobile.png)
 
-## StreamRD administration
+## Guided setup
 
-Server settings from a fresh demo deployment.
+Local configuration progress, explicit next actions, and optional external libraries.
 
-![StreamRD administration](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-admin.png)
+![Guided setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-setup.png)
 
-## StreamRD sign in
+## Setup on mobile
 
-The production login form.
+The same checklist in a mobile viewport.
 
-![StreamRD sign in](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-login.png)
+![Setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-setup-mobile.png)
 
-## Phosphor search
+## Reviewed mounted-library exports
 
-Saved search and results returned by a local Torznab fixture, not a live indexer.
+Real mounted-file selection and movie/episode batch exports, followed by link repair.
 
-![Phosphor search](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/phosphor-search.png)
+![Reviewed mounted-library exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-library.png)
+
+## Library on mobile
+
+Mobile browsing before any demo files are exported.
+
+![Library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/streamrd-library-mobile.png)
+
+## Phosphor discovery
+
+Local Torznab results, inline saved-search naming, and the green theme.
+
+![Phosphor discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-discover.png)
+
+## Phosphor amber theme
+
+Theme control preserves the active search.
+
+![Phosphor amber theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-discover-amber.png)
+
+## Phosphor white theme
+
+A third legible phosphor palette.
+
+![Phosphor white theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-discover-white.png)
+
+## Phosphor on mobile
+
+Responsive search and filter controls at 390px.
+
+![Phosphor on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-discover-mobile.png)
+
+## Phosphor setup
+
+Role-aware connection checklist; configured is explicitly unverified.
+
+![Phosphor setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-setup.png)
+
+## Phosphor setup on mobile
+
+Mobile setup guidance for a fresh demo installation.
+
+![Phosphor setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-setup-mobile.png)
+
+## Phosphor mounted library
+
+The same reviewed movie/episode workflow in the terminal theme.
+
+![Phosphor mounted library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-library.png)
+
+## Phosphor library on mobile
+
+Responsive folder browsing and review panels.
+
+![Phosphor library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-library-mobile.png)
 
 ## Phosphor queue
 
-The real first-use empty queue.
+The real empty state; outage recovery is tested separately.
 
-![Phosphor queue](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/phosphor-downloads.png)
-
-## Phosphor indexers
-
-Local fixture endpoint with a dummy, redacted key.
-
-![Phosphor indexers](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/phosphor-indexers.png)
-
-## Phosphor sign in
-
-The production login form.
-
-![Phosphor sign in](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/phosphor-login.png)
-
-## StreamRD Plex / Jellyfin export
-
-A local mounted-file fixture exported using the real admin form; link repair reports no issues.
-
-![StreamRD library export](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/streamrd-library-export.png)
-
-## Phosphor Plex / Jellyfin export
-
-A local mounted-file fixture exported using the real admin form; link repair reports no issues.
-
-![Phosphor library export](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.2.0/docs/screenshots/phosphor-library-export.png)
+![Phosphor queue](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.3.0/docs/screenshots/v0.3.0/phosphor-queue.png)
 

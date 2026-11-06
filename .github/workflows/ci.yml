@@ -58,3 +58,21 @@ jobs:
         run: docker build -t streamrd-web ./web
       - name: Validate production containers and database restoration
         run: bash infra/smoke-images.sh streamrd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser test tooling
+        run: npm ci --prefix qa
+      - name: Install Chromium
+        run: cd qa && npx playwright install --with-deps chromium
+      - name: Exercise desktop and mobile product workflows
+        env:
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/browser-qa
+        run: bash infra/run-browser-qa.sh streamrd
+      - name: Upload browser screenshots and validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamrd-browser-qa
+          path: ${{ runner.temp }}/browser-qa
+          if-no-files-found: ignore

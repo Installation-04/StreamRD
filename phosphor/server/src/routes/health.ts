@@ -1,3 +1,4 @@
+import { version } from "../../package.json";
 import { asyncHandler } from "../http";
 import { Router } from "express";
 import { db } from "../db";
@@ -15,7 +16,7 @@ healthRouter.get("/", asyncHandler(async (_req, res) => {
   res.status(dbOk ? 200 : 503).json({
     status: dbOk ? "ok" : "degraded",
     db: dbOk ? "up" : "down",
-    version: "0.1.0",
+    version,
     time: new Date().toISOString(),
   });
 }));

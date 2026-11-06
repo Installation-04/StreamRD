@@ -1,3 +1,4 @@
+import { setupRouter } from "./routes/setup";
 import { libraryRouter } from "./routes/library";
 import { errorHandler, requestId } from "./http";
 import cors from "cors";
@@ -28,6 +29,7 @@ export function createApp(): Express {
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
+  app.use("/api/account/setup", setupRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/debrid", debridRouter);
   app.use("/api/search", searchRouter);

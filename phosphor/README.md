@@ -148,8 +148,14 @@ MIT — see the repository root [LICENSE](../LICENSE).
 
 ## Screenshots and external media libraries
 
-![Application screenshot](../docs/screenshots/phosphor-search.png)
+![Application screenshot](../docs/screenshots/v0.3.0/phosphor-discover.png)
 
 See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
 Optional mounted-file symlink export for **Plex and Jellyfin** is available under
 Admin → Plex / Jellyfin. [Setup and scanning guide](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md).
+
+## Community development
+
+[Project HQ](https://github.com/Installation-04/StreamRD/wiki/Project-HQ) tracks delivery, acceptance checks, and upcoming work.
+The community edition adds guided `/setup`, reviewed mounted-file batches,
+and responsive discovery/search workflows. See [contributing](https://github.com/Installation-04/StreamRD/blob/main/CONTRIBUTING.md) to help.

@@ -1,0 +1,21 @@
+name: Feature proposal
+description: Describe a community problem and a useful outcome.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would success look like?
+      description: Describe the workflow and who benefits; screenshots or examples are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Relevant constraints
+      description: Device compatibility, self-hosting setup, accessibility, or alternative approaches.

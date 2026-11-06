@@ -1,0 +1,9 @@
+{
+  "name": "@streamrd/browser-qa",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Disposable production-image browser journeys for both community apps",
+  "scripts": { "test": "node product.cjs" },
+  "engines": { "node": ">=22" },
+  "devDependencies": { "playwright": "1.57.0" }
+}

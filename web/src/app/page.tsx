@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
+import { Icon } from "@/components/Icon";
 import { ApiError, api, del, post } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { BrowsePage, BrowseRow, TitleCardData } from "@/lib/types";
@@ -17,6 +20,9 @@ const appendTitles = (old: TitleCardData[], added: TitleCardData[]) => [...old, 
 
 export default function HomePage() {
   const profile = usePlaybackProfile();
+  const { user } = useAuth();
+  const [view, setView] = useState("all");
+  const [refresh, setRefresh] = useState(0);
   const [rows, setRows] = useState<BrowseRow[] | null>(null);
   const [favorites, setFavorites] = useState<ListPage>(emptyPage);
   const [history, setHistory] = useState<ListPage>(emptyPage);
@@ -68,6 +74,8 @@ export default function HomePage() {
   useEffect(() => {
     if (!profile.ready) return;
     setHistory(emptyPage);
+    setRows(null);
+    setError(null);
     setLoading(new Set());
     const controller = new AbortController();
     const { signal } = controller;
@@ -95,7 +103,7 @@ export default function HomePage() {
       for (const request of requests.current) request.abort();
       requests.current.clear();
     };
-  }, [router, profile.ready, profile.profileId]);
+  }, [router, profile.ready, profile.profileId, refresh]);
 
   async function loadMore(row?: BrowseRow, list?: PersonalList) {
     const key = list ? `list:${list}` : row?.id ?? "more-genres";
@@ -159,16 +167,36 @@ export default function HomePage() {
   }
 
   const favoriteProps = { favoriteIds: favIds, knownFavoriteIds: knownFavorites, busyFavoriteIds: favoriteBusy, onToggleFavorite: toggleFavorite };
+  const featured = history.titles[0] ?? rows?.find(row => row.id === "recent")?.titles[0];
+  const hasCollection = Boolean(rows?.some(row => row.titles.length) || favorites.titles.length || history.titles.length);
+  const filters = [{ id: "all", label: "For you", icon: "grid" as const }, { id: "movies", label: "Movies", icon: "film" as const }, { id: "series", label: "Series", icon: "screen" as const }, { id: "my-list", label: "My List", icon: "heart" as const }];
+  const visibleRows = rows?.filter(row => view === "all" || row.id === view);
+  const collectionIsEmpty = rows !== null && !hasCollection;
   return (
-    <main className="container">
-      <PlaybackProfile {...profile} onChange={profile.chooseProfile} />
-      {profile.error && <p role="alert" className="error-text">{profile.error}</p>}
-      {error && <p className="error-text" role="alert">{error}</p>}
-      {rows && rows.length === 0 && favorites.titles.length === 0 && history.titles.length === 0 && <p className="dim" style={{ marginTop: 40 }}>{t("home.empty")}</p>}
-      {history.titles.length > 0 && <TitleRow label={t("home.continueWatching")} titles={history.titles} {...favoriteProps} loading={loading.has("list:history")} onLoadMore={history.nextCursor ? () => void loadMore(undefined, "history") : undefined} />}
-      {(favorites.titles.length > 0 || favorites.nextCursor) && <TitleRow label={t("home.myList")} titles={favorites.titles} {...favoriteProps} loading={loading.has("list:favorites")} onLoadMore={favorites.nextCursor ? () => void loadMore(undefined, "favorites") : undefined} />}
-      {rows?.map(row => <TitleRow key={row.id} label={row.label} titles={row.titles} {...favoriteProps} onLoadMore={row.nextCursor ? () => void loadMore(row) : undefined} loading={loading.has(row.id)} />)}
-      {nextGenre && <button type="button" className="btn btn-secondary" disabled={loading.has("more-genres")} onClick={() => void loadMore()}>{loading.has("more-genres") ? "Loading…" : "More genres"}</button>}
+    <main className="container home-page">
+      <div className="page-heading">
+        <div><p className="eyebrow">YOUR PERSONAL CINEMA</p><h1>{user ? `Welcome back${user.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}.` : "Make room for a good story."}</h1><p className="page-description">A collection that feels like yours. Pick up a favorite or find your next watch.</p></div>
+        <PlaybackProfile {...profile} onChange={profile.chooseProfile} />
+      </div>
+      {profile.error && <p role="alert" className="error-banner">{profile.error}</p>}
+      {error && <div className="error-banner" role="alert"><span>{error}</span><button type="button" className="text-button" onClick={() => setRefresh(value => value + 1)}>Try again<Icon name="arrow" size={15} /></button></div>}
+      {rows === null && !error && <div className="catalog-skeleton" role="status" aria-label="Loading your collection"><span className="skeleton skeleton-hero" /><div className="skeleton-row">{Array.from({ length: 6 }, (_, i) => <span key={i} className="skeleton skeleton-card" />)}</div><span className="sr-only">Loading your collection…</span></div>}
+      {featured && rows !== null && <section className="discovery-hero" aria-label="Featured from your collection">
+        <div className="discovery-hero-copy"><span className="feature-kicker"><span />{history.titles[0]?.id === featured.id ? "READY WHEN YOU ARE" : "FROM YOUR COLLECTION"}</span><h2>{featured.name}</h2><div className="feature-meta">{featured.year && <span>{featured.year}</span>}<span>{history.titles[0]?.id === featured.id ? "Continue your story" : "Something worth settling in for"}</span></div><p>{history.titles[0]?.id === featured.id ? "Your place is saved. Return to the story, on your own schedule." : "Your next movie night starts with a title you chose. Take a closer look and make it a good one."}</p><div className="feature-actions"><Link href={`/title/${featured.id}`} className="btn"><Icon name="play" size={18} />{history.titles[0]?.id === featured.id ? "Continue watching" : "Explore title"}</Link><Link href="/search" className="btn btn-secondary"><Icon name="search" size={17} />Find a title</Link></div></div>
+        <div className="discovery-hero-art" aria-hidden="true">{featured.posterUrl ? <img src={featured.posterUrl} alt="" onError={event => { event.currentTarget.style.display = "none"; }} /> : <><span className="feature-orbit feature-orbit-one" /><span className="feature-orbit feature-orbit-two" /><span className="feature-monogram">{featured.name.trim().slice(0, 1)}</span><Icon name="play" size={32} /></>}</div>
+        <span className="feature-corner-label">YOUR SCREEN. YOUR STORY.</span>
+      </section>}
+      {collectionIsEmpty && <section className="collection-empty"><span className="empty-icon"><Icon name="film" size={28} /></span><p className="eyebrow">THE FIRST SCENE IS YOURS</p><h2>Let’s build your collection.</h2><p>{user?.role === "admin" ? "Connect a debrid service, add the titles you love, and make this space your own." : "Your collection is waiting for its first titles. Connect a debrid service while your administrator gets things ready."}</p><div className="feature-actions"><Link href="/setup" className="btn">Get started<Icon name="arrow" size={18} /></Link>{user?.role === "admin" && <Link href="/admin/catalog" className="btn btn-secondary"><Icon name="plus" size={18} />Add a title</Link>}</div><div className="empty-steps"><span><b>01</b> Connect your service</span><span><b>02</b> Curate your collection</span><span><b>03</b> Settle in & watch</span></div></section>}
+      {hasCollection && <>
+        <div className="collection-toolbar"><div className="collection-filters" role="group" aria-label="Browse collection">{filters.map(filter => <button key={filter.id} type="button" className={view === filter.id ? "collection-filter active" : "collection-filter"} aria-pressed={view === filter.id} onClick={() => setView(filter.id)}><Icon name={filter.icon} size={16} />{filter.label}</button>)}</div><Link href="/setup" className="collection-help">Make it yours<Icon name="arrow" size={14} /></Link></div>
+        {view === "all" && history.titles.length > 0 && <TitleRow label={t("home.continueWatching")} titles={history.titles} {...favoriteProps} loading={loading.has("list:history")} onLoadMore={history.nextCursor ? () => void loadMore(undefined, "history") : undefined} />}
+        {(view === "all" || view === "my-list") && (favorites.titles.length > 0 || favorites.nextCursor) && <TitleRow label={t("home.myList")} titles={favorites.titles} {...favoriteProps} loading={loading.has("list:favorites")} onLoadMore={favorites.nextCursor ? () => void loadMore(undefined, "favorites") : undefined} />}
+        {view === "my-list" && !favorites.titles.length && !favorites.nextCursor && <div className="view-empty"><Icon name="heart" size={28} /><h2>Keep the good ones close.</h2><p>Add a title to My List using the + button on any card. Your saved titles will appear here.</p><button className="btn btn-secondary" onClick={() => setView("all")}>Explore your collection</button></div>}
+        {visibleRows?.map(row => <TitleRow key={row.id} label={row.label} titles={row.titles} {...favoriteProps} onLoadMore={row.nextCursor ? () => void loadMore(row) : undefined} loading={loading.has(row.id)} />)}
+        {(view === "movies" || view === "series") && !visibleRows?.length && rows !== null && <div className="view-empty"><Icon name={view === "movies" ? "film" : "screen"} size={28} /><h2>No {view} in your collection yet.</h2><p>{user?.role === "admin" ? "Add a title in the catalog to give it a home here." : "Your administrator can add titles to this collection."}</p>{user?.role === "admin" && <Link href="/admin/catalog" className="btn btn-secondary">Open catalog<Icon name="arrow" size={16} /></Link>}</div>}
+        {view === "all" && nextGenre && <div className="more-genres"><button type="button" className="btn btn-secondary" disabled={loading.has("more-genres")} onClick={() => void loadMore()}>{loading.has("more-genres") ? "Loading…" : "Explore more genres"}<Icon name="plus" size={17} /></button></div>}
+      </>}
+      <footer className="collection-footer"><span className="footer-brand">streamrd<span> / </span>Your screen. Your story.</span><div><Link href="/setup">Getting started</Link><a href="https://github.com/Installation-04/StreamRD/wiki" target="_blank" rel="noreferrer">Community guide<Icon name="arrow" size={13} /></a></div></footer>
     </main>
   );
 }

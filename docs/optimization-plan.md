@@ -146,6 +146,19 @@ jobs. Clients play resolved provider URLs directly.
 - Optional Compose overrides and scanner setup are in [plex-jellyfin.md](plex-jellyfin.md).
   Provider-to-mount matching and scanner API integration remain manual.
 
+## Community Edition v0.3.0
+
+- Add role-aware guided setup using private, local-only configuration checks;
+  configured services remain explicitly unverified until tested separately.
+- Browse mounted directories with scoped cursor pages and bounded retained
+  candidates. Review filename hints and export up to 100 files with partial results.
+- Refresh both web experiences, with accessible controls and mobile layouts,
+  explicit loading/error recovery, and existing account/provider behavior retained.
+- Add disposable production browser journeys, screenshots, CI evidence, and a
+  community project tracker with a Notion import bundle. Live Notion publication
+  is blocked on workspace access; the source tracker records that limitation.
+- See [community-validation.md](community-validation.md) and [Project HQ](product/PROJECT-HQ.md).
+
 ## Remaining stages and acceptance checks
 
 1. Extend synthetic measurements to concurrent-user load and real browser costs.

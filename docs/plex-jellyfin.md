@@ -13,11 +13,12 @@ filesystem paths. Provider URLs can expire; they are never written into symlinks
 Export a file only after it exists on the mount. The mount serves bytes when
 Plex/Jellyfin opens the symlink, so no duplicate media copy is created.
 
-Exports are managed manually under **Admin → Plex / Jellyfin** in either app.
-Provide a movie/series name, optional year, relative mounted video path, and season/
-episode numbers for TV. This deliberate mapping avoids guessing which files in a
-provider pack correspond to a catalog title or download. There is no automatic
-mount-file discovery, provider-to-mount matching, or scanner API integration.
+Exports are reviewed under **Admin → Plex / Jellyfin** in either app.
+Browse mounted folders, select up to 100 videos, and review the suggested movie/
+series name, year, and season/episode numbers before exporting. You can also enter
+a relative file path manually and add it to review. This deliberate mapping avoids guessing which files in a
+provider pack correspond to a catalog title or download. The browser lists existing mounted files; provider-to-mount matching and scanner
+API integration remain manual. Filename guesses are not metadata verification.
 
 ## Optional Docker mounts
 
@@ -143,3 +144,21 @@ Missing configuration/mount access returns `503`; invalid paths or metadata retu
 links escaping the source root are rejected. No schema change is needed for this
 feature. It does not add `.strm` URL files, which Plex does not handle as ordinary
 local video files.
+
+## Community edition browsing and batches
+
+The mounted-file browser uses bounded pages with root/directory-scoped cursors.
+Unreadable children, hidden entries, unsupported file types, and escaping source
+symlinks are skipped. No source files or scanner links are changed by browsing.
+Large directories are still enumerated on each page, so a remote mount can affect
+latency; retained pagination candidates are bounded.
+
+Selections remain in review until Export is pressed. Check inferred movie years
+and TV episode numbers, including specials; ambiguous filenames need manual edits.
+Export processes up to 100 selected entries sequentially and reports per-file
+outcomes. Successful files leave review; unsuccessful files stay editable so a
+collision or missing source does not discard the rest of your work.
+
+Search the exported library by name/path or filter Ready/Needs attention. Check /
+repair recreates missing owned links; removal asks for confirmation and preserves
+source media. Refresh the library status after resolving a mount outage.

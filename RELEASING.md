@@ -16,7 +16,7 @@ tested separately.
    export changes, run real-file collision/traversal/ownership regressions and
    scanner integration checks. Validate optional Compose configurations.
 4. Run `bash infra/package-release.sh /tmp/new-release-assets vMAJOR.MINOR.PATCH`.
-   Inspect both ZIPs and verify their checksums. This command only packages files.
+   Inspect the screenshot, wiki, and project-tracker ZIPs and verify their checksums. This command only packages files.
 5. Commit and push the reviewed changes. Wait for both GitHub CI workflows on that
    commit to pass. Create and push the annotated tag on that same commit:
 
@@ -26,7 +26,7 @@ tested separately.
    ```
 
 6. The tag workflow checks package versions, packages the documentation assets,
-   and publishes the checked-in notes with screenshots/wiki ZIPs and SHA256SUMS.
+   and publishes the checked-in notes with screenshots/wiki/project-tracker ZIPs and SHA256SUMS.
    Its manual dispatch also requires a tag ref. Verify the published release's
    target commit, notes, and downloadable assets. If workflow execution is not
    available, use `gh release create TAG --verify-tag --notes-file FILE` with the

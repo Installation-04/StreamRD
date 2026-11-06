@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import * as fs from "node:fs/promises";
 import path from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 
 export class LibraryError extends Error {
@@ -23,8 +23,14 @@ const extensions = new Set([".mkv", ".mp4", ".m4v", ".avi", ".mov", ".ts", ".m2t
 const manifestName = ".media-library.json";
 const missing = (e: unknown) => (e as NodeJS.ErrnoException)?.code === "ENOENT";
 const inside = (root: string, file: string) => { const relative = path.relative(root, file); return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative); };
+function relativeDirectory(directory: string): string {
+  if (directory === "") return directory;
+  if (path.isAbsolute(directory) || directory.includes("\\") || directory.split("/").some(p => p === ".." || p === "." || p === "") || /[\x00-\x1f]/.test(directory) || directory.includes(":")) throw new LibraryError("Use a relative media path within the configured mount");
+  return directory;
+}
 function relativeSource(source: string): string {
-  if (path.isAbsolute(source) || source.includes("\\") || source.split("/").some(p => p === ".." || p === "." || p === "") || /[\x00-\x1f]/.test(source) || source.includes(":")) throw new LibraryError("Use a relative media path within the configured mount");
+  if (!source) throw new LibraryError("Choose a relative video path");
+  relativeDirectory(source);
   if (!extensions.has(path.extname(source).toLowerCase())) throw new LibraryError("Choose a supported video file");
   return source;
 }
@@ -52,6 +58,42 @@ async function noSymlinkDirectories(directory: string, create: boolean): Promise
   }
 }
 
+export const libraryBrowseQuery = z.object({
+  path: z.string().max(2048).default(""), cursor: z.string().min(1).max(4096).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+const browseCursor = z.object({ version: z.literal(1), scope: z.string().regex(/^[a-f0-9]{64}$/), after: z.string().min(1).max(255).refine(value => !/[\/\\\x00-\x1f]/.test(value)) });
+export interface LibraryBrowseItem {
+  kind: "directory" | "file";
+  name: string;
+  path: string;
+  sizeBytes?: number;
+  suggested?: LibraryInput;
+}
+export interface LibraryBatchResult {
+  index: number;
+  sourcePath: string;
+  status: "exported" | "error";
+  entry?: LibraryEntry;
+  error?: string;
+}
+/** Filename hints only. Administrators review these before exporting any files. */
+export function suggestLibraryMedia(sourcePath: string): LibraryInput {
+  const basename = path.basename(sourcePath, path.extname(sourcePath));
+  const episode = /(?:^|[ ._\-])s(\d{1,3})e(\d{1,4})(?=$|[ ._\-])/i.exec(basename)
+    ?? /(?:^|[ ._\-])(\d{1,3})x(\d{1,4})(?=$|[ ._\-])/i.exec(basename);
+  const yearMatch = /(?:^|[ ._(\-])((?:18|19|20|21)\d{2}|2200)(?=$|[ ._)\-])/.exec(basename);
+  const year = yearMatch ? Number(yearMatch[1]) : undefined;
+  const stop = Math.min(episode?.index ?? basename.length, yearMatch?.index ?? basename.length);
+  const clean = (value: string) => value.replace(/[._]+/g, " ").replace(/\s+/g, " ").replace(/^[ \[()\-]+|[ \[()\-]+$/g, "").trim();
+  const parent = path.basename(path.dirname(sourcePath));
+  const name = (clean(basename.slice(0, stop)) || clean(parent === "." ? basename : parent) || "Untitled").slice(0, 160);
+  return {
+    name, ...(year ? { year } : {}), type: episode ? "episode" : "movie", sourcePath,
+    ...(episode ? { season: Number(episode[1]), episode: Number(episode[2]) } : {}),
+  };
+}
+
 /** One writer process per export root. Never follows output-directory symlinks. */
 export class MediaLibrary {
   private pending: Promise<unknown> = Promise.resolve();
@@ -59,15 +101,20 @@ export class MediaLibrary {
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const task = this.pending.then(operation); this.pending = task.catch(() => {}); return task;
   }
-  private async roots() {
+  private async sourceRoots() {
     const cfg = this.settings();
     if (!cfg.sourceRoot || !cfg.exportRoot) throw new LibraryError("Media library export is disabled; configure MEDIA_SOURCE_ROOT and MEDIA_LIBRARY_ROOT", 503);
     if (!path.isAbsolute(cfg.sourceRoot) || !path.isAbsolute(cfg.exportRoot)) throw new LibraryError("Media roots must be absolute filesystem paths", 503);
     const source = await fs.realpath(cfg.sourceRoot).catch(() => { throw new LibraryError("Media source mount is unavailable", 503); });
     const output = path.resolve(cfg.exportRoot);
     if (source === output || inside(source, output) || inside(output, source)) throw new LibraryError("Source and library roots must be separate directories", 503);
-    await noSymlinkDirectories(output, true);
+    if (!(await fs.stat(source)).isDirectory()) throw new LibraryError("Media source mount must be a directory", 503);
     return { source, output };
+  }
+  private async roots() {
+    const roots = await this.sourceRoots();
+    await noSymlinkDirectories(roots.output, true);
+    return roots;
   }
   private async read(output: string): Promise<LibraryEntry[]> {
     const file = path.join(output, manifestName);
@@ -105,6 +152,73 @@ export class MediaLibrary {
       if ((await fs.lstat(file)).isSymbolicLink() && await fs.readlink(file) === target) return false;
       throw new LibraryError("A different file already exists at the scanner path", 409);
     }
+  }
+  browse(input: { path?: string; cursor?: string; limit?: number } = {}) {
+    return this.exclusive(async () => {
+      const parsed = libraryBrowseQuery.safeParse(input);
+      if (!parsed.success) throw new LibraryError("Invalid media browse path, cursor, or page size");
+      const { path: relative, cursor, limit } = parsed.data;
+      relativeDirectory(relative);
+      // Browsing never creates or changes the scanner tree or source mount.
+      const { source } = await this.sourceRoots();
+      const directory = await fs.realpath(path.join(source, relative)).catch(() => { throw new LibraryError("Media directory is unavailable", 404); });
+      if (directory !== source && !inside(source, directory)) throw new LibraryError("Directory resolves outside the configured media mount");
+      if (!(await fs.stat(directory)).isDirectory()) throw new LibraryError("Choose a media directory");
+      const scope = createHash("sha256").update(JSON.stringify([source, relative, directory])).digest("hex");
+      let after = "";
+      if (cursor) {
+        try {
+          const decoded = browseCursor.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+          if (decoded.scope !== scope) throw new Error("Wrong browse scope");
+          after = decoded.after;
+        } catch { throw new LibraryError("Invalid cursor for this media directory"); }
+      }
+      // Retain only the smallest next-page candidates. Remote mounts can have huge
+      // directories; sorting the complete directory would defeat bounded paging.
+      const candidates: { name: string }[] = [];
+      const stream = await fs.opendir(directory);
+      for await (const entry of stream) {
+        if (entry.name.startsWith(".") || entry.name <= after || (!entry.isDirectory() && !entry.isSymbolicLink() && !(entry.isFile() && extensions.has(path.extname(entry.name).toLowerCase())))) continue;
+        let low = 0, high = candidates.length;
+        while (low < high) { const middle = (low + high) >>> 1; if (candidates[middle].name < entry.name) low = middle + 1; else high = middle; }
+        if (low <= limit) { candidates.splice(low, 0, { name: entry.name }); if (candidates.length > limit + 1) candidates.pop(); }
+      }
+      const page = candidates.slice(0, limit), items: LibraryBrowseItem[] = [];
+      for (const entry of page) {
+        const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
+        try {
+          relativeDirectory(relativePath);
+          const target = await fs.realpath(path.join(directory, entry.name));
+          // Never expose an escaping symlink, arbitrary non-video file, or special file.
+          if (!inside(source, target)) continue;
+          const stat = await fs.stat(target);
+          if (stat.isDirectory()) items.push({ kind: "directory", name: entry.name, path: relativePath });
+          else if (stat.isFile() && extensions.has(path.extname(entry.name).toLowerCase()) && extensions.has(path.extname(target).toLowerCase())) {
+            await fs.access(target, constants.R_OK);
+            items.push({ kind: "file", name: entry.name, path: relativePath, sizeBytes: stat.size, suggested: suggestLibraryMedia(relativePath) });
+          }
+        } catch { /* An inaccessible or changed child never invalidates the rest of its page. */ }
+      }
+      const parent = path.posix.dirname(relative);
+      const nextCursor = candidates.length > limit ? Buffer.from(JSON.stringify({ version: 1, scope, after: page[page.length - 1].name })).toString("base64url") : null;
+      return { path: relative, parentPath: relative ? (parent === "." ? "" : parent) : null, items, nextCursor };
+    });
+  }
+  async addBatch(items: unknown[]) {
+    if (!Array.isArray(items) || items.length < 1 || items.length > 100) throw new LibraryError("Choose between 1 and 100 files per export batch");
+    const results: LibraryBatchResult[] = [];
+    // Process sequentially, sharing the existing single-writer queue with manual
+    // exports. An invalid/colliding item does not discard earlier successful work.
+    for (const [index, input] of items.entries()) {
+      const raw = input as { sourcePath?: unknown } | null;
+      const sourcePath = typeof raw?.sourcePath === "string" ? raw.sourcePath : "";
+      const parsed = libraryInput.safeParse(input);
+      if (!parsed.success) { results.push({ index, sourcePath, status: "error", error: "Review the file name, type, path, and episode numbers" }); continue; }
+      try { results.push({ index, sourcePath, status: "exported", entry: await this.add(parsed.data) }); }
+      catch (e) { results.push({ index, sourcePath, status: "error", error: e instanceof LibraryError ? e.message : "Could not export this file; check mount access and storage permissions" }); }
+    }
+    const exported = results.filter(item => item.status === "exported").length;
+    return { results, summary: { exported, failed: results.length - exported } };
   }
   list() {
     return this.exclusive(async () => {

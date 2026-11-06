@@ -6,79 +6,41 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 type PhosphorColor = "green" | "amber" | "white";
-
-const COLOR_ORDER: PhosphorColor[] = ["green", "amber", "white"];
-const COLOR_LABEL: Record<PhosphorColor, string> = { green: "GRN", amber: "AMB", white: "WHT" };
-
+const COLORS: PhosphorColor[] = ["green", "amber", "white"];
+const LABELS: Record<PhosphorColor, string> = { green: "Green", amber: "Amber", white: "White" };
 function ColorToggle() {
   const [color, setColor] = useState<PhosphorColor>("green");
-
   useEffect(() => {
-    const saved = (localStorage.getItem("ph_color") as PhosphorColor) ?? "green";
-    setColor(saved);
-    if (saved !== "green") document.documentElement.dataset.phosphor = saved;
+    try { const saved = localStorage.getItem("ph_color"); if (COLORS.includes(saved as PhosphorColor)) setColor(saved as PhosphorColor); } catch { /* Theme remains usable without storage. */ }
   }, []);
-
-  const cycle = () => {
-    const next = COLOR_ORDER[(COLOR_ORDER.indexOf(color) + 1) % COLOR_ORDER.length];
-    setColor(next);
-    localStorage.setItem("ph_color", next);
-    if (next === "green") delete document.documentElement.dataset.phosphor;
-    else document.documentElement.dataset.phosphor = next;
-  };
-
-  return (
-    <button className="btn btn-sm" onClick={cycle} title={`Phosphor color: ${color} (click to change)`}>
-      {COLOR_LABEL[color]}
-    </button>
-  );
+  function cycle() {
+    const next = COLORS[(COLORS.indexOf(color) + 1) % COLORS.length];
+    setColor(next); document.documentElement.dataset.phosphor = next;
+    try { localStorage.setItem("ph_color", next); } catch { /* Theme still applies to this visit. */ }
+  }
+  return <button className="theme-switch" onClick={cycle} aria-label={`Color theme: ${LABELS[color]}. Switch to ${LABELS[COLORS[(COLORS.indexOf(color) + 1) % COLORS.length]]}.`} title="Change phosphor color"><span className="theme-dot" aria-hidden="true" />{LABELS[color]}</button>;
 }
-
 export function Nav() {
   const { user, logout } = useAuth();
-  const pathname = usePathname();
-  const router = useRouter();
+  const pathname = usePathname(), router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   if (pathname.startsWith("/watch/")) return null;
-
-  const link = (href: string, label: string) => (
-    <Link href={href} className={pathname === href ? "active" : ""}>
-      {label}
-    </Link>
-  );
-
-  return (
-    <nav className="nav">
-      <Link href="/" className="nav-logo glow">
-        PHOSPHOR
-      </Link>
+  const link = (href: string, label: string) => {
+    const active = pathname === href || (href === "/admin" && pathname.startsWith("/admin/"));
+    return <Link href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>{label}</Link>;
+  };
+  return <>
+    <a className="skip-link" href="#main-content">Skip to content</a>
+    <nav className="nav" aria-label="Main navigation">
+      <Link href="/" className="nav-logo"><span className="brand-symbol" aria-hidden="true">p<span>_</span></span><span>PHOSPHOR<span className="brand-caption">YOUR MEDIA. YOUR SIGNAL.</span></span></Link>
       <div className="nav-links">
-        {user && link("/search", "Search")}
-        {user && link("/downloads", "Queue")}
-        {user && link("/account/debrid", "Debrid")}
-        {user && link("/account/profile", "Profile")}
-        {user?.role === "admin" && link("/admin", "Admin")}
+        {user && link("/setup", "Setup")}{user && link("/search", "Discover")}{user && link("/downloads", "Queue")}{user && link("/account/debrid", "Connections")}{user && link("/account/profile", "Account")}{user?.role === "admin" && link("/admin", "Admin")}
       </div>
-      <ColorToggle />
-      {user ? (
-        <>
-          <span className="dim" style={{ fontSize: 12 }}>
-            {user.displayName}
-          </span>
-          <button
-            className="btn btn-sm"
-            onClick={async () => {
-              await logout();
-              router.push("/login");
-            }}
-          >
-            Sign out
-          </button>
-        </>
-      ) : (
-        <Link href="/login" className="btn btn-sm" style={{ display: "inline-block" }}>
-          Sign in
-        </Link>
-      )}
+      <div className="nav-account"><ColorToggle />{user ? <>
+        <span className="nav-avatar" title={user.displayName} aria-label={user.displayName}>{user.displayName.slice(0, 1).toUpperCase()}</span>
+        <button className="nav-signout" disabled={signingOut} onClick={async () => { setSigningOut(true); await logout(); router.push("/login"); }}>{signingOut ? "Signing out…" : "Sign out"}</button>
+      </> : <Link href="/login" className="btn btn-sm">Sign in</Link>}</div>
     </nav>
-  );
+    <span id="main-content" className="content-anchor" tabIndex={-1} />
+  </>;
 }

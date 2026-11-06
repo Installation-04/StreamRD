@@ -17,10 +17,11 @@ for (const directory of ['server','web','phosphor/server','phosphor/web']) {
 if (!fs.statSync(`docs/releases/${tag}.md`).isFile()) throw Error('Missing reviewed release notes');
 JS
 mkdir -p "$output"
-for file in "$output/streamrd-${tag}-screenshots.zip" "$output/streamrd-${tag}-wiki.zip" "$output/SHA256SUMS"; do
+for file in "$output/streamrd-${tag}-screenshots.zip" "$output/streamrd-${tag}-wiki.zip" "$output/streamrd-${tag}-project-tracker.zip" "$output/SHA256SUMS"; do
   [[ ! -e "$file" ]] || { echo 'Use a new output directory; existing assets are never replaced' >&2; exit 1; }
 done
 zip -q -r "$output/streamrd-${tag}-screenshots.zip" docs/screenshots
 zip -q -r "$output/streamrd-${tag}-wiki.zip" docs/wiki
-(cd "$output" && sha256sum "streamrd-${tag}-screenshots.zip" "streamrd-${tag}-wiki.zip" > SHA256SUMS)
+zip -q -r "$output/streamrd-${tag}-project-tracker.zip" docs/product
+(cd "$output" && sha256sum "streamrd-${tag}-screenshots.zip" "streamrd-${tag}-wiki.zip" "streamrd-${tag}-project-tracker.zip" > SHA256SUMS)
 echo "Version-checked release assets: $output"

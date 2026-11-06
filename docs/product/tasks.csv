@@ -1,0 +1,13 @@
+Name,Status,Priority,Milestone,Owner,Acceptance
+StreamRD responsive discovery,Done,P0,v0.3.0,Lead integration,Desktop and mobile journeys preserve favorites and profile progress
+Phosphor cockpit refresh,Done,P0,v0.3.0,Lead integration,Readable themes and working search and saved searches
+Mounted media browsing and reviewed bulk export,Done,P0,v0.3.0,Lead integration,Traversal and cursor regressions plus real browser export
+Guided first-use setup,Done,P0,v0.3.0,Lead integration,Role and credential privacy tests plus actionable browser checklist
+Community contributor workflow,Done,P1,v0.3.0,Lead,Documented setup and issue templates
+Production and browser regression checks,Done,P0,v0.3.0,Lead,All backend tests builds and disposable journeys pass
+Publish Notion project page,Blocked,P1,v0.3.0,CEO workspace access,Notion connection and accessible parent page required
+Release v0.3.0,Done,P0,v0.3.0,Lead,CI green and tagged release assets verified
+Native client parity,Backlog,P1,Future,Community,Real device builds exercise file choice and profile resume
+Versioned migrations,Backlog,P1,Future,Community,Old schema upgrade and restore fixtures
+Credential encryption and session architecture,Backlog,P1,Future,Community,Key rotation and client compatibility plan
+Playback reliability insights,Backlog,P2,Future,Community,Separate resolved links from successful playback

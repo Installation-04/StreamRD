@@ -33,14 +33,14 @@ export default function LoginPage() {
       <form className="card auth-card" onSubmit={submit}>
         <h1 style={{ marginBottom: 20 }}>{t("auth.login")}</h1>
         <div className="field">
-          <label>{t("auth.email")}</label>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label htmlFor="login-email">{t("auth.email")}</label>
+          <input id="login-email" autoComplete="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="field">
-          <label>{t("auth.password")}</label>
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label htmlFor="login-password">{t("auth.password")}</label>
+          <input id="login-password" autoComplete="current-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        {error && <p className="error-text">{error}</p>}
+        {error && <p className="error-text" role="alert">{error}</p>}
         <button className="btn" disabled={busy} style={{ width: "100%" }}>
           {busy ? "…" : t("auth.login")}
         </button>
