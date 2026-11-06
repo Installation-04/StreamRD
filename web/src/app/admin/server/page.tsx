@@ -112,7 +112,7 @@ export default function AdminServerPage() {
             />
           </div>
           <div className="field">
-            <label>Max playback attempts (providers tried per play)</label>
+            <label>Max playback attempts (total source/provider attempts)</label>
             <input
               type="number"
               min={1}

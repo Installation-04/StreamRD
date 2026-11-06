@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+import { asyncHandler } from "../http";
 import { Router } from "express";
 import { z } from "zod";
 import { config } from "../config";
@@ -24,42 +26,32 @@ const signupSchema = z.object({
   displayName: z.string().min(1).max(80),
 });
 
-authRouter.post("/signup", authRateLimit, async (req, res) => {
+authRouter.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
   const body = parseBody(signupSchema, req.body, res);
   if (!body) return;
   const email = body.email.toLowerCase();
-  const existing = await db.user.findUnique({ where: { email } });
-  if (existing) {
-    res.status(409).json({ error: "An account with this email already exists" });
-    return;
-  }
-  // The very first account (or the configured ADMIN_EMAIL) becomes admin so a
-  // fresh install always has someone who can reach the admin panel.
-  const userCount = await db.user.count();
-  const role =
-    userCount === 0 || (config.adminEmail && email === config.adminEmail.toLowerCase())
-      ? "admin"
-      : "user";
-  const user = await db.user.create({
-    data: {
-      email,
-      displayName: body.displayName,
-      hashedPassword: await hashPassword(body.password),
-      role,
-      debridConfig: { create: {} },
-    },
-  });
-  await logEvent("info", "signup", `New account ${email} (${role})`, { userId: user.id });
-  const token = signSession({ sub: user.id, email: user.email, role: role as "user" | "admin" });
+  if (await db.user.findUnique({ where: { email } })) { res.status(409).json({ error: "An account with this email already exists" }); return; }
+  // Hash outside the transaction so bcrypt does not hold the SQLite write lock.
+  const hashedPassword = await hashPassword(body.password);
+  const user = await db.$transaction(async tx => {
+    // Take a write lock before reading the count, across processes as well as requests.
+    await tx.setting.upsert({ where: { key: "auth.signup.lock" }, create: { key: "auth.signup.lock", value: "1" }, update: { value: "1" } });
+    const count = await tx.user.count();
+    const role = config.adminEmail ? (email === config.adminEmail.toLowerCase() ? "admin" : "user") : count === 0 ? "admin" : "user";
+    return tx.user.create({ data: { email, displayName: body.displayName, hashedPassword, role, debridConfig: { create: {} } } });
+  }, { maxWait: 10000, timeout: 10000 });
+  await logEvent("info", "signup", `New account ${email} (${user.role})`, { userId: user.id });
+  const token = signSession({ sub: user.id, email: user.email, role: user.role === "admin" ? "admin" : "user",
+    version: user.sessionVersion });
   res.status(201).json({ token, user: publicUser(user) });
-});
+}));
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
 
-authRouter.post("/login", authRateLimit, async (req, res) => {
+authRouter.post("/login", authRateLimit, asyncHandler(async (req, res) => {
   const body = parseBody(loginSchema, req.body, res);
   if (!body) return;
   const user = await db.user.findUnique({ where: { email: body.email.toLowerCase() } });
@@ -76,17 +68,20 @@ authRouter.post("/login", authRateLimit, async (req, res) => {
     sub: user.id,
     email: user.email,
     role: user.role === "admin" ? "admin" : "user",
+    version: user.sessionVersion,
   });
   res.json({ token, user: publicUser(user) });
-});
+}));
 
-// Stateless JWTs cannot be revoked server-side; the endpoint exists so
-// clients have a uniform place to end a session (and we log it).
-authRouter.post("/logout", async (req, res) => {
+authRouter.post("/logout", asyncHandler(async (req, res) => {
   if (req.session) {
-    await logEvent("info", "logout", `Logout ${req.session.email}`, {
-      userId: req.session.sub,
-    });
+    try {
+      await db.revokedSession.upsert({ where: { id: req.session.jti }, create: { id: req.session.jti, userId: req.session.sub, expiresAt: new Date(req.session.exp * 1000) }, update: {} });
+    } catch (err) {
+      // A deleted account is already unable to use this token.
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && ["P2003", "P2025"].includes(err.code))) throw err;
+    }
+    await logEvent("info", "logout", "Session signed out", { userId: req.session.sub });
   }
   res.json({ ok: true });
-});
+}));

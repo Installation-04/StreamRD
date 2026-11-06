@@ -1,3 +1,9 @@
+import { asyncHandler } from "../http";
+import { beginPlayback, mediaKeyFor, ownsProfile } from "../progress";
+import { progressRouter } from "./progress";
+import { FileSelectionRequired, InvalidFileSelection } from "../providers/files";
+import { PROVIDER_IDS } from "../providers/types";
+import { PendingSourceError } from "../providers/sourceJobs";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../auth/middleware";
@@ -8,22 +14,27 @@ import { parseBody, titleSources } from "./helpers";
 
 export const playRouter = Router();
 playRouter.use(requireAuth);
+playRouter.use(progressRouter);
 
 const playSchema = z.object({
   titleId: z.string().min(1),
+  trackProgress: z.boolean().optional(),
+  profileId: z.string().min(1).max(200).optional(),
   /** Optional index into the title's source list to force a specific source. */
   sourceIndex: z.number().int().min(0).optional(),
-});
+  selection: z.object({ provider: z.enum(PROVIDER_IDS), fileToken: z.string().regex(/^[a-f0-9]{64}$/) }).optional(),
+}).refine(body => !body.selection || body.sourceIndex !== undefined, { message: "File choices require a source index" });
 
 /**
  * POST /api/play — resolve a stream URL for a title through the user's
  * debrid providers, recording a PlaybackLog either way.
  */
-playRouter.post("/", async (req, res) => {
+playRouter.post("/", asyncHandler(async (req, res) => {
   const body = parseBody(playSchema, req.body, res);
   if (!body) return;
   const userId = req.session!.sub;
   const started = Date.now();
+  if (!await ownsProfile(userId, body.profileId)) { res.status(404).json({ error: "Profile not found" }); return; }
 
   const title = await db.title.findUnique({ where: { id: body.titleId } });
   if (!title) {
@@ -43,7 +54,8 @@ playRouter.post("/", async (req, res) => {
   });
 
   try {
-    const stream = await debridManager.resolveStream(cfg, sources);
+    const stream = await debridManager.resolveStream(cfg, sources, body.selection);
+    const playback = body.trackProgress ? await beginPlayback(userId, title.id, stream.mediaKey ?? mediaKeyFor(title.id, stream.filename, stream.filesize), body.profileId) : undefined;
     await db.playbackLog.create({
       data: {
         userId,
@@ -58,6 +70,7 @@ playRouter.post("/", async (req, res) => {
       provider: stream.provider,
     });
     res.json({
+      ...(playback ? { playback } : {}),
       stream: {
         url: stream.url,
         filename: stream.filename,
@@ -70,6 +83,16 @@ playRouter.post("/", async (req, res) => {
       title: { id: title.id, name: title.name },
     });
   } catch (err) {
+    if (err instanceof FileSelectionRequired) {
+      res.status(409).json({ error: err.message, selectionRequired: true, files: err.files, provider: err.provider, sourceIndex: body.sourceIndex ?? err.sourceIndex });
+      return;
+    }
+    if (err instanceof InvalidFileSelection) { res.status(409).json({ error: err.message }); return; }
+    if (err instanceof PendingSourceError) {
+      // Preserve the legacy error status; new clients can explicitly retry pending work.
+      res.status(502).json({ error: err.message, pending: true, retryAfterMs: 5000, progress: err.progress });
+      return;
+    }
     const message = (err as Error).message;
     await db.playbackLog.create({
       data: {
@@ -86,4 +109,4 @@ playRouter.post("/", async (req, res) => {
     });
     res.status(502).json({ error: message });
   }
-});
+}));

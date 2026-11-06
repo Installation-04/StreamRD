@@ -175,3 +175,225 @@ Server settings shape:
 | GET | `/api/admin/logs?limit=&type=&level=&provider=&userId=` | Recent structured events, newest first (max 500) |
 | GET | `/api/admin/export/config` | JSON export of server settings + provider settings + catalog (versionable) |
 | POST | `/api/admin/import/config` | Validated import of the same document (`version: 1`); titles upsert by id |
+
+### Pending torrent playback (backward-compatible extension)
+
+`POST /api/play` still returns the existing `{ stream, title }` body with HTTP
+200 when ready. An unfinished torrent returns HTTP 502 with the existing
+`error` string plus `pending: true`, `retryAfterMs: 5000`, and `progress` (0–100).
+Clients may retry the same request after that interval. Pending preparations do
+not count as failed plays in PlaybackLog. Legacy clients continue to receive an
+ordinary error and can retry manually; the web client retries up to 60 times and
+cancels polling when navigating away. No new unauthenticated job endpoint exists.
+
+Provider references are stored per user, provider, source, credentials and base
+URL. Signed stream URLs are freshly resolved and never stored in the job table.
+References expire after 24 hours; changed credentials select a separate job.
+Concurrent workers use a database lease. Abandoned leases become recoverable
+after their timeout. HTTP 404 clears a removed provider reference; transient
+errors retain it. A process crash (or an error inside a provider's add operation)
+before its returned reference is persisted can still cause a duplicate add on
+retry. This is not an exactly-once guarantee across the provider and SQLite.
+
+Upgrades require the additive `PlaybackSourceJob` table: regenerate the Prisma
+client and apply the schema using the repository's existing `prisma db push`
+workflow before starting the updated backend. Back up deployed databases first.
+
+### Bounded catalog browsing
+
+The legacy `GET /api/catalog/rows` response is unchanged for existing clients.
+New clients use the following authenticated endpoints (or public browsing when
+an admin has enabled it):
+
+- `GET /api/catalog/browse?limit=20`: initial recent/movie/series rows plus up
+  to five genre rows. Empty rows are omitted. `limit` is per row, defaults to
+  20 and must be an integer from 1 to 50.
+- `GET /api/catalog/browse?afterGenre=<nextGenre>&limit=20`: the next five genre
+  rows. The response is `{ rows, nextGenre }`; null `nextGenre` ends pagination.
+- `GET /api/catalog/browse/row?row=<rowId>&cursor=<nextCursor>&limit=20`: another
+  page within a row. Row IDs are `recent`, `movies`, `series`, or `genre:<name>`.
+  Response is `{ id, label, titles, nextCursor }`. Null ends pagination.
+
+Cards contain only `id`, `name`, `year`, and `posterUrl`. Fetch the existing
+`/api/catalog/title/:id` endpoint for full details. Encode query parameters with
+URLSearchParams or encodeURIComponent. Genre names are sorted using SQLite's
+binary order; nonempty string genres up to 500 characters are supported by the
+new genre listing. Malformed and non-array genre JSON is ignored.
+
+Row cursors carry the row ID, timestamp, and title ID; treat them as opaque and
+pass them back unchanged. Invalid or cross-row cursors return HTTP 400. Rows use
+`createdAt DESC, id DESC` keyset ordering, so deleting the cursor's title does
+not invalidate pagination. Newer titles require refreshing the first page;
+this is not a frozen snapshot while admins edit the catalog.
+
+The web home page uses these endpoints with load-more controls and cancellation
+on navigation. Favorites/history remain on their existing endpoints. Apply the
+new additive Title indexes with the repository's existing schema-update workflow
+before deployment. Genre queries currently use SQLite JSON functions; migrating
+to another database needs an equivalent query implementation.
+
+### Bounded favorites and viewing history
+
+- `GET /api/account/favorites/page?limit=20&cursor=...`
+- `GET /api/account/continue-watching/page?limit=20&cursor=...`
+
+Both require an active authenticated account and return `{ titles, nextCursor }`.
+Titles contain only `id`, `name`, `year`, and `posterUrl`. The default page size
+is 20; valid limits are integers from 1 to 50. Null cursors end pagination.
+Malformed, cross-account, or cross-list cursors return HTTP 400. Treat cursors
+as opaque; URL-encode them when sending them back. Query filters always scope
+results to the authenticated account, independently of cursor contents.
+
+Favorites use creation timestamp and favorite-record ID keyset ordering. Removing
+the cursor's favorite does not prevent loading the next page. History aggregates
+all successful playback logs by title before limiting, ordered by latest success
+then title ID. Failures do not advance a title. This fixes the previous behavior
+where 200 recent plays of one title hid other titles. History still represents
+successful URL resolution, not playback position or completion.
+
+`POST /api/account/favorites/status` accepts `{ titleIds: string[] }`, at most 200
+nonempty IDs, and returns `{ favoriteIds: string[] }` containing only favorites
+among the requested IDs for the current account. Empty input returns an empty
+array; duplicate IDs are deduplicated. The web queries status for newly visible
+cards, rather than downloading the whole saved list. Favorite controls wait for
+status and serialize edits per title; late page/status results preserve local
+edits, and failed edits roll back with a visible error.
+
+The original GET favorites and continue-watching response shapes remain available.
+Legacy favorites still returns the full list. Legacy history returns up to 20
+full titles using the corrected distinct-history query. New history pages scan
+the account's indexed successful logs to aggregate them; this bounds returned
+objects, but does not provide constant-time aggregation for arbitrarily large
+histories. Page contents can change when new activity occurs; refresh to see
+items that move ahead of an existing cursor.
+
+Apply the additive Favorite(userId, createdAt, id) and
+PlaybackLog(userId, success, titleId, createdAt) indexes with the existing Prisma
+schema-update workflow before deployment. No history backfill is needed.
+
+### Choosing a torrent video file
+
+When a finished torrent contains multiple main videos, `POST /api/play` returns
+HTTP 409 with `{ error, selectionRequired: true, provider, sourceIndex, files }`.
+Each file contains `{ token, name, size?, format, sample }`. No provider URL or
+API credential is included in the choice list. Retry the same endpoint with:
+
+```json
+{
+  "titleId": "the-title-id",
+  "sourceIndex": 0,
+  "selection": { "provider": "realdebrid", "fileToken": "the-returned-token" }
+}
+```
+
+Pass the returned sourceIndex and provider unchanged. Tokens are bound to the
+account, source, credentials/base URL, saved torrent reference and file metadata.
+An invalid or expired choice returns HTTP 409; malformed selection input returns
+400. Explicit choices do not silently fall back to another source or provider.
+Selecting a file reuses the saved reference rather than adding the torrent again.
+As with pending work, asking for a choice does not create a failed playback log.
+
+When there is exactly one main video it is chosen automatically, skipping samples,
+trailers and non-video files. A sample-only torrent requires an explicit choice.
+Empty/non-video torrents fail rather than playing an arbitrary document/archive.
+Older adapters without metadata retain single-link behavior; multiple unnamed
+links require a choice. Choice responses are capped at 500 video candidates;
+oversized packs fail explicitly rather than silently hiding files.
+
+Real-Debrid maps links to the selected files in order, refusing inconsistent
+file/link counts. It still selects all files at the provider to start the torrent;
+this change controls playback selection, not which files the provider downloads.
+AllDebrid retrieves its nested file tree. Premiumize resolves finished transfers
+through item details or nested folder listings and uses cloud links directly.
+Tree traversal is bounded by depth/count limits and the existing network deadline.
+
+The web chooser supports changing files and shows an external-link fallback if
+HTML video playback fails. Container extensions are hints, not codec guarantees;
+no transcoding is added. Legacy clients still receive a normal error string for
+ambiguous packs and need a chooser update to play a specific file. Direct hoster
+sources keep their existing unrestrict behavior; Premiumize multi-entry directdl
+responses for those sources still use the first entry.
+
+Provider mapping references: [Real-Debrid REST](https://api.real-debrid.com/),
+[AllDebrid magnet files](https://docs.alldebrid.com/#get-files-and-links), and
+[Premiumize API](https://www.premiumize.me/api/). Validation uses mocked responses
+and a local provider fixture; live subscription playback has not been tested.
+
+### Profile-scoped playback progress and resume
+
+New clients opt in to tracking when resolving a stream:
+
+```json
+{ "titleId": "title-id", "trackProgress": true, "profileId": "optional-owned-profile-id" }
+```
+
+Omit `profileId` for the account's default viewing scope. A foreign/missing profile
+returns HTTP 404. A successful response keeps `{ stream, title }` and adds
+`playback: { sessionId, resumeSeconds, durationSeconds }`. Completed videos resume
+from zero. Requesting a stream alone does not populate the new Continue Watching
+row. Older clients that omit trackProgress retain their previous behavior.
+
+After actual playback starts, save events using:
+
+```json
+{
+  "sessionId": "returned-session-id",
+  "sequence": 0,
+  "positionSeconds": 30,
+  "durationSeconds": 120
+}
+```
+
+Send this body with `PUT /api/play/progress`. Sequences must increase per session.
+Responses are `{ accepted: true }` or `{ accepted: false, reason: "out-of-order" |
+"superseded" }`. An older player cannot overwrite a newer resolved tracked player
+for the same account/profile/title/file. Seeks backwards within the active session
+are allowed. Session IDs are account-authorized on every write; another account
+receives 404. Inactive accounts receive 401. Sessions expire after 24 hours (410).
+Positions/durations must be finite nonnegative numbers (duration strictly positive),
+not exceed seven days, and position cannot exceed duration by more than one second.
+The server clamps the one-second tolerance and marks at least 95% complete.
+
+`GET /api/play/continue?profileId=...&limit=20&cursor=...` returns compact title
+cards with positionSeconds, durationSeconds and mediaKey, plus nextCursor. It
+includes only incomplete positive progress, with the most recent incomplete file
+per title. Limits range from 1 to 50. Cursors are bound to the account and viewing
+scope. Progress is separate for every profile and media identity; deleting a
+profile cascades its progress/sessions. Favorites remain shared across the account.
+The legacy `/api/account/continue-watching*` APIs still represent successful URL
+resolution history, preserving existing client behavior.
+
+Media identity hashes the catalog source and file path/name/size. It excludes
+expiring CDN URLs and credentials; different files/editions do not share positions.
+Metadata/source changes may create a new identity rather than risk resuming the
+wrong video. For packs, choose the appropriate file again; that file then resumes
+its own position. Progress does not automatically choose an episode for the user.
+
+The web profile selector persists a choice per account in local storage. Player
+writes are throttled to 15 seconds, with pause/seek/end/navigation/visibility flushes.
+They are serialized; failures retry on later player events and display a message.
+Exit flushes use fetch keepalive as a best effort, not a guaranteed delivery channel.
+A failed/crashed browser can lose recent unsaved seconds. Live/unknown durations
+are not tracked. No first-frame/buffering analytics or transcoding is included.
+
+Apply the additive PlaybackSession and PlaybackProgress tables/indexes and
+regenerate the Prisma client before deployment, using the existing schema-update
+workflow after backing up deployed data. No guessed positions are backfilled from
+old resolution logs. Expired session retention/cleanup remains future work.
+
+
+### Authentication session update
+
+Issued tokens now have a product issuer, HS256, token ID and account session version.
+Old tokens require a new sign-in after this upgrade. POST /api/auth/logout revokes
+only the current token. POST /api/account/change-password returns
+`{ ok: true, token, role }`: save that replacement token; other older tokens now
+receive 401. Admin deactivation also invalidates older sessions. New internal
+sessionVersion fields are not included in public user responses. Apply the new
+schema and use a stable, non-placeholder JWT_SECRET before deployment.
+
+## Optional Plex/Jellyfin library export
+
+Administrator-only mounted-file exports use `/api/admin/library`. See the
+[endpoint contract and filesystem requirements](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md#api).
+No database schema changes are required for these filesystem manifests.

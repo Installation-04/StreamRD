@@ -5,6 +5,7 @@ import {
   ProviderError,
   TorrentPhase,
   TorrentStatus,
+  TorrentFile,
   UnrestrictedLink,
   providerFetch,
 } from "./types";
@@ -67,7 +68,8 @@ export class AllDebridProvider implements DebridProvider {
       this.id,
       `${base}${path}?${qs}`,
       init,
-      creds.timeoutMs
+      creds.timeoutMs,
+      creds.deadline
     );
     if (!res.ok) throw new ProviderError(this.id, `HTTP ${res.status}`, res.status);
     const body = (await res.json()) as AdEnvelope<T>;
@@ -140,7 +142,30 @@ export class AllDebridProvider implements DebridProvider {
     const data = await this.request<{ magnets: AdMagnet }>(creds, "/magnet/status", {
       id,
     });
-    return toStatus(data.magnets);
+    const status = toStatus(data.magnets);
+    if (status.phase === "finished") {
+      type Entry = { n: string; s?: number; l?: string; e?: Entry[] };
+      const result = await this.request<{ magnets: Array<{ id: string | number; files?: Entry[]; error?: { message: string } }> }>(
+        creds, "/magnet/files", {}, { method: "POST", body: new URLSearchParams({ "id[]": id }) }
+      );
+      const magnet = result.magnets.find(item => String(item.id) === id);
+      if (!magnet || magnet.error) throw new ProviderError(this.id, magnet?.error?.message ?? "Magnet files unavailable");
+      const files: TorrentFile[] = [];
+      let entries = 0;
+      const visit = (items: Entry[], prefix = "", depth = 0) => {
+        if (depth > 32) throw new ProviderError(this.id, "Torrent folder tree is too deep");
+        for (const item of items) {
+          if (++entries > 5000) throw new ProviderError(this.id, "Torrent contains too many files");
+          const path = prefix + item.n;
+          if (item.e) visit(item.e, path + "/", depth + 1);
+          else if (item.l) files.push({ id: item.l, path, size: item.s, link: item.l });
+        }
+      };
+      visit(magnet.files ?? []);
+      status.files = files;
+      status.links = files.map(file => file.link);
+    }
+    return status;
   }
 
   async listTorrents(creds: ProviderCredentials): Promise<TorrentStatus[]> {

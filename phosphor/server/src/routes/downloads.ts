@@ -1,3 +1,6 @@
+import { asyncHandler } from "../http";
+import { Prisma } from "@prisma/client";
+import { refreshDownload } from "../downloadRefresh";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../auth/middleware";
@@ -11,23 +14,23 @@ import { parseBody } from "./helpers";
 export const downloadsRouter = Router();
 downloadsRouter.use(requireAuth);
 
-downloadsRouter.get("/", async (req, res) => {
+downloadsRouter.get("/", asyncHandler(async (req, res) => {
   const jobs = await db.downloadJob.findMany({
     where: { userId: req.session!.sub },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
   res.json({ jobs });
-});
+}));
 
-downloadsRouter.get("/:id", async (req, res) => {
+downloadsRouter.get("/:id", asyncHandler(async (req, res) => {
   const job = await db.downloadJob.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
   if (!job) {
     res.status(404).json({ error: "Download job not found" });
     return;
   }
   res.json({ job });
-});
+}));
 
 const createSchema = z.object({
   title: z.string().min(1),
@@ -43,7 +46,7 @@ const createSchema = z.object({
  * /refresh) or a direct hoster link (unrestricted immediately) to the
  * user's download queue.
  */
-downloadsRouter.post("/", async (req, res) => {
+downloadsRouter.post("/", asyncHandler(async (req, res) => {
   const body = parseBody(createSchema, req.body, res);
   if (!body) return;
   const userId = req.session!.sub;
@@ -84,7 +87,7 @@ downloadsRouter.post("/", async (req, res) => {
         data: {
           ...base,
           providerRef: status.id,
-          status: streamUrl ? "finished" : status.phase,
+          status: streamUrl ? "finished" : status.phase === "finished" ? "downloading" : status.phase,
           progress: status.progress,
           streamUrl,
           filename,
@@ -110,58 +113,38 @@ downloadsRouter.post("/", async (req, res) => {
     });
     res.status(502).json({ job, error: (err as Error).message });
   }
-});
+}));
 
 /** POST /api/downloads/:id/refresh — poll the provider for a still-active job. */
-downloadsRouter.post("/:id/refresh", async (req, res) => {
-  const job = await db.downloadJob.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
-  if (!job) {
-    res.status(404).json({ error: "Download job not found" });
-    return;
-  }
-  if (job.status === "finished" || job.status === "error" || !job.providerRef) {
-    res.json({ job });
-    return;
-  }
-  const cfg = await db.debridConfig.findUnique({ where: { userId: req.session!.sub } });
-  if (!cfg) {
-    res.status(400).json({ error: "No debrid configuration" });
-    return;
-  }
+downloadsRouter.post("/:id/refresh", asyncHandler(async (req, res, next) => {
   try {
-    const { status, stream } = await debridManager.refresh(cfg, job.provider as ProviderId, job.providerRef);
-    const updated = await db.downloadJob.update({
-      where: { id: job.id },
-      data: {
-        status: stream ? "finished" : status.phase,
-        progress: status.progress,
-        streamUrl: stream?.url ?? job.streamUrl,
-        filename: stream?.filename ?? job.filename,
-      },
-    });
-    res.json({ job: updated });
+    const job = await db.downloadJob.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
+    if (!job) { res.status(404).json({ error: "Download job not found" }); return; }
+    if (job.status === "finished" || job.status === "error" || !job.providerRef) { res.json({ job }); return; }
+    const cfg = await db.debridConfig.findUnique({ where: { userId: req.session!.sub } });
+    if (!cfg) { res.status(400).json({ error: "No debrid configuration" }); return; }
+    const result = await refreshDownload(job, cfg);
+    if (result.retryable) res.setHeader("Retry-After", "8");
+    res.status(result.error ? result.retryable ? 503 : 502 : 200).json(result);
   } catch (err) {
-    const updated = await db.downloadJob.update({
-      where: { id: job.id },
-      data: { status: "error", error: (err as Error).message },
-    });
-    res.status(502).json({ job: updated, error: (err as Error).message });
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") { res.status(404).json({ error: "Download job not found" }); return; }
+    next(err);
   }
-});
+}));
 
 /**
  * DELETE /api/downloads/clear-completed — bulk-remove every finished/errored
  * job in one query, instead of the client firing N individual deletes.
  * Registered before the `/:id` route below so it isn't swallowed as an id.
  */
-downloadsRouter.delete("/clear-completed", async (req, res) => {
+downloadsRouter.delete("/clear-completed", asyncHandler(async (req, res) => {
   const { count } = await db.downloadJob.deleteMany({
     where: { userId: req.session!.sub, status: { in: ["finished", "error"] } },
   });
   res.json({ removed: count });
-});
+}));
 
-downloadsRouter.delete("/:id", async (req, res) => {
+downloadsRouter.delete("/:id", asyncHandler(async (req, res) => {
   const job = await db.downloadJob.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
   if (!job) {
     res.status(404).json({ error: "Download job not found" });
@@ -169,4 +152,4 @@ downloadsRouter.delete("/:id", async (req, res) => {
   }
   await db.downloadJob.delete({ where: { id: job.id } });
   res.json({ ok: true });
-});
+}));

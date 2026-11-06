@@ -5,6 +5,8 @@
  * query), not a durable cache layer.
  */
 export class TtlCache<T> {
+  private pending = new Map<string, Promise<T>>();
+  private generation = 0;
   private store = new Map<string, { value: T; expiresAt: number }>();
 
   /**
@@ -36,6 +38,8 @@ export class TtlCache<T> {
   }
 
   clear(): void {
+    this.generation++;
+    this.pending.clear();
     this.store.clear();
   }
 
@@ -43,8 +47,19 @@ export class TtlCache<T> {
   async getOrSet(key: string, compute: () => Promise<T>): Promise<T> {
     const cached = this.get(key);
     if (cached !== undefined) return cached;
-    const value = await compute();
-    this.set(key, value);
-    return value;
+    const existing = this.pending.get(key);
+    if (existing) return existing;
+    const generation = this.generation;
+    const pending = Promise.resolve().then(compute).then(value => {
+      // Clear invalidates work started before it.
+      if (generation === this.generation) this.set(key, value);
+      return value;
+    });
+    this.pending.set(key, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.pending.get(key) === pending) this.pending.delete(key);
+    }
   }
 }

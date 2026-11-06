@@ -5,6 +5,7 @@ import {
   ProviderError,
   TorrentPhase,
   TorrentStatus,
+  TorrentFile,
   UnrestrictedLink,
   providerFetch,
 } from "./types";
@@ -31,6 +32,8 @@ interface PmTransfer {
   name: string;
   status: string;
   progress: number; // 0..1
+  file_id?: string | null;
+  folder_id?: string | null;
 }
 
 function toStatus(t: PmTransfer, links: string[] = []): TorrentStatus {
@@ -64,7 +67,8 @@ export class PremiumizeProvider implements DebridProvider {
       this.id,
       `${base}${path}?${qs}`,
       init,
-      creds.timeoutMs
+      creds.timeoutMs,
+      creds.deadline
     );
     if (!res.ok) throw new ProviderError(this.id, `HTTP ${res.status}`, res.status);
     const body = (await res.json()) as T;
@@ -126,10 +130,39 @@ export class PremiumizeProvider implements DebridProvider {
     creds: ProviderCredentials,
     id: string
   ): Promise<TorrentStatus> {
-    const transfers = await this.listTorrents(creds);
-    const found = transfers.find((t) => t.id === id);
-    if (!found) throw new ProviderError(this.id, `Transfer ${id} not found`);
-    return found;
+    const body = await this.request<{ status: string; transfers: PmTransfer[] }>(creds, "/transfer/list");
+    const transfer = body.transfers.find(item => item.id === id);
+    if (!transfer) throw new ProviderError(this.id, `Transfer ${id} not found`, 404);
+    const status = toStatus(transfer);
+    if (status.phase !== "finished") return status;
+    type Item = { id: string; name: string; type?: string; size?: number; link?: string };
+    const files: TorrentFile[] = [];
+    const add = (item: Item, prefix = "") => {
+      if (item.link) files.push({ id: item.id, path: prefix + item.name, size: item.size, link: item.link, direct: true });
+      if (files.length > 5000) throw new ProviderError(this.id, "Transfer contains too many files");
+    };
+    if (transfer.file_id) {
+      const file = await this.request<Item & { status: string }>(creds, "/item/details", { id: transfer.file_id });
+      add(file);
+    } else if (transfer.folder_id) {
+      const queue = [{ id: transfer.folder_id, prefix: "", depth: 0 }];
+      const visited = new Set<string>();
+      while (queue.length) {
+        const folder = queue.shift()!;
+        if (visited.has(folder.id)) continue;
+        if (visited.size >= 100 || folder.depth > 32) throw new ProviderError(this.id, "Transfer folder tree is too large");
+        visited.add(folder.id);
+        const content = await this.request<{ status: string; content: Item[] }>(creds, "/folder/list", { id: folder.id });
+        for (const item of content.content ?? []) {
+          if (item.type === "folder") queue.push({ id: item.id, prefix: folder.prefix + item.name + "/", depth: folder.depth + 1 });
+          else add(item, folder.prefix);
+        }
+        if (queue.length > 5000) throw new ProviderError(this.id, "Transfer contains too many folders");
+      }
+    } else {
+      throw new ProviderError(this.id, "Finished transfer has no files in your Premiumize cloud");
+    }
+    return { ...status, files, links: files.map(file => file.link) };
   }
 
   async listTorrents(creds: ProviderCredentials): Promise<TorrentStatus[]> {

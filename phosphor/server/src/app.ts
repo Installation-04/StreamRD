@@ -1,3 +1,5 @@
+import { libraryRouter } from "./routes/library";
+import { errorHandler, requestId } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
 import { attachSession } from "./auth/middleware";
@@ -14,6 +16,7 @@ import { searchRouter } from "./routes/search";
 export function createApp(): Express {
   const app = express();
   app.disable("x-powered-by");
+  app.use(requestId);
   app.use(
     cors({
       origin: config.corsOrigins === "*" ? true : config.corsOrigins.split(","),
@@ -29,8 +32,10 @@ export function createApp(): Express {
   app.use("/api/debrid", debridRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/downloads", downloadsRouter);
+  app.use("/api/admin/library", libraryRouter);
   app.use("/api/admin", adminRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
+  app.use(errorHandler);
   return app;
 }

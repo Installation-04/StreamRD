@@ -1,7 +1,10 @@
+import { mediaKeyFor } from "../progress";
+import { FileSelectionRequired, InvalidFileSelection } from "./files";
+import { PendingSourceError, sourceJobs } from "./sourceJobs";
 import { DebridConfig } from "@prisma/client";
 import { logEvent } from "../logger";
 import { increment } from "../metrics";
-import { getProviderSettings, getServerSettings, ServerSettings } from "../settings";
+import { getProviderSettings, getServerSettings, ProviderSettings, ServerSettings } from "../settings";
 import { getProvider } from "./registry";
 import {
   DebridUserInfo,
@@ -55,17 +58,18 @@ export class DebridManager {
   /** Ordered list of providers this user can actually use right now. */
   async providerOrderFor(
     cfg: DebridConfig,
-    settings?: ServerSettings
+    settings?: ServerSettings,
+    providers?: ProviderSettings
   ): Promise<ProviderId[]> {
     const server = settings ?? (await getServerSettings());
-    const providerSettings = await getProviderSettings();
+    const providerSettings = providers ?? (await getProviderSettings());
     const personal = parseOrder(cfg.fallbackOrder);
     const base = personal.length > 0 ? personal : server.providerOrder;
     const ordered = [
       cfg.primaryProvider as ProviderId,
       ...base.filter((p) => p !== cfg.primaryProvider),
     ];
-    return ordered.filter(
+    return [...new Set(ordered)].filter(
       (id) =>
         PROVIDER_IDS.includes(id) &&
         !server.disabledProviders.includes(id) &&
@@ -100,12 +104,14 @@ export class DebridManager {
    * provider order until one succeeds. Returns the stream plus which
    * provider produced it; throws the last error when all fail.
    */
-  async resolveStream(cfg: DebridConfig, sources: TitleSource[]): Promise<ResolvedStream> {
-    const server = await getServerSettings();
-    const order = (await this.providerOrderFor(cfg, server)).slice(
-      0,
-      Math.max(1, server.maxPlaybackAttempts)
-    );
+  async resolveStream(cfg: DebridConfig, sources: TitleSource[], selection?: { provider: ProviderId; fileToken: string }): Promise<ResolvedStream> {
+    const [server, providers] = await Promise.all([getServerSettings(), getProviderSettings()]);
+    const order = (await this.providerOrderFor(cfg, server, providers)).filter(id => !selection || id === selection.provider);
+    const budget = Math.max(1, server.maxPlaybackAttempts);
+    const deadline = Date.now() + server.providerTimeoutMs * budget;
+    let attempts = 0;
+    let pending: PendingSourceError | undefined;
+    const unavailable = new Set<ProviderId>();
     if (order.length === 0) {
       throw new ProviderError(
         cfg.primaryProvider as ProviderId,
@@ -113,16 +119,31 @@ export class DebridManager {
       );
     }
     let lastError: Error = new ProviderError(order[0], "No playable source on title");
-    for (const source of sources) {
+    sourcesLoop: for (const [sourceIndex, source] of sources.entries()) {
       for (const id of order) {
+        if (unavailable.has(id)) continue;
+        if (attempts >= budget || Date.now() >= deadline) break sourcesLoop;
+        attempts++;
         const provider = getProvider(id);
-        const creds = await this.credentialsFor(cfg, id);
+        const creds: ProviderCredentials = {
+          apiKey: apiKeyFor(cfg, id)!,
+          baseUrl: providers[id]?.baseUrl,
+          timeoutMs: server.providerTimeoutMs,
+          deadline,
+        };
         try {
-          const link = await this.resolveSource(provider.id, creds, source);
+          const link = await this.resolveSource(cfg.userId, provider.id, creds, source, selection?.fileToken);
+          if (!["http:", "https:"].includes(new URL(link.url).protocol)) throw new ProviderError(id, "Provider returned an invalid stream URL");
           increment(`plays.${id}`);
           return { ...link, quality: source.quality, label: source.label };
         } catch (err) {
+          if (err instanceof FileSelectionRequired) { err.sourceIndex = sourceIndex; throw err; }
+          if (err instanceof InvalidFileSelection) throw err;
           lastError = err as Error;
+          if (err instanceof PendingSourceError) { pending ??= err; continue; }
+          if (err instanceof ProviderError && [401, 403, 429].includes(err.statusCode ?? 0)) {
+            unavailable.add(id);
+          }
           increment(`provider_errors.${id}`);
           await logEvent("warn", "provider_error", (err as Error).message, {
             provider: id,
@@ -130,28 +151,23 @@ export class DebridManager {
         }
       }
     }
-    throw lastError;
+    throw pending ?? lastError;
   }
 
   private async resolveSource(
+    userId: string,
     id: ProviderId,
     creds: ProviderCredentials,
-    source: TitleSource
+    source: TitleSource,
+    fileToken?: string
   ): Promise<UnrestrictedLink> {
     const provider = getProvider(id);
     if (source.kind === "link") {
-      return provider.unrestrictLink(creds, source.url);
+      if (fileToken) throw new InvalidFileSelection(id);
+      const link = await provider.unrestrictLink(creds, source.url);
+      return { ...link, mediaKey: mediaKeyFor(source.url, link.filename, link.filesize) };
     }
-    // Magnet: hand it to the provider's cloud; if it is already cached the
-    // torrent finishes immediately and we can unrestrict the first file.
-    const torrent = await provider.addTorrent(creds, source.url);
-    if (torrent.phase === "finished" && torrent.links.length > 0) {
-      return provider.unrestrictLink(creds, torrent.links[0]);
-    }
-    throw new ProviderError(
-      id,
-      `Torrent not ready yet (${torrent.phase}, ${torrent.progress}%) — try again shortly`
-    );
+    return sourceJobs.resolve(userId, id, creds, source.url, fileToken);
   }
 }
 

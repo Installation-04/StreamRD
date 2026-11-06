@@ -8,7 +8,7 @@ import { ProviderError } from "../src/providers/types";
 const creds = { apiKey: "test-key" };
 
 function mockFetchOnce(status: number, body: unknown) {
-  const impl = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+  const impl = vi.fn().mockImplementation(async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   vi.stubGlobal("fetch", impl);
   return impl;
 }

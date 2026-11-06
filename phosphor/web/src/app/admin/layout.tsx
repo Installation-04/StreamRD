@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
 const NAV = [
+  { href: "/admin/library", label: "Plex / Jellyfin" },
   { href: "/admin", label: "Overview" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/indexers", label: "Indexers" },

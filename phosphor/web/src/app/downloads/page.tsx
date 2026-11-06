@@ -1,49 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { del, get, post } from "@/lib/api";
+import { useDownloadQueue } from "@/lib/useDownloadQueue";
 import { formatBytes } from "@/lib/format";
-import { DownloadJob } from "@/lib/types";
 
 const ACTIVE = new Set(["queued", "downloading"]);
 
 export default function DownloadsPage() {
-  const [jobs, setJobs] = useState<DownloadJob[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    get<{ jobs: DownloadJob[] }>("/api/downloads")
-      .then((res) => setJobs(res.jobs))
-      .catch((err: Error) => setError(err.message));
-  }, []);
-
-  useEffect(load, [load]);
-
-  // Poll any still-active job every 4s until it settles.
-  useEffect(() => {
-    const active = jobs.filter((j) => ACTIVE.has(j.status));
-    if (active.length === 0) return;
-    const timer = setInterval(() => {
-      Promise.all(active.map((j) => post<{ job: DownloadJob }>(`/api/downloads/${j.id}/refresh`))).then(load);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [jobs, load]);
-
-  const remove = async (id: string) => {
-    await del(`/api/downloads/${id}`);
-    load();
-  };
-
-  const refreshOne = async (id: string) => {
-    await post(`/api/downloads/${id}/refresh`);
-    load();
-  };
-
-  const clearCompleted = async () => {
-    await del("/api/downloads/clear-completed");
-    load();
-  };
+  const { jobs, error, busy, remove, refreshOne, clearCompleted } = useDownloadQueue();
 
   const hasCompleted = jobs.some((j) => j.status === "finished" || j.status === "error");
 
@@ -54,7 +18,7 @@ export default function DownloadsPage() {
           Download queue
         </div>
         {hasCompleted && (
-          <button className="btn btn-sm" onClick={clearCompleted}>
+          <button className="btn btn-sm" disabled={busy.has("clear")} onClick={clearCompleted}>
             clear finished/errored
           </button>
         )}
@@ -88,11 +52,11 @@ export default function DownloadsPage() {
                 </Link>
               )}
               {ACTIVE.has(job.status) && (
-                <button className="btn btn-sm" onClick={() => refreshOne(job.id)}>
+                <button className="btn btn-sm" disabled={busy.has(job.id)} onClick={() => refreshOne(job.id)}>
                   refresh
                 </button>
               )}
-              <button className="btn btn-sm btn-danger" onClick={() => remove(job.id)}>
+              <button className="btn btn-sm btn-danger" disabled={busy.has(job.id)} onClick={() => remove(job.id)}>
                 remove
               </button>
             </div>

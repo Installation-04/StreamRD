@@ -1,3 +1,4 @@
+import { asyncHandler } from "../http";
 import { Router } from "express";
 import { requireAuth } from "../auth/middleware";
 import { db } from "../db";
@@ -12,7 +13,7 @@ debridRouter.use(requireAuth);
  * Live account info from the user's primary (or a chosen) provider.
  * Doubles as the "Test connection" action in all clients.
  */
-debridRouter.get("/account", async (req, res) => {
+debridRouter.get("/account", asyncHandler(async (req, res) => {
   const cfg = await db.debridConfig.findUnique({ where: { userId: req.session!.sub } });
   if (!cfg) {
     res.status(404).json({ error: "No debrid configuration yet" });
@@ -28,4 +29,4 @@ debridRouter.get("/account", async (req, res) => {
     const status = err instanceof ProviderError && err.statusCode === 401 ? 401 : 502;
     res.status(status).json({ error: (err as Error).message });
   }
-});
+}));

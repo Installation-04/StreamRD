@@ -19,9 +19,20 @@ export interface UnrestrictedLink {
   filename: string;
   filesize?: number;
   mimeType?: string;
+  /** Internal stable identity for progress; never a signed stream URL. */
+  mediaKey?: string;
 }
 
 export type TorrentPhase = "queued" | "downloading" | "finished" | "error";
+
+export interface TorrentFile {
+  id: string;
+  path: string;
+  size?: number;
+  link: string;
+  /** Premiumize cloud links are already resolved and must not be unrestricted again. */
+  direct?: boolean;
+}
 
 export interface TorrentStatus {
   provider: ProviderId;
@@ -32,6 +43,7 @@ export interface TorrentStatus {
   progress: number;
   /** Direct links available once the torrent is finished. */
   links: string[];
+  files?: TorrentFile[];
 }
 
 export interface ProviderCredentials {
@@ -41,6 +53,8 @@ export interface ProviderCredentials {
   baseUrl?: string;
   /** Request timeout in ms (from server settings). */
   timeoutMs?: number;
+  /** Absolute resolution deadline shared by every upstream request. */
+  deadline?: number;
 }
 
 /**
@@ -74,12 +88,20 @@ export async function providerFetch(
   provider: ProviderId,
   url: string,
   init: RequestInit,
-  timeoutMs = 15000
+  timeoutMs = 15000,
+  deadline?: number
 ): Promise<Response> {
+  timeoutMs = Math.min(timeoutMs, deadline === undefined ? timeoutMs : deadline - Date.now());
+  if (timeoutMs <= 0) throw new ProviderError(provider, "Playback resolution deadline exceeded");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    // Keep the timeout active while reading provider JSON bodies too.
+    const body = response.body === null ? null : await response.arrayBuffer();
+    return new Response(body, {
+      status: response.status, statusText: response.statusText, headers: response.headers,
+    });
   } catch (err) {
     if ((err as Error).name === "AbortError") {
       throw new ProviderError(provider, `Request timed out after ${timeoutMs}ms`);

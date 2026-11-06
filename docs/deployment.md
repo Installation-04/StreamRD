@@ -1,5 +1,8 @@
 # Deployment
 
+For existing installations, read the [production upgrade and backup guide](production-runtime.md)
+before replacing images: runtime containers now use UID 1000.
+
 The backend is one container with a SQLite volume; the web client is a second
 container (or `npm run start` anywhere Node runs). Mobile/TV apps are
 installed on devices and pointed at your server URL.
@@ -15,9 +18,11 @@ sudo ./install.sh
 Installs Docker if it isn't already present, picks a free host port for the
 API and web app (starting from 47821/3000, walking upward if either is
 already bound by something else on the box), generates a random
-`JWT_SECRET`, writes `.env`, and starts the backend + web containers. Prints
+`JWT_SECRET`, writes a private `.env` on first install, and starts the backend + web containers. Prints
 the URLs to open when it's done. Override the starting ports with
-`--api-port`/`--web-port` if you want specific ones tried first.
+`--api-port`/`--web-port` on first install if you want specific ones tried first.
+Reruns preserve the existing `.env`, signing secret, and public URLs; edit that
+file explicitly to change an existing configuration.
 
 To remove it: `sudo ./uninstall.sh` (add `--purge-data` to also delete the
 database, or `--purge-images` to also remove the built images).
@@ -42,11 +47,12 @@ Services:
 | `web` | 3000 | Next.js UI; `NEXT_PUBLIC_API_BASE_URL` is baked at build time |
 | `proxy` | 80/443 | Caddy; automatic HTTPS when `DOMAIN` is a public hostname |
 
-The backend runs `prisma db push` on boot, so the schema is applied
-automatically. Seed demo titles with:
+The backend applies the schema on boot by default, without accepting data loss.
+Set `APPLY_SCHEMA_ON_START=false` for a controlled, backed-up upgrade workflow
+described in the production guide. Seed demo titles with:
 
 ```bash
-docker compose exec backend npx tsx prisma/seed.ts   # or: npm run db:seed in dev
+docker compose exec backend node dist/prisma/seed.js   # or: npm run db:seed in dev
 ```
 
 ## 2. LAN mode
@@ -91,7 +97,7 @@ Backend (`server/.env`):
 |---|---|---|
 | `PORT` | API port | `47821` |
 | `DATABASE_URL` | Prisma datasource (`file:` for SQLite) | `file:./data/streamrd.db` |
-| `JWT_SECRET` | Session signing key — **change it** | dev value |
+| `JWT_SECRET` | Stable session signing key, at least 32 bytes in production | required in production |
 | `JWT_EXPIRES_IN` | Session lifetime | `7d` |
 | `API_BASE_URL` / `LAN_URL` / `PUBLIC_URL` | Reachability hints for docs/clients | localhost |
 | `CORS_ORIGINS` | Comma-separated allowed origins or `*` | `*` |
@@ -102,8 +108,9 @@ Web (`web/.env` or build arg): `NEXT_PUBLIC_API_BASE_URL` — must be the URL
 
 ## Backups
 
-- Database: copy the SQLite file from the `backend-data` volume
-  (`docker compose cp backend:/app/data/streamrd.db ./backup/`).
+- Database: create a consistent, verified snapshot with
+  `docker compose exec backend node scripts/backup-db.cjs /app/data/backup-unique.db`,
+  then copy that snapshot off-host. See the production guide for restore checks.
 - Configuration & catalog: Admin → Server → **Export config**, or
   `GET /api/admin/export/config`; the JSON re-imports via
   `POST /api/admin/import/config` and versions nicely in git.

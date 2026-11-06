@@ -39,3 +39,31 @@ describe("TtlCache", () => {
     expect(cache.get("c")).toBe(3);
   });
 });
+
+
+it("coalesces concurrent misses and caches the result", async () => {
+  const cache = new TtlCache<number>(1000);
+  const compute = vi.fn(async () => 42);
+  expect(await Promise.all([cache.getOrSet("a", compute), cache.getOrSet("a", compute)])).toEqual([42, 42]);
+  expect(await cache.getOrSet("a", compute)).toBe(42);
+  expect(compute).toHaveBeenCalledTimes(1);
+});
+it("retries after a shared failure", async () => {
+  const cache = new TtlCache<number>(1000);
+  const compute = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(42);
+  const results = await Promise.allSettled([cache.getOrSet("a", compute), cache.getOrSet("a", compute)]);
+  expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
+  expect(await cache.getOrSet("a", compute)).toBe(42);
+  expect(compute).toHaveBeenCalledTimes(2);
+});
+it("does not repopulate cleared cache from old work", async () => {
+  const cache = new TtlCache<number>(1000);
+  let resolve!: (value: number) => void;
+  const old = cache.getOrSet("a", () => new Promise<number>(done => { resolve = done; }));
+  await Promise.resolve();
+  cache.clear();
+  expect(await cache.getOrSet("a", async () => 2)).toBe(2);
+  resolve(1);
+  expect(await old).toBe(1);
+  expect(cache.get("a")).toBe(2);
+});

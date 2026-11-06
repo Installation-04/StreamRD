@@ -53,7 +53,8 @@ export class RealDebridProvider implements DebridProvider {
           ...(init.headers ?? {}),
         },
       },
-      creds.timeoutMs
+      creds.timeoutMs,
+      creds.deadline
     );
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
@@ -142,7 +143,13 @@ export class RealDebridProvider implements DebridProvider {
       status: string;
       progress: number;
       links: string[];
+      files?: Array<{ id: number; path: string; bytes: number; selected: number }>;
     }>(creds, `/torrents/info/${id}`);
+    const selected = t.files?.filter(file => file.selected === 1);
+    // RD links correspond, in order, to the selected files only.
+    const files = selected && selected.length === (t.links ?? []).length
+      ? selected.map((file, index) => ({ id: String(file.id), path: file.path, size: file.bytes, link: t.links[index] }))
+      : t.files ? [] : undefined;
     return {
       provider: this.id,
       id: t.id,
@@ -150,6 +157,7 @@ export class RealDebridProvider implements DebridProvider {
       phase: mapPhase(t.status),
       progress: t.progress,
       links: t.links ?? [],
+      files,
     };
   }
 

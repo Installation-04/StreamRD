@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { Title } from "@/lib/types";
+import { TitleCardData } from "@/lib/types";
 
 interface TitleCardProps {
-  title: Title;
+  title: TitleCardData;
   isFavorite?: boolean;
-  onToggleFavorite?: (title: Title) => void;
+  favoritePending?: boolean;
+  onToggleFavorite?: (title: TitleCardData) => void;
 }
 
-export function TitleCard({ title, isFavorite, onToggleFavorite }: TitleCardProps) {
+export function TitleCard({ title, isFavorite, favoritePending, onToggleFavorite }: TitleCardProps) {
   return (
     <Link href={`/title/${title.id}`} className="title-card">
       {onToggleFavorite && (
         <button
           type="button"
+          disabled={favoritePending}
+          aria-busy={favoritePending || undefined}
           className={`favorite-toggle${isFavorite ? " is-favorite" : ""}`}
           title={isFavorite ? "Remove from My List" : "Add to My List"}
           onClick={(e) => {
@@ -32,6 +35,7 @@ export function TitleCard({ title, isFavorite, onToggleFavorite }: TitleCardProp
       ) : (
         <div className="title-poster-fallback">{title.name}</div>
       )}
+      {title.positionSeconds !== undefined && title.durationSeconds !== undefined && title.durationSeconds > 0 && <progress aria-label={`${title.name} viewing progress`} value={title.positionSeconds} max={title.durationSeconds} style={{ width: "100%" }} />}
       <div className="title-card-name">
         {title.name}
         {title.year ? <span className="dim"> · {title.year}</span> : null}
@@ -42,12 +46,16 @@ export function TitleCard({ title, isFavorite, onToggleFavorite }: TitleCardProp
 
 interface TitleRowProps {
   label: string;
-  titles: Title[];
+  onLoadMore?: () => void;
+  loading?: boolean;
+  titles: TitleCardData[];
   favoriteIds?: Set<string>;
-  onToggleFavorite?: (title: Title) => void;
+  knownFavoriteIds?: Set<string>;
+  busyFavoriteIds?: Set<string>;
+  onToggleFavorite?: (title: TitleCardData) => void;
 }
 
-export function TitleRow({ label, titles, favoriteIds, onToggleFavorite }: TitleRowProps) {
+export function TitleRow({ label, titles, favoriteIds, knownFavoriteIds, busyFavoriteIds, onToggleFavorite, onLoadMore, loading }: TitleRowProps) {
   return (
     <section className="row-section">
       <h2 className="row-label">{label}</h2>
@@ -57,10 +65,12 @@ export function TitleRow({ label, titles, favoriteIds, onToggleFavorite }: Title
             key={t.id}
             title={t}
             isFavorite={favoriteIds?.has(t.id)}
+            favoritePending={(knownFavoriteIds !== undefined && !knownFavoriteIds.has(t.id)) || busyFavoriteIds?.has(t.id)}
             onToggleFavorite={onToggleFavorite}
           />
         ))}
       </div>
+      {onLoadMore && <button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={onLoadMore} aria-label={`Load more ${label}`}>{loading ? "Loading…" : "Load more"}</button>}
     </section>
   );
 }

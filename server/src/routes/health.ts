@@ -1,3 +1,4 @@
+import { asyncHandler } from "../http";
 import { Router } from "express";
 import { db } from "../db";
 
@@ -7,7 +8,7 @@ export const healthRouter = Router();
  * GET /api/health — public liveness probe used by every client's
  * "test connection" button, reverse proxies and Docker healthchecks.
  */
-healthRouter.get("/", async (_req, res) => {
+healthRouter.get("/", asyncHandler(async (_req, res) => {
   let dbOk = true;
   try {
     await db.$queryRaw`SELECT 1`;
@@ -20,4 +21,4 @@ healthRouter.get("/", async (_req, res) => {
     version: "0.1.0",
     time: new Date().toISOString(),
   });
-});
+}));

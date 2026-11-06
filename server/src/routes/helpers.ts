@@ -5,7 +5,7 @@ import { TitleSource } from "../providers/manager";
 
 /** Strips secrets from a User row before it leaves the API. */
 export function publicUser(user: User) {
-  const { hashedPassword: _hashed, ...rest } = user;
+  const { hashedPassword: _hashed, sessionVersion: _version, ...rest } = user;
   return rest;
 }
 

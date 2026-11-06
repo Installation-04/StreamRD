@@ -11,13 +11,25 @@ permissions:
 
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify versions and package documentation
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash infra/package-release.sh "$RUNNER_TEMP/release-assets" "$RELEASE_TAG"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
+          name: StreamRD and Phosphor ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: true
+          files: ${{ runner.temp }}/release-assets/*
 

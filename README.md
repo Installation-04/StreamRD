@@ -1,5 +1,7 @@
 # StreamRD
 
+[Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases)
+
 Self-hosted, Netflix-style streaming for your own **debrid** accounts.
 One backend, every screen: web, iOS/Android, Android TV / Fire TV, Apple TV.
 
@@ -53,7 +55,7 @@ providers' terms of service and your local law.
 
 ## Quick start
 
-Prerequisites: Docker (for the stack) or Node.js ≥ 20 (to run pieces directly).
+Prerequisites: Docker (for the stack) or Node.js 22 (to run pieces directly).
 
 On Debian/Ubuntu, `infra/install.sh` does the rest of this section for you —
 installs Docker if needed, picks free ports, and starts the stack:
@@ -75,7 +77,7 @@ cp ../server/.env.example .env    # set JWT_SECRET (openssl rand -hex 32)
 docker compose up -d --build
 
 # Optional demo catalog
-docker compose exec backend npx tsx prisma/seed.ts
+docker compose exec backend node dist/prisma/seed.js
 ```
 
 Open http://localhost:3000, **sign up — the first account becomes admin**,
@@ -166,3 +168,11 @@ clients, own port (61337) — see `phosphor/README.md` to get started.
 ## License
 
 [MIT](LICENSE).
+
+## Screenshots and external media libraries
+
+![Application screenshot](docs/screenshots/streamrd-library.png)
+
+See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
+Optional mounted-file symlink export for **Plex and Jellyfin** is available under
+Admin → Plex / Jellyfin. [Setup and scanning guide](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md).

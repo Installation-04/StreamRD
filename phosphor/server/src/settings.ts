@@ -1,3 +1,4 @@
+import { clearIndexerSearchCache } from "./indexers/searchCache";
 import { db } from "./db";
 import { PROVIDER_IDS, ProviderId } from "./providers/types";
 
@@ -59,7 +60,10 @@ async function writeJson(key: string, value: unknown): Promise<void> {
 export const getServerSettings = () =>
   readJson<ServerSettings>(SERVER_KEY, DEFAULT_SERVER_SETTINGS);
 
-export const saveServerSettings = (s: ServerSettings) => writeJson(SERVER_KEY, s);
+export const saveServerSettings = async (s: ServerSettings) => {
+  await writeJson(SERVER_KEY, s);
+  clearIndexerSearchCache();
+};
 
 export const getProviderSettings = () =>
   readJson<ProviderSettings>(PROVIDERS_KEY, DEFAULT_PROVIDER_SETTINGS);

@@ -1,3 +1,4 @@
+import { asyncHandler } from "../http";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../auth/middleware";
@@ -22,12 +23,12 @@ adminRouter.use(requireAuth, requireAdmin);
 
 /* ------------------------------ users ------------------------------ */
 
-adminRouter.get("/users", async (_req, res) => {
+adminRouter.get("/users", asyncHandler(async (_req, res) => {
   const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
   res.json({ users: users.map(publicUser) });
-});
+}));
 
-adminRouter.get("/users/:id", async (req, res) => {
+adminRouter.get("/users/:id", asyncHandler(async (req, res) => {
   const user = await db.user.findUnique({
     where: { id: req.params.id },
     include: { playbackLogs: { orderBy: { createdAt: "desc" }, take: 20 } },
@@ -38,7 +39,7 @@ adminRouter.get("/users/:id", async (req, res) => {
   }
   const { playbackLogs, ...rest } = user;
   res.json({ user: publicUser(rest), recentPlaybacks: playbackLogs });
-});
+}));
 
 const userUpdateSchema = z.object({
   role: z.enum(["user", "admin"]).optional(),
@@ -46,7 +47,7 @@ const userUpdateSchema = z.object({
   displayName: z.string().min(1).max(80).optional(),
 });
 
-adminRouter.patch("/users/:id", async (req, res) => {
+adminRouter.patch("/users/:id", asyncHandler(async (req, res) => {
   const body = parseBody(userUpdateSchema, req.body, res);
   if (!body) return;
   // Guard rail: an admin cannot demote or deactivate themselves, which
@@ -63,20 +64,20 @@ adminRouter.patch("/users/:id", async (req, res) => {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  const user = await db.user.update({ where: { id: req.params.id }, data: body });
+  const user = await db.user.update({ where: { id: req.params.id }, data: { ...body, ...(body.active === false ? { sessionVersion: { increment: 1 } } : {}) } });
   await logEvent("info", "admin_action", `Updated user ${user.email}`, {
     userId: req.session!.sub,
     meta: body,
   });
   res.json({ user: publicUser(user) });
-});
+}));
 
 /* ----------------------------- catalog ----------------------------- */
 
-adminRouter.get("/catalog", async (_req, res) => {
+adminRouter.get("/catalog", asyncHandler(async (_req, res) => {
   const titles = await db.title.findMany({ orderBy: { createdAt: "desc" } });
   res.json({ titles: titles.map((t) => publicTitle(t, { includeSources: true })) });
-});
+}));
 
 const sourceSchema = z.object({
   kind: z.enum(["link", "magnet"]),
@@ -109,7 +110,7 @@ function titleData(body: z.infer<typeof titleSchema>) {
   };
 }
 
-adminRouter.post("/catalog/create", async (req, res) => {
+adminRouter.post("/catalog/create", asyncHandler(async (req, res) => {
   const body = parseBody(titleSchema, req.body, res);
   if (!body) return;
   const title = await db.title.create({ data: titleData(body) });
@@ -117,9 +118,9 @@ adminRouter.post("/catalog/create", async (req, res) => {
     userId: req.session!.sub,
   });
   res.status(201).json({ title: publicTitle(title, { includeSources: true }) });
-});
+}));
 
-adminRouter.patch("/catalog/:id/update", async (req, res) => {
+adminRouter.patch("/catalog/:id/update", asyncHandler(async (req, res) => {
   const body = parseBody(titleSchema.partial(), req.body, res);
   if (!body) return;
   const existing = await db.title.findUnique({ where: { id: req.params.id } });
@@ -138,9 +139,9 @@ adminRouter.patch("/catalog/:id/update", async (req, res) => {
   if (body.sources !== undefined) data.sources = JSON.stringify(body.sources);
   const title = await db.title.update({ where: { id: req.params.id }, data });
   res.json({ title: publicTitle(title, { includeSources: true }) });
-});
+}));
 
-adminRouter.delete("/catalog/:id/delete", async (req, res) => {
+adminRouter.delete("/catalog/:id/delete", asyncHandler(async (req, res) => {
   const existing = await db.title.findUnique({ where: { id: req.params.id } });
   if (!existing) {
     res.status(404).json({ error: "Title not found" });
@@ -151,13 +152,13 @@ adminRouter.delete("/catalog/:id/delete", async (req, res) => {
     userId: req.session!.sub,
   });
   res.json({ ok: true });
-});
+}));
 
 /* -------------------------- server settings ------------------------ */
 
-adminRouter.get("/server", async (_req, res) => {
+adminRouter.get("/server", asyncHandler(async (_req, res) => {
   res.json({ settings: await getServerSettings() });
-});
+}));
 
 const serverSettingsSchema = z.object({
   providerOrder: z.array(z.enum(PROVIDER_IDS)),
@@ -168,7 +169,7 @@ const serverSettingsSchema = z.object({
   requireLoginForPlayback: z.boolean(),
 });
 
-adminRouter.put("/server", async (req, res) => {
+adminRouter.put("/server", asyncHandler(async (req, res) => {
   const current = await getServerSettings();
   const body = parseBody(serverSettingsSchema.partial(), req.body, res);
   if (!body) return;
@@ -179,11 +180,11 @@ adminRouter.put("/server", async (req, res) => {
     meta: body,
   });
   res.json({ settings: merged });
-});
+}));
 
 /* ------------------------- provider settings ----------------------- */
 
-adminRouter.get("/providers", async (_req, res) => {
+adminRouter.get("/providers", asyncHandler(async (_req, res) => {
   const settings = await getProviderSettings();
   res.json({
     providers: PROVIDER_IDS.map((id) => ({
@@ -193,14 +194,14 @@ adminRouter.get("/providers", async (_req, res) => {
       baseUrl: settings[id]?.baseUrl ?? null,
     })),
   });
-});
+}));
 
 const providerSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   baseUrl: z.string().url().nullable().optional(),
 });
 
-adminRouter.put("/providers/:id", async (req, res) => {
+adminRouter.put("/providers/:id", asyncHandler(async (req, res) => {
   const id = req.params.id as ProviderId;
   if (!PROVIDER_IDS.includes(id)) {
     res.status(404).json({ error: "Unknown provider" });
@@ -220,13 +221,13 @@ adminRouter.put("/providers/:id", async (req, res) => {
     provider: id,
   });
   res.json({ provider: { id, ...settings[id] } });
-});
+}));
 
 /**
  * POST /api/admin/providers/:id/test — connectivity check using the calling
  * admin's own credentials for that provider.
  */
-adminRouter.post("/providers/:id/test", async (req, res) => {
+adminRouter.post("/providers/:id/test", asyncHandler(async (req, res) => {
   const id = req.params.id as ProviderId;
   if (!PROVIDER_IDS.includes(id)) {
     res.status(404).json({ error: "Unknown provider" });
@@ -244,11 +245,11 @@ adminRouter.post("/providers/:id/test", async (req, res) => {
   } catch (err) {
     res.json({ ok: false, error: (err as Error).message });
   }
-});
+}));
 
 /* --------------------------- health & logs ------------------------- */
 
-adminRouter.get("/health", async (_req, res) => {
+adminRouter.get("/health", asyncHandler(async (_req, res) => {
   let dbStatus = "up";
   try {
     await db.$queryRaw`SELECT 1`;
@@ -276,9 +277,9 @@ adminRouter.get("/health", async (_req, res) => {
         !serverSettings.disabledProviders.includes(id),
     })),
   });
-});
+}));
 
-adminRouter.get("/logs", async (req, res) => {
+adminRouter.get("/logs", asyncHandler(async (req, res) => {
   const take = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 500);
   const where: Record<string, string> = {};
   if (req.query.type) where.type = String(req.query.type);
@@ -291,11 +292,11 @@ adminRouter.get("/logs", async (req, res) => {
     take,
   });
   res.json({ logs });
-});
+}));
 
 /* --------------------------- export/import ------------------------- */
 
-adminRouter.get("/export/config", async (_req, res) => {
+adminRouter.get("/export/config", asyncHandler(async (_req, res) => {
   const [server, providerSettings, titles] = await Promise.all([
     getServerSettings(),
     getProviderSettings(),
@@ -309,7 +310,7 @@ adminRouter.get("/export/config", async (_req, res) => {
     providers: providerSettings,
     catalog: titles.map((t) => publicTitle(t, { includeSources: true })),
   });
-});
+}));
 
 const importSchema = z.object({
   version: z.literal(1),
@@ -320,7 +321,7 @@ const importSchema = z.object({
   catalog: z.array(titleSchema.extend({ id: z.string().optional() })).optional(),
 });
 
-adminRouter.post("/import/config", async (req, res) => {
+adminRouter.post("/import/config", asyncHandler(async (req, res) => {
   const body = parseBody(importSchema, req.body, res);
   if (!body) return;
   if (body.server) {
@@ -351,4 +352,4 @@ adminRouter.post("/import/config", async (req, res) => {
     userId: req.session!.sub,
   });
   res.json({ ok: true, importedTitles: imported });
-});
+}));

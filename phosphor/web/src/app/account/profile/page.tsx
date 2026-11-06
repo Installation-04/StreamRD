@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE, put } from "@/lib/api";
+import { API_BASE, post, put, storeSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { User } from "@/lib/types";
 
@@ -38,7 +38,8 @@ export default function ProfilePage() {
     setMsg(null);
     setError(null);
     try {
-      await put("/api/account/change-password", { currentPassword, newPassword });
+      const session = await post<{ token: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
+      storeSession(session.token, session.role);
       setMsg("> password changed");
       setCurrentPassword("");
       setNewPassword("");

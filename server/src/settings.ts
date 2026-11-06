@@ -9,7 +9,7 @@ export interface ServerSettings {
   disabledProviders: ProviderId[];
   /** Per-request timeout when talking to debrid APIs (ms). */
   providerTimeoutMs: number;
-  /** How many providers to try before giving up on playback. */
+  /** Maximum total source/provider attempts before giving up on playback. */
   maxPlaybackAttempts: number;
   /** Allow browsing the catalog without an account. */
   allowUnauthenticatedBrowse: boolean;

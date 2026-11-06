@@ -45,7 +45,7 @@ describe("search and downloads integration", () => {
       <item><title>High Seed Big</title><link>magnet:?xt=urn:btih:big</link>
         <torznab:attr name="size" value="5000"/><torznab:attr name="seeders" value="50"/></item>
     </channel></rss>`;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(xml, { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(xml, { status: 200 })));
 
     const res = await request(app).get("/api/search?q=test&minSeeders=10&sort=size").set(auth(user.token));
     expect(res.status).toBe(200);
@@ -58,7 +58,7 @@ describe("search and downloads integration", () => {
       <item><title>Cached Result</title><link>magnet:?xt=urn:btih:cached</link>
         <torznab:attr name="size" value="1000"/><torznab:attr name="seeders" value="5"/></item>
     </channel></rss>`;
-    const fetchMock = vi.fn().mockResolvedValue(new Response(xml, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(xml, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const first = await request(app).get("/api/search?q=cachetest").set(auth(user.token));
@@ -116,7 +116,7 @@ describe("search and downloads integration", () => {
   });
 
   it("records a failed download job with a 502 when the provider errors out", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 })));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 })));
     const res = await request(app)
       .post("/api/downloads")
       .set(auth(user.token))
@@ -128,7 +128,7 @@ describe("search and downloads integration", () => {
   it("fetches a single job by id and 404s for another user's job", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 }))
+      vi.fn().mockImplementation(async () => new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 }))
     );
     const created = await request(app)
       .post("/api/downloads")
@@ -142,7 +142,7 @@ describe("search and downloads integration", () => {
   });
 
   it("deletes a download job", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "x" }), { status: 500 })));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(JSON.stringify({ error: "x" }), { status: 500 })));
     const created = await request(app)
       .post("/api/downloads")
       .set(auth(user.token))
@@ -154,7 +154,7 @@ describe("search and downloads integration", () => {
   it("bulk-clears only finished/errored jobs, leaving active ones and other users untouched", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 }))
+      vi.fn().mockImplementation(async () => new Response(JSON.stringify({ error: "hoster_unavailable" }), { status: 503 }))
     );
     // Admin needs its own debrid key configured before it can submit a job at all.
     await request(app)

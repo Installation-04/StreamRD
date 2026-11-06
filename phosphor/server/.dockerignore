@@ -1,0 +1,12 @@
+node_modules
+dist
+.next
+.git
+.env
+.env.*
+*.log
+**/*.db
+**/*.db-*
+data
+coverage
+*.tsbuildinfo

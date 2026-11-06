@@ -1,5 +1,8 @@
 # Deployment
 
+For existing installations, read the [production upgrade and backup guide](../../docs/production-runtime.md)
+before replacing images: runtime containers now use UID 1000.
+
 The backend is one container with a SQLite volume; the web client is a
 second container (or `npm run start` anywhere Node runs). TV/desktop clients
 are installed on devices and pointed at your server/web URL.
@@ -15,9 +18,11 @@ sudo ./install.sh
 Installs Docker if it isn't already present, picks a free host port for the
 API and web app (starting from 61337/3100, walking upward if either is
 already bound by something else on the box), generates a random
-`JWT_SECRET`, writes `.env`, and starts the backend + web containers. Prints
+`JWT_SECRET`, writes a private `.env` on first install, and starts the backend + web containers. Prints
 the URLs to open when it's done. Override the starting ports with
-`--api-port`/`--web-port` if you want specific ones tried first.
+`--api-port`/`--web-port` on first install if you want specific ones tried first.
+Reruns preserve the existing `.env`, signing secret, and public URLs; edit that
+file explicitly to change an existing configuration.
 
 To remove it: `sudo ./uninstall.sh` (add `--purge-data` to also delete the
 database, or `--purge-images` to also remove the built images).
@@ -77,7 +82,7 @@ Backend (`phosphor/server/.env`):
 |---|---|---|
 | `PORT` | API port | `61337` |
 | `DATABASE_URL` | Prisma datasource | `file:./data/phosphor.db` |
-| `JWT_SECRET` | Session signing key — **change it** | dev value |
+| `JWT_SECRET` | Stable session signing key, at least 32 bytes in production | required in production |
 | `JWT_EXPIRES_IN` | Session lifetime | `7d` |
 | `API_BASE_URL` / `LAN_URL` / `PUBLIC_URL` | Reachability hints | localhost |
 | `CORS_ORIGINS` | Comma-separated allowed origins or `*` | `*` |
@@ -92,7 +97,9 @@ Admin → Server → **Export config** downloads server settings, provider
 settings, and indexer configs (including plaintext API keys — keep the
 file private) as JSON, re-importable via the same page. User accounts,
 debrid keys, and download history live in the SQLite database file — back
-that up separately (`docker compose cp backend:/app/data/phosphor.db ./backup/`).
+that up separately with
+`docker compose exec backend node scripts/backup-db.cjs /app/data/backup-unique.db`,
+then copy that verified snapshot off-host. See the production guide for restore checks.
 
 ## Health checks
 

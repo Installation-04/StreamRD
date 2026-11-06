@@ -3,9 +3,9 @@ name: Phosphor CI
 on:
   push:
     branches: [main]
-    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml"]
+    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml", "infra/smoke-images.sh"]
   pull_request:
-    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml"]
+    paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml", "infra/smoke-images.sh"]
 
 jobs:
   server:
@@ -21,7 +21,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: phosphor/server/package-lock.json
-      - run: npm ci || npm install
+      - run: npm ci
       - run: npx prisma generate
       - name: Typecheck
         run: npm run lint
@@ -41,7 +41,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: phosphor/web/package-lock.json
-      - run: npm ci || npm install
+      - run: npm ci
       - name: Build
         run: npm run build
 
@@ -49,10 +49,11 @@ jobs:
     name: Phosphor Docker images build
     runs-on: ubuntu-latest
     needs: [server, web]
-    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
         run: docker build -t phosphor-server ./phosphor/server
       - name: Build web image
         run: docker build -t phosphor-web ./phosphor/web
+      - name: Validate production containers and database restoration
+        run: bash infra/smoke-images.sh phosphor

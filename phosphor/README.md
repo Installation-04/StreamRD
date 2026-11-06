@@ -1,5 +1,7 @@
 # Phosphor
 
+[Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases)
+
 Self-hosted, retro terminal-styled **debrid search-and-stream cockpit**.
 No admin-curated catalog — you search your own torrent indexers, one-click
 add results to your own debrid account, and stream once resolved.
@@ -143,3 +145,11 @@ pass). For a new debrid provider, follow
 ## License
 
 MIT — see the repository root [LICENSE](../LICENSE).
+
+## Screenshots and external media libraries
+
+![Application screenshot](../docs/screenshots/phosphor-search.png)
+
+See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
+Optional mounted-file symlink export for **Plex and Jellyfin** is available under
+Admin → Plex / Jellyfin. [Setup and scanning guide](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md).

@@ -57,6 +57,7 @@ export async function searchIndexer(
   opts: { timeoutMs?: number; limit?: number } = {}
 ): Promise<IndexerSearchResult[]> {
   const qs = new URLSearchParams({ t: "search", q: query, apikey: indexer.apiKey });
+  if (opts.limit) qs.set("limit", String(opts.limit));
   const res = await fetchWithTimeout(`${indexer.baseUrl}?${qs}`, {}, opts.timeoutMs ?? 15000);
   if (!res.ok) throw new Error(`${indexer.name}: HTTP ${res.status}`);
   const xml = await res.text();

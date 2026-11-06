@@ -154,3 +154,69 @@ primary provider.
 | GET | `/api/admin/logs?limit=&type=&level=&provider=` | Recent structured events, newest first (max 500) |
 | GET | `/api/admin/export/config` | JSON export: server settings, provider settings, **indexers (including plaintext API keys — treat as sensitive)** |
 | POST | `/api/admin/import/config` | Validated import of the same document (`version: 1`); indexers upsert by id |
+
+## Search and download traffic controls
+
+Regular search requests share four concurrent indexer tasks per backend process,
+with a FIFO waiting queue capped at 128 and a ten-second queue wait limit. Busy,
+failed or timed-out indexers appear in the existing `errors` array while successful
+results remain available. Admin connectivity-test requests are separate from this
+regular-search pool. Torznab requests include the result limit when supported by
+the indexer; local slicing still enforces maxResultsPerIndexer if it ignores it.
+
+Raw results are cached for 30 seconds and simultaneous identical misses coalesce.
+Keys fingerprint the indexer identity/name/URL/key/revision, exact trimmed query,
+timeout and result limit. Query case is preserved. Admin create/update/delete,
+enable changes, imports and server-setting changes clear the local cache; old
+in-flight work cannot repopulate a cleared cache. Other processes miss on changed
+configuration snapshots but do not share the cache or concurrency budget. Search
+query text is limited to 500 characters; malformed filters/sort return HTTP 400.
+
+`POST /api/downloads/:id/refresh` retains its `{ job }` success response and account
+ownership checks. Repeated refreshes share work and a three-second result cache,
+scoped to user/job/provider/reference and credential snapshot. A separate pool
+limits provider refresh work to four active calls and 64 waiting calls per process,
+with the same ten-second queue wait limit. Deletion is checked before returning
+cached data, and in-flight refreshes cannot recreate deleted jobs.
+
+Transient refresh failures (HTTP 408/429/5xx, timeouts/network failures, or local
+capacity exhaustion) preserve active status/progress and return HTTP 503 with
+`{ job, error, retryable: true, retryAfterMs: 8000 }` and `Retry-After: 8`. Successful
+refresh clears the temporary error. Permanent refresh failures retain terminal
+error behavior (502). Existing terminal jobs are not automatically resurrected.
+Finished transfers without a resolved stream remain active for another attempt.
+Indexer/provider HTTP timeouts cover body reads as well as response headers.
+
+The web queue serializes automatic cycles and manual mutations. Each automatic
+cycle refreshes up to twelve jobs, at most three concurrently, rotating through
+the currently listed jobs. Polls are scheduled after a cycle completes rather
+than on a fixed interval. Changes reset the delay to four seconds; unchanged or
+failed cycles back off to at most sixty seconds. Automatic polling pauses while
+hidden, resumes on visibility/focus, and cancels requests on unmount. Manual action
+errors are shown, with duplicate actions disabled per job. One failing refresh
+does not discard successful updates from other jobs.
+
+These limits/caches are process-local, not distributed leases. Visible windows
+may still make separate HTTP requests, though short-lived backend sharing reduces
+their provider calls. Global provider-setting changes can take up to three seconds
+to pass the refresh response cache. The existing list API returns only the newest
+200 jobs; jobs beyond that window and persistent background polling remain outside
+this change. This does not add file selection or fix every provider adapter in
+Phosphor. No schema change is required for these traffic controls.
+
+
+### Authentication session update
+
+Issued tokens now have a product issuer, HS256, token ID and account session version.
+Old tokens require a new sign-in after this upgrade. POST /api/auth/logout revokes
+only the current token. POST /api/account/change-password returns
+`{ ok: true, token, role }`: save that replacement token; other older tokens now
+receive 401. Admin deactivation also invalidates older sessions. New internal
+sessionVersion fields are not included in public user responses. Apply the new
+schema and use a stable, non-placeholder JWT_SECRET before deployment.
+
+## Optional Plex/Jellyfin library export
+
+Administrator-only mounted-file exports use `/api/admin/library`. See the
+[endpoint contract and filesystem requirements](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md#api).
+No database schema changes are required for these filesystem manifests.

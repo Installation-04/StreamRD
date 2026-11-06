@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_BASE, post } from "@/lib/api";
+import { API_BASE, post, storeSession } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
 export default function SettingsPage() {
@@ -16,7 +16,8 @@ export default function SettingsPage() {
     setMsg(null);
     setError(null);
     try {
-      await post("/api/account/change-password", { currentPassword, newPassword });
+      const session = await post<{ token: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
+      storeSession(session.token, session.role);
       setMsg("Password changed.");
       setCurrentPassword("");
       setNewPassword("");

@@ -1,5 +1,7 @@
 "use client";
 
+import type { FileSelection } from "./types";
+
 /**
  * Minimal fetch wrapper for the StreamRD API. The base URL comes from
  * NEXT_PUBLIC_API_BASE_URL so the same build works over LAN, a reverse
@@ -22,10 +24,11 @@ export function getToken(): string | null {
 
 export function storeSession(token: string, role: string): void {
   const maxAge = 60 * 60 * 24 * 7;
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; samesite=lax`;
+  const secure = window.location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
   // Role cookie is only a UX hint for middleware redirects; the API
   // enforces the real RBAC on every request.
-  document.cookie = `${ROLE_COOKIE}=${role}; path=/; max-age=${maxAge}; samesite=lax`;
+  document.cookie = `${ROLE_COOKIE}=${role}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
 }
 
 export function clearSession(): void {
@@ -34,7 +37,7 @@ export function clearSession(): void {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public pending = false, public retryAfterMs = 5000, public fileSelection?: FileSelection) {
     super(message);
   }
 }
@@ -51,7 +54,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiError(res.status, (body as { error?: string }).error ?? `HTTP ${res.status}`);
+    const error = body as { error?: string; pending?: boolean; retryAfterMs?: number; selectionRequired?: boolean } & FileSelection;
+    throw new ApiError(res.status, error.error ?? `HTTP ${res.status}`, error.pending === true, error.retryAfterMs, error.selectionRequired ? { provider: error.provider, sourceIndex: error.sourceIndex, files: error.files } : undefined);
   }
   return body as T;
 }

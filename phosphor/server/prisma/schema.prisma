@@ -13,6 +13,8 @@ datasource db {
 
 model User {
   id             String         @id @default(cuid())
+  sessionVersion Int @default(0)
+  revokedSessions RevokedSession[]
   email          String         @unique
   hashedPassword String
   displayName    String
@@ -112,4 +114,12 @@ model LogEvent {
 model Setting {
   key   String @id
   value String // JSON-encoded
+}
+
+model RevokedSession {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
 }

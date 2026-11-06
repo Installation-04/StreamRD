@@ -100,19 +100,10 @@ describe("AllDebridProvider", () => {
   });
 
   it("maps magnet status to a uniform TorrentStatus", async () => {
-    mockFetchOnce(200, {
-      status: "success",
-      data: {
-        magnets: {
-          id: 99,
-          filename: "show.mkv",
-          statusCode: 4,
-          downloaded: 100,
-          size: 100,
-          links: [{ link: "https://ad.example/dl/1" }],
-        },
-      },
-    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ status: "success", data: { magnets: { id: 99, filename: "show.mkv", statusCode: 4, downloaded: 100, size: 100, links: [] } } })));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ status: "success", data: { magnets: [{ id: "99", files: [{ n: "show.mkv", s: 100, l: "https://ad.example/dl/1" }] }] } })));
     const status = await ad.getTorrentStatus(creds, "99");
     expect(status).toMatchObject({
       provider: "alldebrid",

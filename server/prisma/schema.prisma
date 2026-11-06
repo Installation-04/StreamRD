@@ -13,6 +13,8 @@ datasource db {
 
 model User {
   id             String         @id @default(cuid())
+  sessionVersion Int @default(0)
+  revokedSessions RevokedSession[]
   email          String         @unique
   hashedPassword String
   displayName    String
@@ -25,6 +27,9 @@ model User {
   profiles       Profile[]
   playbackLogs   PlaybackLog[]
   favorites      Favorite[]
+  sourceJobs     PlaybackSourceJob[]
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
 }
 
 model DebridConfig {
@@ -44,6 +49,8 @@ model Profile {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   avatarUrl   String?
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
   preferences String   @default("{}") // JSON blob (subtitle language, maturity, ...)
   createdAt   DateTime @default(now())
 
@@ -66,6 +73,11 @@ model Title {
   updatedAt   DateTime      @updatedAt
   playbackLogs PlaybackLog[]
   favoritedBy  Favorite[]
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
+
+  @@index([createdAt, id])
+  @@index([type, createdAt, id])
 }
 
 // "My List" — a user's saved titles, Netflix-style.
@@ -79,6 +91,7 @@ model Favorite {
 
   @@unique([userId, titleId])
   @@index([userId])
+  @@index([userId, createdAt, id])
 }
 
 model PlaybackLog {
@@ -94,6 +107,7 @@ model PlaybackLog {
   createdAt    DateTime @default(now())
 
   @@index([userId])
+  @@index([userId, success, titleId, createdAt])
   @@index([titleId])
   @@index([createdAt])
 }
@@ -117,4 +131,62 @@ model LogEvent {
 model Setting {
   key   String @id
   value String // JSON-encoded
+}
+
+// Provider references survive retries/restarts; signed stream URLs are never stored.
+model PlaybackSourceJob {
+  key         String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String
+  providerRef String?
+  expiresAt   DateTime
+  leaseUntil  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PlaybackSession {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String?
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  scope String @default("")
+  titleId String
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  mediaKey String
+  lastSequence Int @default(-1)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PlaybackProgress {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String?
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  scope String @default("")
+  titleId String
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  mediaKey String
+  positionSeconds Float @default(0)
+  durationSeconds Float @default(0)
+  completed Boolean @default(false)
+  activeSessionId String
+  updatedAt DateTime @default(now())
+  @@unique([userId, scope, titleId, mediaKey])
+  @@index([userId, scope, completed, updatedAt, id])
+}
+
+model RevokedSession {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
 }

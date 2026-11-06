@@ -91,3 +91,35 @@ export interface LogEntry {
   provider: string | null;
   createdAt: string;
 }
+
+/** Compact fields needed to render a catalog card. */
+export type TitleCardData = Pick<Title, "id" | "name" | "year" | "posterUrl"> & { positionSeconds?: number; durationSeconds?: number };
+export interface BrowseRow {
+  id: string;
+  label: string;
+  titles: TitleCardData[];
+  nextCursor: string | null;
+}
+export interface BrowsePage {
+  rows: BrowseRow[];
+  nextGenre: string | null;
+}
+
+export interface FileChoice {
+  token: string;
+  name: string;
+  size?: number;
+  format: string;
+  sample: boolean;
+}
+export interface FileSelection {
+  provider: ProviderId;
+  sourceIndex: number;
+  files: FileChoice[];
+}
+
+export interface PlaybackData {
+  sessionId: string;
+  resumeSeconds: number;
+  durationSeconds: number;
+}

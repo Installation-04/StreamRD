@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { clearSession, get, getToken, post, storeSession } from "./api";
+import { ApiError, clearSession, get, getToken, post, storeSession } from "./api";
 import { User } from "./types";
 
 interface AuthState {
@@ -28,9 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await get<{ user: User }>("/api/account/profile");
       setUser(res.user);
-    } catch {
-      clearSession();
-      setUser(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        clearSession();
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

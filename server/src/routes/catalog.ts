@@ -1,3 +1,5 @@
+import { asyncHandler } from "../http";
+import { browseRouter } from "./browse";
 import { NextFunction, Request, Response, Router } from "express";
 import { requireAuth } from "../auth/middleware";
 import { db } from "../db";
@@ -16,13 +18,14 @@ async function browseGate(req: Request, res: Response, next: NextFunction) {
   await requireAuth(req, res, next);
 }
 
-catalogRouter.use(browseGate);
+catalogRouter.use(asyncHandler(browseGate));
+catalogRouter.use("/browse", browseRouter);
 
 /**
  * GET /api/catalog/rows — Netflix-style home rows: recently added,
  * movies, series, then one row per genre.
  */
-catalogRouter.get("/rows", async (_req, res) => {
+catalogRouter.get("/rows", asyncHandler(async (_req, res) => {
   const titles = await db.title.findMany({ orderBy: { createdAt: "desc" } });
   const decoded = titles.map((t) => publicTitle(t));
   const byGenre = new Map<string, typeof decoded>();
@@ -43,10 +46,10 @@ catalogRouter.get("/rows", async (_req, res) => {
     })),
   ].filter((row) => row.titles.length > 0);
   res.json({ rows });
-});
+}));
 
 /** GET /api/catalog/search?q= */
-catalogRouter.get("/search", async (req, res) => {
+catalogRouter.get("/search", asyncHandler(async (req, res) => {
   const q = String(req.query.q ?? "").trim();
   if (!q) {
     res.json({ results: [] });
@@ -60,14 +63,14 @@ catalogRouter.get("/search", async (req, res) => {
     take: 50,
   });
   res.json({ results: titles.map((t) => publicTitle(t)) });
-});
+}));
 
 /** GET /api/catalog/title/:id */
-catalogRouter.get("/title/:id", async (req, res) => {
+catalogRouter.get("/title/:id", asyncHandler(async (req, res) => {
   const title = await db.title.findUnique({ where: { id: req.params.id } });
   if (!title) {
     res.status(404).json({ error: "Title not found" });
     return;
   }
   res.json({ title: publicTitle(title) });
-});
+}));

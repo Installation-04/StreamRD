@@ -1,0 +1,21 @@
+# Optional mounted-media export for Plex/Jellyfin.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.media.yml up -d backend web
+# Create these host directories first; export directory must be writable by UID 1000.
+services:
+  backend:
+    environment:
+      MEDIA_SOURCE_ROOT: /media/debrid
+      MEDIA_LIBRARY_ROOT: /media/library
+    volumes:
+      - type: bind
+        source: ${MEDIA_MOUNT_PATH:?Set MEDIA_MOUNT_PATH to your existing mounted media directory}
+        target: /media/debrid
+        read_only: true
+        bind:
+          create_host_path: false
+          propagation: rslave
+      - type: bind
+        source: ${MEDIA_EXPORT_PATH:?Set MEDIA_EXPORT_PATH to a separate writable library directory}
+        target: /media/library
+        bind:
+          create_host_path: false

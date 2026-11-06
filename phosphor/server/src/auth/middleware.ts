@@ -18,7 +18,7 @@ function extractToken(req: Request): string | null {
     ?.split(";")
     .map((c) => c.trim())
     .find((c) => c.startsWith("ph_token="));
-  return cookie ? decodeURIComponent(cookie.split("=").slice(1).join("=")) : null;
+  try { return cookie ? decodeURIComponent(cookie.split("=").slice(1).join("=")) : null; } catch { return null; }
 }
 
 /** Populates req.session when a valid token is present; never rejects. */
@@ -37,11 +37,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const user = await db.user.findUnique({ where: { id: req.session.sub } });
-  if (!user || !user.active) {
-    res.status(401).json({ error: "Account is not active" });
+  let user;
+  try {
+    user = await db.user.findFirst({ where: { id: req.session.sub, active: true, sessionVersion: req.session.version, revokedSessions: { none: { id: req.session.jti } } }, select: { role: true, email: true } });
+  } catch (err) { next(err); return; }
+  if (!user) {
+    res.status(401).json({ error: "Session is no longer active" });
     return;
   }
+  req.session.email = user.email;
   req.session.role = user.role === "admin" ? "admin" : "user";
   next();
 }

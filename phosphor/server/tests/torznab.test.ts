@@ -32,7 +32,7 @@ describe("searchIndexer (Torznab)", () => {
   const indexer = { id: "idx1", name: "Sample Indexer", baseUrl: "http://jackett.local/api", apiKey: "key123" };
 
   it("parses magnet and torrent-file items with size/seeders/peers", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(SAMPLE_XML, { status: 200 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(SAMPLE_XML, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const results = await searchIndexer(indexer, "some movie");
@@ -64,12 +64,12 @@ describe("searchIndexer (Torznab)", () => {
   });
 
   it("throws on a non-OK response", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 500 })));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response("", { status: 500 })));
     await expect(searchIndexer(indexer, "x")).rejects.toThrowError(/HTTP 500/);
   });
 
   it("respects the limit option", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(SAMPLE_XML, { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(SAMPLE_XML, { status: 200 })));
     const results = await searchIndexer(indexer, "x", { limit: 1 });
     expect(results).toHaveLength(1);
   });
