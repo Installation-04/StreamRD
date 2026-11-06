@@ -1,0 +1,3 @@
+# Migration and datamodel checksums must be identical on all checkouts.
+server/prisma/** text eol=lf
+phosphor/server/prisma/** text eol=lf

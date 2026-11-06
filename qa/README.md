@@ -20,7 +20,8 @@ needed. Set `QA_ARTIFACT_DIR` to an absolute directory for screenshots and the J
 validation report. The runner refuses occupied ports and missing images, creates
 only fresh volumes, and removes only its own containers/volumes on exit.
 
-Coverage includes actual UI login, member/admin separation, private guided setup,
+Coverage includes read-only System readiness and migration counts on desktop/mobile,
+actual UI login, member/admin separation, private guided setup,
 mounted-file browsing, reviewed movie/episode exports, repair, export search and
 removal, catalog favorites/search, local Torznab and saved-search flows, queue
 loading/error recovery, desktop/mobile overflow, and browser page errors. This is

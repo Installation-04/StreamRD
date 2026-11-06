@@ -5,7 +5,7 @@ from `infra/` for StreamRD or `phosphor/infra/` for Phosphor. The API/web ports 
 47821/3000 and 61337/3100 respectively. Web API URLs are baked into the image and
 must be reachable by the browser; rebuild the web image after changing them.
 
-## Runtime changes in v0.2.0
+## Production runtime baseline and subsequent upgrades
 
 All four images use Node 22. Backend builds emit `dist/src/index.js`; compiled
 tests, TypeScript, tsx, and Vitest are excluded from the final runtime. The Prisma
@@ -52,9 +52,10 @@ docker compose run --rm --no-deps --user root backend \
 For bind mounts, coordinate the corresponding host ownership with your storage
 policy. These commands refer only to the selected product's data mount.
 
-Startup applies `prisma db push --skip-generate` by default and does not pass
-`--accept-data-loss`. Versioned migrations are not yet implemented. To control
-when schema synchronization happens, set `APPLY_SCHEMA_ON_START=false` in `.env`,
+Startup now validates and applies committed versioned SQLite migrations, with a
+verified snapshot before changing an existing database. Read [database-upgrades.md](database-upgrades.md)
+for supported baseline adoption, refusal states, and recovery. To control when
+preparation happens, set `APPLY_SCHEMA_ON_START=false` in `.env`,
 keep the writer stopped, and apply the reviewed schema once:
 
 ```bash
@@ -64,9 +65,10 @@ docker compose up -d backend web
 ```
 
 Check `/api/health`, sign in, and inspect existing accounts/catalog or indexers.
-The authentication upgrade fixture has also verified preservation of all 11
-StreamRD and 7 Phosphor pre-upgrade application tables through SQLite's User table
-rebuild. Always test your own backup before relying on a production upgrade.
+The v0.4.0 historical migration uses an additive User-column change and preserves
+existing rows and foreign keys; it does not rebuild User. The older authentication
+fixture separately tests a derived intermediate schema. Always test your own
+backup before relying on a production upgrade.
 
 ## Backups and restoration
 
@@ -112,7 +114,8 @@ runtimes, signs up an admin, creates application data, verifies restart persiste
 backs up/restores into another volume, signs in again, and checks the web login
 page on its expected port. It never mounts an existing application volume or
 contacts real providers. It also checks mounted-file export and manifest persistence,
-and verifies SQLite-only restoration still works with the optional mount disabled.
+verifies SQLite-only restoration with the optional mount disabled, and adopts a
+populated exact v0.3 schema while proving its snapshot predates migration history.
 CI runs these checks for pull requests and main pushes.
 Installer regressions use mocked Docker/OS commands and temporary directories.
 
@@ -123,3 +126,7 @@ the CA is not stored in an image layer and TLS verification remains enabled.
 
 Optional Plex/Jellyfin library manifests and links live outside SQLite: back them
 up separately as described in [plex-jellyfin.md](plex-jellyfin.md).
+
+Versioned migration adoption and readiness were added in v0.4.0. Admin → System
+reports actual history/schema state and distinguishes snapshot policy from backup
+evidence. Existing exact v0.2/v0.3 databases are snapshotted before baseline adoption.

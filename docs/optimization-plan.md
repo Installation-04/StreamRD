@@ -174,9 +174,10 @@ jobs. Clients play resolved provider URLs directly.
 5. Encrypt stored provider credentials with an explicit key/rotation and backup
    strategy. Plan HttpOnly browser sessions/CSRF compatibility, audit business/provider
    log redaction, and consider verified public bootstrap/email ownership separately.
-6. Introduce versioned, reviewed schema migrations. Production entrypoints, frozen
-   installs, pruned images, and verified backup/restore checks are implemented;
-   automatic schema synchronization remains configurable.
+6. Build on the v0.4.0 versioned SQLite migration foundation: keep released SQL
+   immutable, add reviewed migration steps and regenerate checkpoint signatures.
+   Exact historical/current adoption, pre-change snapshots, drift/history refusal,
+   and read-only System readiness are implemented. See [database-upgrades.md](database-upgrades.md).
 7. Extract shared provider/API contracts after behavior stabilizes. Keep the two
    product workflows separate; consider distributed traffic coordination only if
    deployments actually require more than one backend process.

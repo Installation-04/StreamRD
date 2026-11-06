@@ -32,6 +32,20 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
   await page.getByRole('button',{name:sr?/sign in/i:/connect/i}).click();await page.waitForURL(u=>!u.pathname.includes('/login'));await page.waitForLoadState('networkidle');
   report.journeys.push(`${product}: actual UI login`);
   assert.equal((await call(api,'/api/health')).version,require('../server/package.json').version);
+  const readiness=await call(api,'/api/admin/system',null,admin.token);assert.equal(readiness.migrations.state,'current');assert.equal(readiness.migrations.pending.length,0);assert.equal(readiness.upgrade.backupPolicy,'verified-before-changes');
+  await page.goto(`${url}/admin/system`,{waitUntil:'networkidle'});await page.getByRole('heading',{name:'System & upgrades',exact:true}).waitFor();await page.getByRole('region',{name:'Upgrade readiness'}).waitFor();await noOverflow('desktop system');await shot('system');
+  await page.setViewportSize({width:390,height:844});await noOverflow('mobile system');await shot('system-mobile');await page.setViewportSize({width:1440,height:1050});
+  // Screenshots above use the real managed database. Exercise failure presentation
+  // separately so stale checks and unavailable storage cannot appear healthy.
+  const statusPattern='**/api/admin/system',systemAlert=page.getByRole('alert').filter({hasText:'System check needs attention'});
+  await page.route(statusPattern,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'fixture service unavailable'})}));
+  await page.getByRole('button',{name:'Refresh status',exact:true}).click();await systemAlert.waitFor();await page.getByText('LAST SUCCESSFUL SNAPSHOT',{exact:true}).waitFor();
+  await page.unroute(statusPattern);
+  await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByText('Database upgrades are current.',{exact:true}).waitFor();assert.equal(await systemAlert.count(),0);
+  await page.route(statusPattern,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...readiness,database:{status:'down'},migrations:{...readiness.migrations,state:'unavailable'}})}));
+  await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByText('The database is unavailable.',{exact:true}).waitFor();await page.getByText('Not verified',{exact:true}).waitFor();
+  await page.unroute(statusPattern);await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByText('Database upgrades are current.',{exact:true}).waitFor();
+  report.journeys.push(`${product}: real migration readiness desktop/mobile and simulated failure recovery`);
   await page.goto(`${url}/setup`,{waitUntil:'networkidle'});await page.getByRole('heading',{name:'Make yourself at home.'}).waitFor();await page.getByRole('progressbar',{name:'Essentials configured'}).waitFor();await noOverflow('desktop setup');await shot('setup');report.journeys.push(`${product}: private configuration checklist`);
   await page.setViewportSize({width:390,height:844});await noOverflow('mobile setup');await shot('setup-mobile');
   await page.goto(`${url}/admin/library`,{waitUntil:'networkidle'});await page.getByRole('checkbox',{name:'Select Big.Buck.Bunny.2008.mp4',exact:true}).waitFor();await noOverflow('mobile library');await shot('library-mobile');

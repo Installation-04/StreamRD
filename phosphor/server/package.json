@@ -1,6 +1,6 @@
 {
   "name": "@phosphor/server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Phosphor backend: auth, multiservice debrid providers, Torznab indexer search, download queue.",
   "type": "commonjs",
@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "db:migrate": "node scripts/migrate-db.cjs",
+    "db:status": "node scripts/db-status.cjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

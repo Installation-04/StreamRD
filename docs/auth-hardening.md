@@ -76,4 +76,5 @@ JavaScript-accessible; HttpOnly/BFF sessions and CSRF handling need a compatible
 client/API migration. Business/provider logs need a separate redaction review.
 Expired revocations need retention cleanup. Production entrypoints, frozen installs,
 and backup/restore checks are covered in [production-runtime.md](production-runtime.md).
-Versioned schema migrations remain in the optimization plan.
+Versioned schema migrations and exact historical upgrade fixtures are now covered in
+[database-upgrades.md](database-upgrades.md).

@@ -46,3 +46,11 @@ sensitive exploit details in a public issue.
 
 Maintainers coordinate scope through the project tracker. Reviews should be
 specific, respectful, and useful to the person doing the work.
+
+## Database changes
+
+Production changes require immutable versioned SQLite migrations and regenerated
+checkpoint metadata. See [database-upgrades.md](docs/database-upgrades.md). Run the
+checkpoint generator with `--check` and the migration tests before changing models.
+`db push` is restricted to disposable development/test workflows, never a release
+upgrade shortcut.

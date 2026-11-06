@@ -1,6 +1,6 @@
 // StreamRD data model.
-// SQLite by default for a zero-dependency self-hosted setup; switch the
-// provider to "postgresql" and update DATABASE_URL for larger deployments.
+// SQLite is the supported database for this self-hosted application.
+// PostgreSQL requires dedicated migrations and adaptations to SQLite-specific queries.
 
 generator client {
   provider = "prisma-client-js"

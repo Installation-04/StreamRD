@@ -106,3 +106,10 @@ then copy that verified snapshot off-host. See the production guide for restore 
 `GET /api/health` is unauthenticated and returns `503` when the database is
 unreachable — used by the Docker healthcheck and every client's "test
 connection" action.
+
+## Versioned database upgrades
+
+Starting in v0.4.0, startup uses committed migrations and validates existing schema/history
+before changes. Known existing databases receive verified pre-upgrade snapshots.
+See the [upgrade and recovery guide](https://github.com/Installation-04/StreamRD/blob/main/docs/database-upgrades.md).
+Admin → System reports actual readiness; it never applies changes from the browser.

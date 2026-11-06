@@ -47,7 +47,7 @@ providers' terms of service and your local law.
 
 | Piece | Stack |
 |---|---|
-| Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite (Postgres-ready), JWT + bcrypt, Zod, Vitest + Supertest |
+| Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, Vitest + Supertest |
 | Web (`/web`) | Next.js (App Router), React, TypeScript, cookie session + middleware RBAC gates |
 | Mobile (`/mobile`) | Expo / React Native (iOS + Android), expo-av playback |
 | TV (`/tv`) | react-native-tvos (Android TV / Fire TV), SwiftUI + AVKit (tvOS) |
@@ -171,7 +171,7 @@ clients, own port (61337) — see `phosphor/README.md` to get started.
 
 ## Screenshots and external media libraries
 
-![Application screenshot](docs/screenshots/v0.3.0/streamrd-discover.png)
+![Application screenshot](docs/screenshots/v0.4.0/streamrd-discover.png)
 
 See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
 Optional mounted-file symlink export for **Plex and Jellyfin** is available under
@@ -182,3 +182,8 @@ Admin → Plex / Jellyfin. [Setup and scanning guide](https://github.com/Install
 [Project HQ](https://github.com/Installation-04/StreamRD/wiki/Project-HQ) tracks delivery, acceptance checks, and upcoming work.
 The community edition adds guided `/setup`, reviewed mounted-file batches,
 and responsive discovery/search workflows. See [contributing](https://github.com/Installation-04/StreamRD/blob/main/CONTRIBUTING.md) to help.
+
+**v0.4.0 Safe Upgrades** adds versioned SQLite migrations, verified snapshots before
+existing database changes, and read-only **Admin → System** readiness pages in both
+apps. Follow the [upgrade and recovery guide](docs/database-upgrades.md) before
+upgrading an existing installation.

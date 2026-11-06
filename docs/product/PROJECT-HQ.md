@@ -1,6 +1,6 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.3.0 Community Edition — delivered
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.4.0 Safe Upgrades — implementation and local acceptance complete
 
 This is the source of truth for the project tracker. Import the Markdown and CSV
 bundle into Notion when a workspace connection is available. **No live Notion page
@@ -12,6 +12,16 @@ Make self-hosted debrid media welcoming, dependable, and easy to operate. Stream
 is a curated personal cinema; Phosphor is its distinct search-and-queue companion.
 Both use the community's own accounts and infrastructure. Plex/Jellyfin export
 stays optional and uses real mounted files.
+
+## Active milestone: v0.4.0 Safe Upgrades
+
+| Workstream | Owner | State | Acceptance |
+|---|---|---|---|
+| Versioned SQLite migrations | Migration engine + lead | Delivered | Exact legacy/current adoption, immutable history, verified snapshot before existing DB changes |
+| Independent schema/history validation | Migration research + engine | Delivered | Refuse unknown/custom schema, altered checksums, failed history and partial baseline |
+| System readiness UI/API | System design + lead | Delivered | Read-only admin diagnostics, truthful status, no invented backup evidence |
+| Upgrade/recovery regression fixtures | Engine + lead | Delivered | New/legacy/current databases preserve rows and FKs; disabled mode writes nothing |
+| Production and browser acceptance | Lead | Delivered | Migration-aware container startup/restore and System desktop/mobile checks |
 
 ## Current delivery board
 
@@ -42,6 +52,15 @@ stays optional and uses real mounted files.
   [Validation](https://github.com/Installation-04/StreamRD/blob/v0.3.0/docs/community-validation.md)
 
 
+- **v0.4.0 Safe Upgrades:** versioned SQLite migration chains, exact historical/current
+  adoption, verified snapshots before existing database changes, independent
+  schema/history checks and read-only System readiness pages. **318 backend tests,
+  14 browser journeys, 20 screenshots**, four production builds and both enhanced
+  upgrade/backup/restore smoke checks passed locally. The release is gated on both
+  CI pipelines; its tag and Release workflow record publication evidence.
+  [Release](https://github.com/Installation-04/StreamRD/releases/tag/v0.4.0) ·
+  [Validation](https://github.com/Installation-04/StreamRD/blob/v0.4.0/docs/safe-upgrades-validation.md)
+
 ## Product principles
 
 1. Show real state. Configured keys are not verified connections; resolved links
@@ -59,7 +78,7 @@ stays optional and uses real mounted files.
 | Priority | Opportunity | Acceptance evidence |
 |---|---|---|
 | P1 | Native-client parity | Device builds exercise file choice, profile resume, and compatible APIs |
-| P1 | Versioned database migrations | Old-to-new upgrade and rollback/restore fixtures protect real installations |
+| P1 | Extend the reviewed migration chain | New changes include immutable SQL, regenerated checkpoints and upgrade/recovery fixtures |
 | P1 | Credential encryption and session architecture | Documented key backup/rotation and compatible browser/device migration |
 | P2 | Playback reliability insights | First-frame/error signals distinguish URL resolution from real playback |
 | P2 | Retention and cleanup | Scoped dry runs, protected recoverable references, backup and boundary tests |
@@ -78,5 +97,5 @@ are durable evidence; marketing copy is not completion evidence.
 - Repository: https://github.com/Installation-04/StreamRD
 - Releases: https://github.com/Installation-04/StreamRD/releases
 - Wiki: https://github.com/Installation-04/StreamRD/wiki
-- Current stable: https://github.com/Installation-04/StreamRD/releases/tag/v0.3.0
+- Current stable: https://github.com/Installation-04/StreamRD/releases/latest
 - Engineering backlog: [optimization plan](https://github.com/Installation-04/StreamRD/blob/main/docs/optimization-plan.md)

@@ -1,0 +1,41 @@
+{
+  "journeys": [
+    "streamrd: actual UI login",
+    "streamrd: real migration readiness desktop/mobile and simulated failure recovery",
+    "streamrd: private configuration checklist",
+    "streamrd: mount browsing, reviewed movie/episode batch, real link status, repair and export search",
+    "streamrd: explicit link removal",
+    "streamrd: catalog discovery, favorite editing and real search",
+    "streamrd: mobile signup routes into guided setup",
+    "phosphor: actual UI login",
+    "phosphor: real migration readiness desktop/mobile and simulated failure recovery",
+    "phosphor: private configuration checklist",
+    "phosphor: mount browsing, reviewed movie/episode batch, real link status, repair and export search",
+    "phosphor: explicit link removal",
+    "phosphor: real local-indexer search, saved search, queue empty/error/retry states",
+    "phosphor: mobile signup routes into guided setup"
+  ],
+  "pageErrors": [],
+  "screenshots": [
+    "streamrd-system.png",
+    "streamrd-system-mobile.png",
+    "streamrd-setup.png",
+    "streamrd-setup-mobile.png",
+    "streamrd-library-mobile.png",
+    "streamrd-library.png",
+    "streamrd-discover.png",
+    "streamrd-discover-light.png",
+    "streamrd-discover-mobile.png",
+    "phosphor-system.png",
+    "phosphor-system-mobile.png",
+    "phosphor-setup.png",
+    "phosphor-setup-mobile.png",
+    "phosphor-library-mobile.png",
+    "phosphor-library.png",
+    "phosphor-discover.png",
+    "phosphor-discover-amber.png",
+    "phosphor-discover-white.png",
+    "phosphor-discover-mobile.png",
+    "phosphor-queue.png"
+  ]
+}

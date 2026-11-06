@@ -7,23 +7,26 @@ docker image inspect "$product-server" "$product-web" >/dev/null
 suffix="$(openssl rand -hex 8)"
 volume="${product}-smoke-${suffix}"
 restored_volume="${product}-restore-${suffix}"
-backend_id= web_id= restored_id= volume_created=false restored_created=false
+upgrade_volume="${product}-upgrade-${suffix}"
+backend_id= web_id= restored_id= upgraded_id= volume_created=false restored_created=false upgrade_created=false
 cleanup() {
   local status=$?
   set +e
   if [ "$status" -ne 0 ] && [ -n "$backend_id" ]; then docker logs "$backend_id"; fi
-  for container in "$backend_id" "$web_id" "$restored_id"; do [ -z "$container" ] || docker rm --force "$container" >/dev/null 2>&1; done
+  for container in "$backend_id" "$web_id" "$restored_id" "$upgraded_id"; do [ -z "$container" ] || docker rm --force "$container" >/dev/null 2>&1; done
   [ "$volume_created" = false ] || docker volume rm "$volume" >/dev/null 2>&1
   [ "$restored_created" = false ] || docker volume rm "$restored_volume" >/dev/null 2>&1
+  [ "$upgrade_created" = false ] || docker volume rm "$upgrade_volume" >/dev/null 2>&1
   return "$status"
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
-for name in "$volume" "$restored_volume"; do
+for name in "$volume" "$restored_volume" "$upgrade_volume"; do
   if docker volume inspect "$name" >/dev/null 2>&1; then echo "Refusing an existing smoke volume" >&2; exit 1; fi
 done
 docker volume create "$volume" >/dev/null; volume_created=true
 docker volume create "$restored_volume" >/dev/null; restored_created=true
+docker volume create "$upgrade_volume" >/dev/null; upgrade_created=true
 smoke_jwt="$(openssl rand -hex 32)"
 backend_id="$(docker run --pull=never --detach --volume "$volume:/app/data" --env "JWT_SECRET=$smoke_jwt" --env MEDIA_SOURCE_ROOT=/app/data/mounted --env MEDIA_LIBRARY_ROOT=/app/data/scanner-library "$product-server")"
 wait_backend() {
@@ -71,6 +74,36 @@ if docker exec "$backend_id" node scripts/backup-db.cjs /app/data/smoke-backup.d
 docker run --pull=never --rm --user root --volume "$volume:/source:ro" --volume "$restored_volume:/target" "$product-server" node -e "const fs=require('node:fs');fs.copyFileSync('/source/smoke-backup.db','/target/$database',fs.constants.COPYFILE_EXCL);fs.chownSync('/target',1000,1000);fs.chownSync('/target/$database',1000,1000)"
 restored_id="$(docker run --pull=never --detach --volume "$restored_volume:/app/data" --env "JWT_SECRET=$smoke_jwt" --env APPLY_SCHEMA_ON_START=false "$product-server")"
 wait_backend "$restored_id"; fixture "$restored_id" restore
+# Construct a populated, exact v0.3-format database only in a NEW disposable volume.
+# This db push is a historical test-fixture constructor, never production startup.
+docker run --pull=never --rm --interactive --volume "$upgrade_volume:/app/data" --env "SMOKE_PRODUCT=$product" "$product-server" node <<'NODE'
+(async()=>{
+ const fs=require("node:fs"),{execFileSync}=require("node:child_process"),{PrismaClient}=require("@prisma/client");
+ const file=process.env.DATABASE_URL.slice(5);fs.closeSync(fs.openSync(file,"wx",0o600));
+ execFileSync(process.execPath,["/app/node_modules/prisma/build/index.js","db","push","--skip-generate","--schema","/app/prisma/community-v0.3.prisma"],{stdio:"pipe",env:process.env});
+ const db=new PrismaClient();try{
+ const user=await db.user.create({data:{email:"container@example.invalid",displayName:"Upgrade fixture",role:"admin",hashedPassword:require("bcryptjs").hashSync("container-password123",10)}});
+ await db.debridConfig.create({data:{userId:user.id,realDebridToken:"upgrade-fixture-only"}});
+ if(process.env.SMOKE_PRODUCT==="streamrd")await db.title.create({data:{name:"Container fixture"}});
+ else await db.indexerConfig.create({data:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-only"}});
+ const history=await db.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE name='_prisma_migrations'");if(history.length)throw Error("Historical fixture already has migration history");
+ }finally{await db.$disconnect()}
+})().catch(error=>{console.error(error.message);process.exitCode=1});
+NODE
+upgraded_id="$(docker run --pull=never --detach --volume "$upgrade_volume:/app/data" --env "JWT_SECRET=$smoke_jwt" "$product-server")"
+wait_backend "$upgraded_id"; fixture "$upgraded_id" restore
+docker exec --interactive "$upgraded_id" node <<'NODE'
+(async()=>{
+ const fs=require("node:fs"),{PrismaClient}=require("@prisma/client");
+ const state=await require("./scripts/database-state.cjs").inspectDatabase();if(state.state!=="current"||state.applied!==2)throw Error("Adopted upgrade is not current");
+ const files=fs.readdirSync("/app/data/backups").filter(name=>name.startsWith("pre-upgrade-")&&name.endsWith(".db"));if(files.length!==1)throw Error("Expected one automatic upgrade snapshot");
+ const snapshot="/app/data/backups/"+files[0];if((fs.statSync(snapshot).mode&0o777)!==0o600)throw Error("Upgrade snapshot is not private");
+ const db=new PrismaClient({datasources:{db:{url:"file:"+snapshot}}});try{
+ if((await db.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE name='_prisma_migrations'")).length)throw Error("Snapshot was not taken before baseline adoption");
+ if(Number((await db.$queryRawUnsafe("SELECT COUNT(*) AS count FROM User"))[0].count)!==1)throw Error("Original account missing from snapshot");
+ }finally{await db.$disconnect()}
+})().catch(error=>{console.error(error.message);process.exitCode=1});
+NODE
 web_id="$(docker run --pull=never --detach "$product-web")"
 for attempt in $(seq 1 30); do
   if docker exec "$web_id" node -e "fetch('http://127.0.0.1:$web_port/login').then(async r=>{const text=await r.text();process.exit(r.ok && text.includes('password')?0:1)}).catch(()=>process.exit(1))" >/dev/null 2>&1; then break; fi
@@ -78,4 +111,4 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 docker exec "$web_id" node -e 'if(process.getuid()===0)throw Error("Root web runtime")'
-echo "$product: production startup, non-root/pruned runtime, restart persistence, verified backup/restore, mounted-library export, and web login passed."
+echo "$product: production startup, non-root/pruned runtime, restart persistence, verified backup/restore, v0.3 adoption with pre-change snapshot, mounted-library export, and web login passed."

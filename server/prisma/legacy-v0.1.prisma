@@ -1,0 +1,120 @@
+// StreamRD data model.
+// SQLite by default for a zero-dependency self-hosted setup; switch the
+// provider to "postgresql" and update DATABASE_URL for larger deployments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  hashedPassword String
+  displayName    String
+  avatarUrl      String?
+  role           String         @default("user") // "user" | "admin"
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  debridConfig   DebridConfig?
+  profiles       Profile[]
+  playbackLogs   PlaybackLog[]
+  favorites      Favorite[]
+}
+
+model DebridConfig {
+  userId           String  @id
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryProvider  String  @default("realdebrid") // "realdebrid" | "alldebrid" | "premiumize"
+  fallbackOrder    String  @default("[]") // JSON array of provider ids; empty = use global order
+  realDebridToken  String?
+  allDebridApiKey  String?
+  premiumizeApiKey String?
+  updatedAt        DateTime @updatedAt
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  avatarUrl   String?
+  preferences String   @default("{}") // JSON blob (subtitle language, maturity, ...)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Title {
+  id          String        @id @default(cuid())
+  name        String
+  description String        @default("")
+  type        String        @default("movie") // "movie" | "series"
+  genres      String        @default("[]") // JSON array of strings
+  year        Int?
+  posterUrl   String?
+  backdropUrl String?
+  // JSON array of debrid sources:
+  // [{ "kind": "link" | "magnet", "url": "...", "quality": "1080p", "label": "..." }]
+  sources     String        @default("[]")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  playbackLogs PlaybackLog[]
+  favoritedBy  Favorite[]
+}
+
+// "My List" — a user's saved titles, Netflix-style.
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleId   String
+  title     Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, titleId])
+  @@index([userId])
+}
+
+model PlaybackLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleId      String
+  title        Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  providerUsed String
+  success      Boolean
+  durationMs   Int      @default(0)
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([titleId])
+  @@index([createdAt])
+}
+
+model LogEvent {
+  id        String   @id @default(cuid())
+  level     String   @default("info") // "info" | "warn" | "error"
+  type      String // "signup" | "login" | "playback" | "provider_error" | ...
+  message   String
+  userId    String?
+  provider  String?
+  meta      String? // JSON blob
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([level])
+  @@index([createdAt])
+}
+
+// Key/value store for mutable server + provider settings managed via the admin API.
+model Setting {
+  key   String @id
+  value String // JSON-encoded
+}

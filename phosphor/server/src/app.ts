@@ -1,3 +1,4 @@
+import { systemRouter } from "./routes/system";
 import { setupRouter } from "./routes/setup";
 import { libraryRouter } from "./routes/library";
 import { errorHandler, requestId } from "./http";
@@ -34,6 +35,7 @@ export function createApp(): Express {
   app.use("/api/debrid", debridRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/downloads", downloadsRouter);
+  app.use("/api/admin/system", systemRouter);
   app.use("/api/admin/library", libraryRouter);
   app.use("/api/admin", adminRouter);
 

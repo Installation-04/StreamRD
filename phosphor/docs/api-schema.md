@@ -244,3 +244,15 @@ provider/indexer requests are made, so configured does not mean verified.
 Both routes require administrator access and preserve existing single-file APIs.
 Directory traversal has bounded retained candidates but still enumerates the
 directory per page; remote mount latency remains dependent on the mount.
+
+## System readiness
+
+`GET /api/admin/system` requires a live administrator session and returns private,
+no-store diagnostics: product/version, checkedAt, Node runtime, DB up/down status,
+migration state, verified applied count, bundled total, pending/failed names, last
+applied timestamp, automatic startup mode, snapshot policy, and optional mount
+configuration. States: current/unmanaged/pending/failed/drifted/unavailable.
+No upgrade mutation, baseline, snapshot, provider call, credential, raw path, or
+exception detail is exposed. Counts are not trustworthy when state is failed,
+drifted, or unavailable; the UI labels those as not verified. The backup policy
+field does not prove that a snapshot exists.

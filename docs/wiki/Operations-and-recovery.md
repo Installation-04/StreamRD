@@ -13,10 +13,12 @@ Back up the database and `.env`; stop writers before schema/ownership changes.
 Old root-owned volumes require an explicit ownership upgrade, described in that
 guide. Installer reruns stop with guidance if the data directory is not writable.
 
-Schema synchronization still defaults to `prisma db push` without accepting data
-loss. Versioned migrations are not implemented. Set `APPLY_SCHEMA_ON_START=false`
-to separate schema application from service startup, following the documented
-one-off preparation command after verifying a backup.
+Versioned SQLite migrations now replace production schema push. Exact historical
+and current databases can be adopted only after verification and a private snapshot.
+Unknown schemas, checksum changes, failed records, and partial baselines stop the
+upgrade. [Versioned upgrade guide](https://github.com/Installation-04/StreamRD/blob/main/docs/database-upgrades.md).
+Admin → System shows actual readiness without applying database changes.
+`APPLY_SCHEMA_ON_START=false` performs inspection only and refuses incompatible schemas.
 
 ## Back up
 

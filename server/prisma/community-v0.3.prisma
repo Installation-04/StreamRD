@@ -1,0 +1,192 @@
+// StreamRD data model.
+// SQLite by default for a zero-dependency self-hosted setup; switch the
+// provider to "postgresql" and update DATABASE_URL for larger deployments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  sessionVersion Int @default(0)
+  revokedSessions RevokedSession[]
+  email          String         @unique
+  hashedPassword String
+  displayName    String
+  avatarUrl      String?
+  role           String         @default("user") // "user" | "admin"
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  debridConfig   DebridConfig?
+  profiles       Profile[]
+  playbackLogs   PlaybackLog[]
+  favorites      Favorite[]
+  sourceJobs     PlaybackSourceJob[]
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
+}
+
+model DebridConfig {
+  userId           String  @id
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryProvider  String  @default("realdebrid") // "realdebrid" | "alldebrid" | "premiumize"
+  fallbackOrder    String  @default("[]") // JSON array of provider ids; empty = use global order
+  realDebridToken  String?
+  allDebridApiKey  String?
+  premiumizeApiKey String?
+  updatedAt        DateTime @updatedAt
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  avatarUrl   String?
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
+  preferences String   @default("{}") // JSON blob (subtitle language, maturity, ...)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Title {
+  id          String        @id @default(cuid())
+  name        String
+  description String        @default("")
+  type        String        @default("movie") // "movie" | "series"
+  genres      String        @default("[]") // JSON array of strings
+  year        Int?
+  posterUrl   String?
+  backdropUrl String?
+  // JSON array of debrid sources:
+  // [{ "kind": "link" | "magnet", "url": "...", "quality": "1080p", "label": "..." }]
+  sources     String        @default("[]")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  playbackLogs PlaybackLog[]
+  favoritedBy  Favorite[]
+  playbackSessions PlaybackSession[]
+  playbackProgress PlaybackProgress[]
+
+  @@index([createdAt, id])
+  @@index([type, createdAt, id])
+}
+
+// "My List" — a user's saved titles, Netflix-style.
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleId   String
+  title     Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, titleId])
+  @@index([userId])
+  @@index([userId, createdAt, id])
+}
+
+model PlaybackLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  titleId      String
+  title        Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  providerUsed String
+  success      Boolean
+  durationMs   Int      @default(0)
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, success, titleId, createdAt])
+  @@index([titleId])
+  @@index([createdAt])
+}
+
+model LogEvent {
+  id        String   @id @default(cuid())
+  level     String   @default("info") // "info" | "warn" | "error"
+  type      String // "signup" | "login" | "playback" | "provider_error" | ...
+  message   String
+  userId    String?
+  provider  String?
+  meta      String? // JSON blob
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([level])
+  @@index([createdAt])
+}
+
+// Key/value store for mutable server + provider settings managed via the admin API.
+model Setting {
+  key   String @id
+  value String // JSON-encoded
+}
+
+// Provider references survive retries/restarts; signed stream URLs are never stored.
+model PlaybackSourceJob {
+  key         String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String
+  providerRef String?
+  expiresAt   DateTime
+  leaseUntil  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PlaybackSession {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String?
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  scope String @default("")
+  titleId String
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  mediaKey String
+  lastSequence Int @default(-1)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PlaybackProgress {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String?
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  scope String @default("")
+  titleId String
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  mediaKey String
+  positionSeconds Float @default(0)
+  durationSeconds Float @default(0)
+  completed Boolean @default(false)
+  activeSessionId String
+  updatedAt DateTime @default(now())
+  @@unique([userId, scope, titleId, mediaKey])
+  @@index([userId, scope, completed, updatedAt, id])
+}
+
+model RevokedSession {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}

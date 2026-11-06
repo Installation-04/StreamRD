@@ -22,7 +22,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/prisma ./prisma
 COPY --chown=node:node package.json ./
-COPY --chown=node:node scripts/prepare-db.cjs scripts/backup-db.cjs ./scripts/
+COPY --chown=node:node scripts/prepare-db.cjs scripts/backup-db.cjs scripts/migrate-db.cjs scripts/database-state.cjs scripts/db-status.cjs ./scripts/
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 47821

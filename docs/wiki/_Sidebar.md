@@ -5,6 +5,7 @@
 - [StreamRD guide](https://github.com/Installation-04/StreamRD/wiki/StreamRD-guide)
 - [Phosphor guide](https://github.com/Installation-04/StreamRD/wiki/Phosphor-guide)
 - [Architecture](https://github.com/Installation-04/StreamRD/wiki/Architecture)
+- [System and upgrades](https://github.com/Installation-04/StreamRD/wiki/System-and-upgrades)
 - [Operations and recovery](https://github.com/Installation-04/StreamRD/wiki/Operations-and-recovery)
 - [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots)
 - [Troubleshooting](https://github.com/Installation-04/StreamRD/wiki/Troubleshooting)
