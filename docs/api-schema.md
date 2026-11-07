@@ -433,3 +433,55 @@ No upgrade mutation, baseline, snapshot, provider call, credential, raw path, or
 exception detail is exposed. Counts are not trustworthy when state is failed,
 drifted, or unavailable; the UI labels those as not verified. The backup policy
 field does not prove that a snapshot exists.
+
+## Metadata and matching
+
+Administrator endpoints under `/api/admin/metadata` require live admin auth and
+private/no-store responses. `GET/PUT /settings` returns provider, language, automatic,
+refreshDays and configured booleans; keys are accepted on PUT and never returned.
+Blank keys preserve existing values; clearTmdb/clearOmdb explicitly remove them.
+`POST /test {provider}`, `/search {query,type,year?,provider?}`, and
+`/preview {provider,id,type}` perform explicit provider requests.
+
+`GET /records?limit=50&cursor=...` returns bounded shared matching activity and
+counts. `POST /scan {targetType?,cursor?,limit?}` queues at most 100 existing
+catalog/library targets per page. `/records/:targetType/:targetId` supports GET,
+DELETE, POST `/match {provider,id,type,expectedRevision?}`, POST `/refresh`, and
+PATCH `/locks {lockedFields,expectedRevision?}`. Phosphor shared targets are mounted
+library entries; StreamRD also has catalog targets. Private account records are
+excluded from shared activity and cannot be addressed through admin target routes.
+
+Metadata details include provider/id/type/name/year, synopsis, safe artwork URLs,
+genres, cast, runtimeMinutes, rating/ratingSource, contentRating, imdbId/tmdbId,
+providerUrl and fetchedAt. Record views add status, revision, locks, attempts and
+sanitized error. Internal field-ownership bookkeeping is omitted.
+
+## Private account library and onboarding scan
+
+All `/api/account/library` endpoints require a live owner session and private/no-store
+responses. GET lists only that user's items, with `limit` (1–100, default30), scoped
+opaque `cursor`, `q` and `type` filters. It returns `{items,total,nextCursor}`.
+Views contain id/name/type/year/provider/phase/progress/createdAt/metadata/metadataStatus;
+raw provider references, owner IDs, credential fingerprints and signed URLs are omitted.
+
+- GET `/scans`: local automatic preference, per-provider configured/enabled state,
+  status, counters, safe error and last update; no upstream request.
+- POST `/scan {provider?,force?}`: queue eligible providers; default idempotent
+  onboarding start, `force:true` deliberate rescan.
+- POST `/scan/cancel {provider}`: cancel future pages; retain imports.
+- GET `/:id`: owned item or404, including for another administrator.
+- POST `/:id/play {fileToken?}`: freshly resolved stream, explicit video choices,
+  or pending progress; no URL is stored.
+- DELETE `/:id`: remove local import and private metadata only.
+
+`GET/PUT /api/account/debrid` adds `autoImportLibrary` (defaulttrue). Credential
+saves queue scan work locally when enabled. Setup GET remains local; the Setup UI
+starts a first eligible account scan once and shows its progress.
+
+Owned `/:id/metadata` supports GET record, POST `/search`, `/preview`, `/match`,
+`/refresh`, and PATCH `/locks`, using the same normalized bodies as shared metadata.
+These routes check item ownership before any provider lookup. Mutations/lookups
+are rate limited; metadata provider keys remain server-managed.
+
+See the repository metadata and account-library guides for provider support,
+matching rules, migration requirements, limits and fixture versus live evidence.

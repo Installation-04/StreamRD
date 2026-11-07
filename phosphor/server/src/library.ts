@@ -220,6 +220,27 @@ export class MediaLibrary {
     const exported = results.filter(item => item.status === "exported").length;
     return { results, summary: { exported, failed: results.length - exported } };
   }
+  /** Bounded descriptors for metadata discovery; never stats every mounted video. */
+  metadataTargets(cursor = "", limit = 100) {
+    return this.exclusive(async () => {
+      const configured = this.settings();
+      if (!configured.sourceRoot || !configured.exportRoot) return [];
+      const { output } = await this.roots();
+      return (await this.read(output)).filter(entry => entry.id > cursor)
+        .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+        .slice(0, Math.max(1, Math.min(101, limit)))
+        .map(entry => ({ targetType: "library" as const, targetId: entry.id, name: entry.media.name,
+          mediaType: entry.media.type === "episode" ? "series" as const : "movie" as const, year: entry.media.year ?? null }));
+    });
+  }
+  metadataTarget(id: string) {
+    return this.exclusive(async () => {
+      const { output } = await this.roots();
+      const entry = (await this.read(output)).find(item => item.id === id);
+      return entry ? { targetType: "library" as const, targetId: entry.id, name: entry.media.name,
+        mediaType: entry.media.type === "episode" ? "series" as const : "movie" as const, year: entry.media.year ?? null } : null;
+    });
+  }
   list() {
     return this.exclusive(async () => {
       const configured = this.settings();

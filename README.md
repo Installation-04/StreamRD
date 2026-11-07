@@ -187,3 +187,16 @@ and responsive discovery/search workflows. See [contributing](https://github.com
 existing database changes, and read-only **Admin → System** readiness pages in both
 apps. Follow the [upgrade and recovery guide](docs/database-upgrades.md) before
 upgrading an existing installation.
+
+## Automatic libraries — v0.5.0
+
+Connect your debrid account during onboarding to import existing torrents into
+**My library**, private to your account. Scans follow provider pages, skip duplicate
+references, and resolve temporary streams only when you press Play.
+[Account scanner and playback guide](docs/account-library.md).
+
+**Admin → Metadata** connects TMDB and OMDb for artwork, descriptions, cast, runtime,
+ratings and IMDb IDs. Automatic matching is opt-in; uncertain results can be reviewed
+and corrected, and manual edits are protected. Metadata enriches personal imports,
+mounted exports and StreamRD catalog titles.
+[Metadata setup and matching guide](docs/metadata-automation.md).

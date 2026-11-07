@@ -50,6 +50,7 @@ export function Nav() {
         <div className="nav-links">
           {link("/", "Discover", "home")}
           {link("/search", t("nav.search"), "search")}
+          {user && link("/library", "My library", "film")}
           {user && link("/setup", "Setup", "settings")}
           {user && link("/account/profile", t("nav.account"), "user")}
           {user?.role === "admin" && link("/admin", t("nav.admin"), "grid")}

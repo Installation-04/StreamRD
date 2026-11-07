@@ -23,6 +23,9 @@ async function main(){
   for(const name of names){
    const sql=path.join(root,"prisma/migrations",name,"migration.sql");
    command(["db","execute","--url",`file:${file}`,"--file",sql]);
+   // DDL runs in a different process. Reopen the inspection connection so
+   // SQLite PRAGMA metadata cannot retain a previous schema cache.
+   await db.$disconnect();
    snapshots.migrations.push({name,checksum:digest(sql),schema:await schemaSignature(db)});
    for(const [key,baseline] of Object.entries(baselineNames))if(name===baseline){
     const fixture=key==="legacy"?"legacy-v0.1.prisma":"community-v0.3.prisma";

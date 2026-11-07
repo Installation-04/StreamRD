@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import AccountScanPanel from "@/components/AccountScanPanel";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { get } from "@/lib/api";
@@ -26,10 +27,11 @@ export default function SetupPage() {
     {error && <div className={styles.error} role="alert"><p>We couldn’t refresh your setup checklist. {error}</p><button className="btn btn-secondary" onClick={() => void load()} disabled={loading}>Try again</button></div>}
     {loading && !data && <div className={styles.skeleton} role="status">Loading your checklist…</div>}
     {data && <>
-      <section className={styles.overview} aria-label="Setup progress"><div><span className={styles.overline}>YOUR SPACE, TAKING SHAPE</span><h2>{data.configurationReady ? "Your essentials are configured." : "Let’s connect the essentials."}</h2><p>{data.configurationReady ? "Your local configuration is in place. Test your provider and source connections before your first watch." : "These checks use your saved settings. Your credentials stay private and no external service is contacted."}</p></div><div className={styles.progress}><span><b>{complete}</b> / {total}</span><label htmlFor="setup-progress">Essentials configured</label><progress aria-label="Essentials configured" id="setup-progress" value={complete} max={total || 1} /></div></section>
+      <section className={styles.overview} aria-label="Setup progress"><div><span className={styles.overline}>YOUR SPACE, TAKING SHAPE</span><h2>{data.configurationReady ? "Your essentials are configured." : "Let’s connect the essentials."}</h2><p>{data.configurationReady ? "Your local configuration is in place. Test your provider and source connections before your first watch." : "The checklist reads saved settings. With automatic import enabled, your connected account is scanned in the background to build your private library."}</p></div><div className={styles.progress}><span><b>{complete}</b> / {total}</span><label htmlFor="setup-progress">Essentials configured</label><progress aria-label="Essentials configured" id="setup-progress" value={complete} max={total || 1} /></div></section>
       <div className={styles.grid}>{data.checks.map((check, index) => <section className={`${styles.step} ${check.status === "complete" ? styles.done : ""}`} key={check.id}>
         <div className={styles.stepTop}><span className={styles.number} aria-hidden="true">{check.status === "complete" ? "✓" : String(index + 1).padStart(2, "0")}</span><span className={styles.badge}>{check.status === "complete" ? "Configured" : check.required ? "Next step" : "Optional"}</span></div><h2>{check.title}</h2><p>{check.description}</p><div className={styles.stepAction}>{check.href ? <Link href={check.href}>{check.actionLabel}<Arrow /></Link> : <span className={styles.waiting}>{check.actionLabel}</span>}</div>
       </section>)}</div>
+      <AccountScanPanel automaticStart />
       <footer className={styles.footer}><div><h3>Your accounts. Your choices.</h3><p>Saved settings don’t verify a subscription, indexer, mount, or playable file. Use each connection’s test before relying on it. Optional Plex/Jellyfin exports never block normal URL playback.</p></div><button className="btn btn-secondary" disabled={loading} onClick={() => void load()}>{loading ? "Refreshing…" : "Refresh checklist"}</button></footer>
     </>}
     <p className={styles.community}>Building together. <a href="https://github.com/Installation-04/StreamRD/wiki" target="_blank" rel="noreferrer">Read the community guide <Arrow /></a></p>

@@ -1,6 +1,6 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.4.0 Safe Upgrades — implementation and local acceptance complete
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.5.0 Automatic Libraries — production acceptance in progress
 
 This is the source of truth for the project tracker. Import the Markdown and CSV
 bundle into Notion when a workspace connection is available. **No live Notion page
@@ -13,15 +13,16 @@ is a curated personal cinema; Phosphor is its distinct search-and-queue companio
 Both use the community's own accounts and infrastructure. Plex/Jellyfin export
 stays optional and uses real mounted files.
 
-## Active milestone: v0.4.0 Safe Upgrades
+## Active milestone: v0.5.0 Automatic Libraries
 
 | Workstream | Owner | State | Acceptance |
 |---|---|---|---|
-| Versioned SQLite migrations | Migration engine + lead | Delivered | Exact legacy/current adoption, immutable history, verified snapshot before existing DB changes |
-| Independent schema/history validation | Migration research + engine | Delivered | Refuse unknown/custom schema, altered checksums, failed history and partial baseline |
-| System readiness UI/API | System design + lead | Delivered | Read-only admin diagnostics, truthful status, no invented backup evidence |
-| Upgrade/recovery regression fixtures | Engine + lead | Delivered | New/legacy/current databases preserve rows and FKs; disabled mode writes nothing |
-| Production and browser acceptance | Lead | Delivered | Migration-aware container startup/restore and System desktop/mobile checks |
+| TMDB / OMDb metadata services | Provider engineering | Implemented | Server-only keys, normalized details, bounded caches/requests and safe failures |
+| Automatic enrichment and field ownership | Lead | Implemented | Durable queue, confident matching, locks and stale-result guards |
+| Personal debrid library and onboarding scan | Scanner backend + UI | Implemented | Owner-only imports, paged read-only scans, cancellation and duplicate-free rescans |
+| Private playback and matching UI | Product design + lead | Implemented | Explicit temporary streams, video choices, owner-scoped metadata corrections |
+| Additive migrations and recovery | Storage + lead | Implemented | Existing rows preserved, released checkpoints immutable, private metadata cascades |
+| Production / browser / release acceptance | Lead | In progress | All builds, upgrade/restore checks, browser journeys, screenshots and CI pass |
 
 ## Current delivery board
 
@@ -82,7 +83,7 @@ stays optional and uses real mounted files.
 | P1 | Credential encryption and session architecture | Documented key backup/rotation and compatible browser/device migration |
 | P2 | Playback reliability insights | First-frame/error signals distinguish URL resolution from real playback |
 | P2 | Retention and cleanup | Scoped dry runs, protected recoverable references, backup and boundary tests |
-| P2 | Richer media metadata | Opt-in provider choice, provenance, editable matches, no false artwork claims |
+| P2 | Refine metadata quality and retention | Measure matching outcomes and add scoped retention without losing manual edits |
 | P3 | Multi-instance coordination | Add only after real deployment measurements justify it |
 
 ## Operating cadence

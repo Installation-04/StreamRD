@@ -1,3 +1,4 @@
+import { countReadyAccountMedia, getAccountScanStatus } from "../account-library";
 import { Router } from "express";
 import { requireAuth } from "../auth/middleware";
 import { config } from "../config";
@@ -48,23 +49,25 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
         : "Add your own debrid API key. Setup checks configuration only; test the connection on the Debrid page.",
     href: "/account/debrid", actionLabel: providerReady ? "Review or test connection" : "Configure debrid",
   }];
-  const [titleCount, sourcedTitle, profileCount] = await Promise.all([
+  const [titleCount, sourcedTitle, profileCount, privateReadyCount] = await Promise.all([
     db.title.count(), db.$queryRaw<{ available: number }[]>`SELECT EXISTS(
       SELECT 1 FROM Title, json_each(CASE WHEN json_valid(sources) THEN sources ELSE '[]' END) item
       WHERE item.type = 'object'
       AND json_extract(CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END, '$.kind') IN ('link', 'magnet')
       AND length(trim(COALESCE(json_extract(CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END, '$.url'), ''))) > 0
     ) AS available`,
-    db.profile.count({ where: { userId } }),
+    db.profile.count({ where: { userId } }), countReadyAccountMedia(userId),
   ]);
-  const contentReady = titleCount > 0 && Boolean(sourcedTitle[0]?.available);
+  const curatedReady = titleCount > 0 && Boolean(sourcedTitle[0]?.available);
+  const contentReady = curatedReady || privateReadyCount > 0;
   checks.push({
-    id: "catalog", title: "A catalog to explore", required: true, status: contentReady ? "complete" : "action",
-    description: contentReady ? "The catalog contains titles with configured sources. Source reachability and playback still depend on your provider."
+    id: "catalog", title: !curatedReady && privateReadyCount ? "Your private library is ready" : "A catalog to explore", required: true, status: contentReady ? "complete" : "action",
+    description: curatedReady ? "The catalog contains titles with configured sources. Source reachability and playback still depend on your provider."
+      : privateReadyCount ? "Your connected account has finished items in your private library. Playback availability is checked when you choose Play."
       : admin ? "Add a title and at least one link or magnet source to give your community something to watch."
       : "Your administrator needs to add catalog titles with playable sources before you can start watching.",
-    href: contentReady ? "/" : admin ? "/admin/catalog" : null,
-    actionLabel: contentReady ? "Explore the library" : admin ? "Add catalog titles" : "Ask your administrator",
+    href: curatedReady ? "/" : privateReadyCount ? "/library" : admin ? "/admin/catalog" : null,
+    actionLabel: privateReadyCount && !curatedReady ? "Open your private library" : contentReady ? "Explore the library" : admin ? "Add catalog titles" : "Ask your administrator",
   }, {
     id: "profiles", title: "Make it your own", required: false, status: profileCount ? "complete" : "optional",
     description: profileCount ? "Your viewing profiles are ready. Select one before watching to keep progress separate."
@@ -79,10 +82,13 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
       : "Optional: mount your media and export scanner-friendly links. Normal stream playback does not require a mount.",
     href: "/admin/library", actionLabel: "Manage external library",
   });
+  const accountLibrary = await getAccountScanStatus(userId);
+  checks.push({ id: "account-library", title: "Your private debrid library", required: false, status: accountLibrary.totalImported ? "complete" : "optional", description: accountLibrary.totalImported ? "Existing provider items have been imported privately for this account. Open your library to review metadata or play a video." : "Scan existing torrents and cloud videos from your connected accounts. Scanning reads your providers; imported items stay private.", href: "/library", actionLabel: "Open your library" });
   const required = checks.filter(check => check.required), completed = required.filter(check => check.status === "complete").length;
   res.setHeader("Cache-Control", "private, no-store");
   res.json({
     product: "streamrd", role: admin ? "admin" : "user", configurationReady: completed === required.length,
+    accountLibrary,
     connectionVerified: false, progress: { completed, total: required.length }, providers, checks,
     catalog: { available: titleCount > 0, hasSources: Boolean(sourcedTitle[0]?.available) }, profiles: { count: profileCount },
     ...(admin ? { library: { configured: Boolean(config.mediaSourceRoot && config.mediaLibraryRoot), verification: "not-tested" } } : {}),

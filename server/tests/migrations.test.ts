@@ -7,14 +7,20 @@ import path from "node:path";
 const root=process.cwd(), cli=path.join(root,"node_modules/prisma/build/index.js");
 const {migrateDatabase}=require("../scripts/migrate-db.cjs");
 const {inspectDatabase}=require("../scripts/database-state.cjs");
-const names=["00000000000000_legacy_baseline","20261106000000_community_upgrade"];
+const checkpoints=JSON.parse(fs.readFileSync(path.join(root,"prisma/schema-snapshots.json"),"utf8"));
+const names:string[]=checkpoints.migrations.map((step:{name:string})=>step.name);
+const communityApplied:number=checkpoints.fixtures.current.applied;
 let temporary:string,file:string,url:string;
 const clients:PrismaClient[]=[];
 beforeEach(()=>{temporary=fs.mkdtempSync(path.join(os.tmpdir(),"versioned-upgrade-"));file=path.join(temporary,"app.db");url=`file:${file}`;});
 afterEach(async()=>{for(const client of clients.splice(0))await client.$disconnect();fs.rmSync(temporary,{recursive:true,force:true});});
 function client(){const db=new PrismaClient({datasources:{db:{url}}});clients.push(db);return db;}
 function command(args:string[]){return execFileSync(process.execPath,[cli,...args],{cwd:root,env:{...process.env,DATABASE_URL:url},stdio:"pipe"});}
-function initialize(schema:"legacy"|"current"){fs.writeFileSync(file,"");command(["db","push","--skip-generate","--schema",path.join(root,"prisma",schema==="legacy"?"legacy-v0.1.prisma":"schema.prisma")]);}
+function initialize(schema:"legacy"|"community"|"current"){
+ fs.writeFileSync(file,"");
+ const fixture=schema==="legacy"?"legacy-v0.1.prisma":schema==="community"?"community-v0.3.prisma":"schema.prisma";
+ command(["db","push","--skip-generate","--schema",path.join(root,"prisma",fixture)]);
+}
 const stringify=(value:unknown)=>JSON.stringify(value,(_key,item)=>typeof item==="bigint"?item.toString():item);
 async function seed(db:PrismaClient,current=false){
  const at=Date.now();
@@ -55,7 +61,7 @@ async function preserved(db:PrismaClient,before:Record<string,Record<string,unkn
  expect(await db.$queryRawUnsafe("PRAGMA foreign_key_check")).toEqual([]);
 }
 it("deploys new databases transactionally and becomes a read-only no-op on restart",async()=>{
- const result=await migrateDatabase({root,url});expect(result.mode).toBe("migrated");expect(result.backup).toBeNull();expect(result.state).toMatchObject({state:"current",applied:2,pending:[]});
+ const result=await migrateDatabase({root,url});expect(result.mode).toBe("migrated");expect(result.backup).toBeNull();expect(result.state).toMatchObject({state:"current",applied:names.length,pending:[]});
  const before=fs.readFileSync(file);expect((await migrateDatabase({root,url})).mode).toBe("current");expect(fs.readFileSync(file)).toEqual(before);expect(fs.existsSync(file+".upgrade.lock")).toBe(false);
 });
 it("adopts exact legacy history, backs up, and upgrades without dropping parent/child data",async()=>{
@@ -68,8 +74,29 @@ it("adopts exact legacy history, backs up, and upgrades without dropping parent/
  expect((await restored.$queryRawUnsafe<{name:string}[]>("PRAGMA table_info(User)")).some(row=>row.name==="sessionVersion")).toBe(false);
 });
 it("baselines current unmanaged databases and preserves all populated application tables",async()=>{
- initialize("current");const db=client();await seed(db,true);const before=await snapshot(db);const result=await migrateDatabase({root,url});
- expect(result.mode).toBe("baselined");expect(result.state.applied).toBe(2);expect(result.backup).toBeTruthy();await preserved(db,before);
+ initialize("current");const db=client();await seed(db,true);
+ await db.metadataRecord.create({data:{targetType:"library",targetId:"preserved-library-id",name:"Preserved metadata",mediaType:"movie",status:"matched",requestedBy:"manual",data:'{"provider":"tmdb","id":"1"}',lockedFields:'["name"]',revision:2,attempts:1}});
+ const before=await snapshot(db);const result=await migrateDatabase({root,url});
+ expect(result.mode).toBe("baselined");expect(result.state.applied).toBe(names.length);expect(result.backup).toBeTruthy();await preserved(db,before);
+});
+it("adopts the frozen community schema then deploys metadata storage without changing existing data",async()=>{
+ initialize("community");const db=client();await seed(db,true);const before=await snapshot(db);
+ expect(await inspectDatabase({root,url})).toMatchObject({state:"unmanaged",baselineApplied:communityApplied,total:names.length});
+ const result=await migrateDatabase({root,url});expect(result.mode).toBe("migrated");expect(result.backup).toBeTruthy();
+ expect(result.state).toMatchObject({state:"current",applied:names.length,pending:[]});await preserved(db,before);
+ expect(await db.metadataRecord.count()).toBe(0);
+});
+it("upgrades a managed v0.4 checkpoint with a pre-change snapshot and preserved application rows",async()=>{
+ initialize("community");const db=client();await seed(db,true);
+ for(const name of names.slice(0,communityApplied))command(["migrate","resolve","--applied",name]);
+ const before=await snapshot(db);
+ expect(await inspectDatabase({root,url})).toMatchObject({state:"pending",applied:communityApplied,pending:names.slice(communityApplied)});
+ await expect(migrateDatabase({root,url,apply:false})).rejects.toMatchObject({code:"disabled-schema-not-ready"});
+ const result=await migrateDatabase({root,url});expect(result.mode).toBe("migrated");expect(result.backup).toBeTruthy();
+ expect(result.state).toMatchObject({state:"current",applied:names.length,pending:[]});await preserved(db,before);
+ const backup=new PrismaClient({datasources:{db:{url:`file:${path.join(temporary,"backups",result.backup)}`}}});clients.push(backup);
+ expect((await backup.$queryRawUnsafe<{count:bigint}[]>("SELECT COUNT(*) AS count FROM _prisma_migrations"))[0].count).toBe(BigInt(communityApplied));
+ expect(await backup.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE name='MetadataRecord'")).toEqual([]);
 });
 it("refuses unknown schema and ignored-by-Prisma triggers without backups or history writes",async()=>{
  initialize("legacy");const db=client();await seed(db);await db.$executeRawUnsafe("CREATE TRIGGER unexpected AFTER UPDATE ON User BEGIN SELECT 1; END");
@@ -94,8 +121,12 @@ it("refuses drift after managed deployment rather than trusting migrate deploy",
  await expect(migrateDatabase({root,url})).rejects.toMatchObject({code:"schema-drift"});expect(fs.existsSync(path.join(temporary,"backups"))).toBe(false);
 });
 it("detects incomplete adoption instead of applying duplicate schema upgrade SQL",async()=>{
- initialize("current");command(["migrate","resolve","--applied",names[0]]);
- expect((await inspectDatabase({root,url})).reason).toBe("baseline-history-incomplete");await expect(migrateDatabase({root,url})).rejects.toMatchObject({code:"baseline-history-incomplete"});
+ initialize("current");
+ for(const name of names.slice(0,-1)){
+  command(["migrate","resolve","--applied",name]);
+  expect((await inspectDatabase({root,url})).reason).toBe("baseline-history-incomplete");
+  await expect(migrateDatabase({root,url})).rejects.toMatchObject({code:"baseline-history-incomplete"});
+ }
 });
 it("disabled mode never initializes a DB, lock, backup or history and permits exact current backups",async()=>{
  await expect(migrateDatabase({root,url,apply:false})).rejects.toMatchObject({code:"disabled-schema-not-ready"});expect(fs.existsSync(file)).toBe(false);
@@ -144,7 +175,7 @@ it.each([
 });
 
 it("does not treat a known unmanaged checkpoint as ready when a later release adds a migration",async()=>{
- initialize("current");const copy=path.join(temporary,"future-repository");fs.mkdirSync(copy);
+ initialize("community");const copy=path.join(temporary,"future-repository");fs.mkdirSync(copy);
  fs.cpSync(path.join(root,"prisma"),path.join(copy,"prisma"),{recursive:true});
  fs.cpSync(path.join(root,"scripts"),path.join(copy,"scripts"),{recursive:true});
  fs.symlinkSync(path.join(root,"node_modules"),path.join(copy,"node_modules"),"dir");
@@ -153,7 +184,24 @@ it("does not treat a known unmanaged checkpoint as ready when a later release ad
  fs.appendFileSync(path.join(copy,"prisma/schema.prisma"),'\nmodel FutureMarker {\n id String @id\n}\n');
  const generated=spawnSync(process.execPath,[path.join(copy,"scripts/generate-migration-snapshots.cjs")],{cwd:copy,env:process.env,encoding:"utf8"});
  expect(generated.status,generated.stderr).toBe(0);
- const checkpoint=await inspectDatabase({root:copy,url});expect(checkpoint).toMatchObject({state:"unmanaged",baselineApplied:2,total:3});
+ const checkpoint=await inspectDatabase({root:copy,url});expect(checkpoint).toMatchObject({state:"unmanaged",baselineApplied:communityApplied,total:names.length+1});
  const before=fs.readFileSync(file);await expect(migrateDatabase({root:copy,url,apply:false})).rejects.toMatchObject({code:"disabled-schema-not-ready"});expect(fs.readFileSync(file)).toEqual(before);
- const prepared=await migrateDatabase({root:copy,url});expect(prepared.mode).toBe("migrated");expect(prepared.state).toMatchObject({state:"current",applied:3,pending:[]});
+ const prepared=await migrateDatabase({root:copy,url});expect(prepared.mode).toBe("migrated");expect(prepared.state).toMatchObject({state:"current",applied:names.length+1,pending:[]});
+},60000);
+
+it("does not skip a schema-identical data-only migration when latest unmanaged adoption would be ambiguous",async()=>{
+ initialize("current");const db=client();
+ await db.metadataRecord.create({data:{targetType:"library",targetId:"unmanaged",name:"Original",mediaType:"movie",revision:7}});
+ const copy=path.join(temporary,"data-migration-repository");fs.mkdirSync(copy);
+ fs.cpSync(path.join(root,"prisma"),path.join(copy,"prisma"),{recursive:true});
+ fs.cpSync(path.join(root,"scripts"),path.join(copy,"scripts"),{recursive:true});
+ fs.symlinkSync(path.join(root,"node_modules"),path.join(copy,"node_modules"),"dir");
+ const next=path.join(copy,"prisma/migrations/20261107000000_data_only");fs.mkdirSync(next);
+ fs.writeFileSync(path.join(next,"migration.sql"),'BEGIN IMMEDIATE;\nUPDATE "MetadataRecord" SET "revision" = "revision" + 1;\nCOMMIT;\n');
+ const generated=spawnSync(process.execPath,[path.join(copy,"scripts/generate-migration-snapshots.cjs")],{cwd:copy,env:process.env,encoding:"utf8"});
+ expect(generated.status,generated.stderr).toBe(0);
+ const before=fs.readFileSync(file);expect(await inspectDatabase({root:copy,url})).toMatchObject({state:"drifted",reason:"unrecognized-schema"});
+ await expect(migrateDatabase({root:copy,url})).rejects.toMatchObject({code:"unrecognized-schema"});
+ expect(fs.readFileSync(file)).toEqual(before);expect((await db.metadataRecord.findFirstOrThrow()).revision).toBe(7);
+ expect(fs.existsSync(path.join(temporary,"backups"))).toBe(false);
 },60000);

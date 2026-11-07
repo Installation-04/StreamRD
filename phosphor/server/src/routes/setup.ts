@@ -1,3 +1,4 @@
+import { countReadyAccountMedia, getAccountScanStatus } from "../account-library";
 import { Router } from "express";
 import { requireAuth } from "../auth/middleware";
 import { config } from "../config";
@@ -48,14 +49,15 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
         : "Add your own debrid API key. Setup checks configuration only; test the connection on the Debrid page.",
     href: "/account/debrid", actionLabel: providerReady ? "Review or test connection" : "Configure debrid",
   }];
-  const indexerCount = await db.indexerConfig.count({ where: { enabled: true } });
+  const [indexerCount, privateReadyCount] = await Promise.all([db.indexerConfig.count({ where: { enabled: true } }), countReadyAccountMedia(userId)]);
   checks.push({
-    id: "indexers", title: "Connect your search sources", required: true, status: indexerCount ? "complete" : "action",
+    id: "indexers", title: !indexerCount && privateReadyCount ? "Your private library is ready" : "Connect your search sources", required: true, status: indexerCount || privateReadyCount ? "complete" : "action",
     description: indexerCount ? "An enabled Torznab indexer is configured. Test its connection in Indexers; this checklist does not contact it."
+      : privateReadyCount ? "Finished items in your connected account are available in your private library. Add an indexer later when you want to search for new media."
       : admin ? "Add your Jackett or Prowlarr Torznab endpoint and key, then test the connection."
       : "Your administrator needs to configure an enabled Torznab indexer before you can search.",
-    href: indexerCount ? "/search" : admin ? "/admin/indexers" : null,
-    actionLabel: indexerCount ? "Start a search" : admin ? "Configure indexers" : "Ask your administrator",
+    href: indexerCount ? "/search" : privateReadyCount ? "/library" : admin ? "/admin/indexers" : null,
+    actionLabel: indexerCount ? "Start a search" : privateReadyCount ? "Open your private library" : admin ? "Configure indexers" : "Ask your administrator",
   });
   if (admin) checks.push({
     id: "library", title: "Plex / Jellyfin library", required: false,
@@ -65,10 +67,13 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
       : "Optional: mount your media and export scanner-friendly links. Normal stream playback does not require a mount.",
     href: "/admin/library", actionLabel: "Manage external library",
   });
+  const accountLibrary = await getAccountScanStatus(userId);
+  checks.push({ id: "account-library", title: "Your private debrid library", required: false, status: accountLibrary.totalImported ? "complete" : "optional", description: accountLibrary.totalImported ? "Existing provider items have been imported privately for this account. Open your library to review metadata or play a video." : "Scan existing torrents and cloud videos from your connected accounts. Scanning reads your providers; imported items stay private.", href: "/library", actionLabel: "Open your library" });
   const required = checks.filter(check => check.required), completed = required.filter(check => check.status === "complete").length;
   res.setHeader("Cache-Control", "private, no-store");
   res.json({
     product: "phosphor", role: admin ? "admin" : "user", configurationReady: completed === required.length,
+    accountLibrary,
     connectionVerified: false, progress: { completed, total: required.length }, providers, checks,
     indexers: { configured: indexerCount > 0 },
     ...(admin ? { library: { configured: Boolean(config.mediaSourceRoot && config.mediaLibraryRoot), verification: "not-tested" } } : {}),

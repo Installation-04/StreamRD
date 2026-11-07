@@ -16,3 +16,9 @@ Independent schema and history validation,Done,P0,v0.4.0,Migration research and 
 System readiness UI and API,Done,P0,v0.4.0,System design and lead,Read-only admin view with accurate policy versus backup evidence
 Upgrade and recovery fixtures,Done,P0,v0.4.0,Migration engine and lead,Preserve rows and FKs across historical and current upgrades
 Production and browser acceptance,Done,P0,v0.4.0,Lead,Migration startup restore and responsive System pages pass
+TMDB and OMDb metadata services,Done,P0,v0.5.0,Provider engineering,Server-only credentials bounded traffic and safe normalized details
+Automatic enrichment and field ownership,Done,P0,v0.5.0,Lead,Durable jobs locks ownership and stale-response regression checks
+Private account import and onboarding scan,Done,P0,v0.5.0,Scanner backend and UI,Read-only paged imports preserve privacy and skip duplicates
+Personal library playback and metadata correction,Done,P0,v0.5.0,Product design and lead,Owner-only views explicit stream resolution and video choice
+Metadata and account migrations,Done,P0,v0.5.0,Storage and lead,Preserved old data immutable released checkpoints and owner cascades
+Production browser and publication acceptance,In progress,P0,v0.5.0,Lead,Four builds upgrade restore real-app fixture journeys screenshots and CI pass

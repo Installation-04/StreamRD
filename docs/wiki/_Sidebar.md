@@ -14,3 +14,6 @@
 - [Plex and Jellyfin](https://github.com/Installation-04/StreamRD/wiki/Plex-and-Jellyfin): optional mounted-media symlink libraries.
 
 - [Project HQ and community roadmap](https://github.com/Installation-04/StreamRD/wiki/Project-HQ)
+
+- [My library and account scans](https://github.com/Installation-04/StreamRD/wiki/Account-library)
+- [Metadata and matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching)

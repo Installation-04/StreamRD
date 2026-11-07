@@ -2,6 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {chromium}=require('playwright');
+const automaticLibraries=require('./automatic-libraries.cjs');
 if(process.env.QA_DISPOSABLE_FIXTURES!=='1')throw Error('Use infra/run-browser-qa.sh: tests require fresh disposable services.');
 const products=(process.env.QA_PRODUCT==='both'?['streamrd','phosphor']:[process.env.QA_PRODUCT]);
 if(products.some(p=>!['streamrd','phosphor'].includes(p)))throw Error('Invalid QA product');
@@ -68,6 +69,7 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
    await page.goto(`${url}/downloads`,{waitUntil:'networkidle'});await page.getByRole('heading',{name:'Good things are worth finding.'}).waitFor();await shot('queue');
    await page.route('**/api/downloads',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary fixture outage'})}));await page.reload({waitUntil:'networkidle'});await page.getByRole('alert').filter({hasText:'Temporary fixture outage'}).waitFor();await page.unroute('**/api/downloads');await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByRole('heading',{name:'Good things are worth finding.'}).waitFor();report.journeys.push('phosphor: real local-indexer search, saved search, queue empty/error/retry states');
   }
+  await automaticLibraries({product,page,url,api,admin,member,call,shot,noOverflow,report});
   await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement!==document.body),'Keyboard focus must reach an interactive control');
   // A member session must not expose the filesystem administration interface.
   await context.clearCookies();await context.addCookies([{name:sr?'sr_token':'ph_token',value:member.token,domain:'localhost',path:'/'},{name:sr?'sr_role':'ph_role',value:'user',domain:'localhost',path:'/'}]);

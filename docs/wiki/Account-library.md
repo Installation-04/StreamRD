@@ -1,0 +1,27 @@
+# My library and account scans
+
+Connect your own debrid account during onboarding and leave **Automatically scan
+existing torrents after connecting** enabled. **My library** imports existing
+account entries privately, with a visible scan panel, stop/retry actions and
+idempotent rescans. Completed scans do not restart on every page visit.
+
+Both apps support Real-Debrid torrents, AllDebrid magnets and Premiumize cloud
+video folders. Phosphor also supports Torbox torrents. Scans follow bounded pages
+and retain progress across restarts. They read existing account content without
+creating/deleting torrents, selecting provider files or copying videos.
+
+Your imports are separate from the shared curated catalog. Open a title and press
+**Play from my account** to resolve a temporary link. Multi-video torrents offer a
+file picker; pending transfers report readiness. Stream URLs are not persisted.
+Browser compatibility depends on the media codecs/container; there is no transcoder.
+
+With [metadata matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching)
+configured, imports can gain artwork, plot, cast, ratings and IMDb references.
+Owners can preview and correct their own matches. Credential changes invalidate
+stale scans/streams; rescan the current account before playing old imports.
+
+Read the [complete account-library guide](https://github.com/Installation-04/StreamRD/blob/v0.5.0/docs/account-library.md)
+for limits, private APIs, recovery and provider coverage. Plex/Jellyfin exports
+still require real mounted files through the separate reviewed export workflow.
+The release tests use local provider fixtures and an original color-video clip,
+not a live debrid account.

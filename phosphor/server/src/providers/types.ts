@@ -36,6 +36,8 @@ export interface ProviderCredentials {
   apiKey: string;
   baseUrl?: string;
   timeoutMs?: number;
+  /** Absolute deadline shared by bounded existing-account scan/play requests. */
+  deadline?: number;
 }
 
 /**

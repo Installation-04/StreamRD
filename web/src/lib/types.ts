@@ -1,3 +1,5 @@
+import type { MetadataDetails } from "./metadata";
+
 export type Role = "user" | "admin";
 
 export interface User {
@@ -35,6 +37,8 @@ export interface TitleSource {
 }
 
 export interface Title {
+  metadata?: MetadataDetails | null;
+  metadataStatus?: string | null;
   id: string;
   name: string;
   description: string;

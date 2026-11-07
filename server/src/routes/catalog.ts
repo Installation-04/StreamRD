@@ -1,3 +1,4 @@
+import { recordFor, storedMetadata } from "../metadata/automation";
 import { asyncHandler } from "../http";
 import { browseRouter } from "./browse";
 import { NextFunction, Request, Response, Router } from "express";
@@ -72,5 +73,6 @@ catalogRouter.get("/title/:id", asyncHandler(async (req, res) => {
     res.status(404).json({ error: "Title not found" });
     return;
   }
-  res.json({ title: publicTitle(title) });
+  const metadata = await recordFor("catalog", title.id);
+  res.json({ title: { ...publicTitle(title), metadata: storedMetadata(metadata?.data ?? "{}"), metadataStatus: metadata?.status ?? null } });
 }));

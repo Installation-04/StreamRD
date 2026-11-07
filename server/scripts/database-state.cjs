@@ -72,8 +72,13 @@ async function inspectDatabase({root=path.resolve(__dirname,".."),url=process.en
     const same = expected => json(signature) === json(expected);
     const hasHistory=(await db.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE type='table' AND name='_prisma_migrations'")).length>0;
     if (!hasHistory) {
-      const baseline=signature.length===0?"empty":same(snapshots.legacy)?"legacy":same(snapshots.current)?"current":null;
-      const baselineApplied=baseline==="legacy"?snapshots.fixtures.legacy.applied:baseline==="current"?snapshots.fixtures.current.applied:0;
+      // Prefer frozen historical fixtures when signatures coincide. A future
+      // schema-identical data migration must still run after that known baseline.
+      const legacy=same(snapshots.legacy), community=same(snapshots.current);
+      const latest=same(snapshots.migrations.at(-1).schema)
+        && !snapshots.migrations.slice(0,-1).some(checkpoint=>same(checkpoint.schema));
+      const baseline=signature.length===0?"empty":legacy?"legacy":community||latest?"current":null;
+      const baselineApplied=legacy?snapshots.fixtures.legacy.applied:community?snapshots.fixtures.current.applied:latest?snapshots.migrations.length:0;
       return {...result,state:baseline?"unmanaged":"drifted",reason:baseline?"migration-history-missing":"unrecognized-schema",baseline,baselineApplied};
     }
     const columns=await db.$queryRawUnsafe('PRAGMA table_info("_prisma_migrations")');
@@ -87,7 +92,7 @@ async function inspectDatabase({root=path.resolve(__dirname,".."),url=process.en
     result.applied=rows.length;result.pending=snapshots.migrations.slice(rows.length).map(row=>row.name);
     const last=rows.at(-1)?.finished_at;result.lastAppliedAt=last?new Date(last).toISOString():null;
     const expected=rows.length===0?[]:snapshots.migrations[rows.length-1].schema;
-    if(!same(expected))return {...result,state:"drifted",reason:rows.length===1&&same(snapshots.current)?"baseline-history-incomplete":"schema-drift"};
+    if(!same(expected))return {...result,state:"drifted",reason:snapshots.migrations.slice(rows.length).some(checkpoint=>same(checkpoint.schema))?"baseline-history-incomplete":"schema-drift"};
     return {...result,state:result.pending.length?"pending":"current",reason:null,baseline:rows.length===0?"empty":rows.length===1?"legacy":"current"};
   } catch { return {...result,state:"unavailable",reason:"database-unavailable"}; }
   finally { if (!provided)await db.$disconnect(); }

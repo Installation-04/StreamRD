@@ -1,3 +1,4 @@
+import { syncAccountLibraryConfiguration } from "../account-library";
 import { signSession } from "../auth/jwt";
 import { asyncHandler } from "../http";
 import { accountListsRouter, historyPage } from "./accountLists";
@@ -134,6 +135,7 @@ accountRouter.get("/debrid", asyncHandler(async (req, res) => {
   });
   res.json({
     primaryProvider: cfg.primaryProvider,
+    autoImportLibrary: cfg.autoImportLibrary,
     fallbackOrder: JSON.parse(cfg.fallbackOrder),
     keys: {
       realdebrid: keyHint(cfg.realDebridToken),
@@ -144,6 +146,7 @@ accountRouter.get("/debrid", asyncHandler(async (req, res) => {
 }));
 
 const debridSchema = z.object({
+  autoImportLibrary: z.boolean().optional(),
   primaryProvider: z.enum(PROVIDER_IDS).optional(),
   fallbackOrder: z.array(z.enum(PROVIDER_IDS)).optional(),
   // null clears a stored key; undefined leaves it untouched.
@@ -156,6 +159,7 @@ accountRouter.put("/debrid", asyncHandler(async (req, res) => {
   const body = parseBody(debridSchema, req.body, res);
   if (!body) return;
   const data: Record<string, unknown> = {};
+  if (body.autoImportLibrary !== undefined) data.autoImportLibrary = body.autoImportLibrary;
   if (body.primaryProvider !== undefined) data.primaryProvider = body.primaryProvider;
   if (body.fallbackOrder !== undefined)
     data.fallbackOrder = JSON.stringify(body.fallbackOrder);
@@ -167,6 +171,7 @@ accountRouter.put("/debrid", asyncHandler(async (req, res) => {
     create: { userId: req.session!.sub, ...data },
     update: data,
   });
+  await syncAccountLibraryConfiguration(req.session!.sub);
   res.json({ ok: true });
 }));
 

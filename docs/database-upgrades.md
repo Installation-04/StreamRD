@@ -1,4 +1,4 @@
-# Versioned database upgrades — v0.4.0
+# Versioned database upgrades
 
 StreamRD and Phosphor now use reviewed SQLite migration files and independent
 schema/history validation. Production startup no longer runs `prisma db push`.
@@ -11,7 +11,7 @@ this release; changing the Prisma provider alone is insufficient.
 |---|---|
 | Missing or empty | Create a private SQLite file and deploy the committed chain |
 | Exact historical v0.1 schema from repository checkpoint `1a5dbce` | Verify a snapshot, establish the legacy baseline, then apply the community upgrade |
-| Exact unmanaged v0.2/v0.3 schema | Verify a snapshot, then record the migrations already represented by that schema |
+| Exact unmanaged v0.2/v0.3 schema | Verify a snapshot, record the community baseline, then apply later committed steps |
 | Managed database at a known checkpoint | Validate history/checksums and the checkpoint schema before applying pending migrations |
 | Unknown, partial, customized, corrupt, or inconsistent database | Refuse the upgrade; retain the source and require review/recovery |
 
@@ -156,3 +156,18 @@ mistakenly treated as the latest schema.
 production upgrade fallback. The older auth-upgrade validator tests a derived
 intermediate schema; the new migration fixtures use the exact historical
 checkpoint and current supported release schemas.
+
+## v0.5.0: metadata and private account imports
+
+Two additive migrations follow the released v0.4 chain:
+`20261106010000_metadata_automation` adds durable matching records;
+`20261107000000_account_library` adds private imports/scans, the automatic-import
+preference and nullable metadata ownership with user-deletion cascades.
+Existing supported data is preserved. A current v0.4 database is pending these
+steps; startup with schema application disabled refuses it until preparation.
+
+Known exact latest unmanaged schemas can be adopted when their structure uniquely
+identifies the checkpoint. A schema-identical data-only step is never guessed as
+applied merely from structure. Released SQL and historical checkpoints remain
+unchanged. The checkpoint generator reopens its inspection connection after each
+external SQL prefix to avoid stale SQLite schema caches.

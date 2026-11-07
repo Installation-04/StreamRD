@@ -83,7 +83,7 @@ docker run --pull=never --rm --interactive --volume "$upgrade_volume:/app/data" 
  execFileSync(process.execPath,["/app/node_modules/prisma/build/index.js","db","push","--skip-generate","--schema","/app/prisma/community-v0.3.prisma"],{stdio:"pipe",env:process.env});
  const db=new PrismaClient();try{
  const user=await db.user.create({data:{email:"container@example.invalid",displayName:"Upgrade fixture",role:"admin",hashedPassword:require("bcryptjs").hashSync("container-password123",10)}});
- await db.debridConfig.create({data:{userId:user.id,realDebridToken:"upgrade-fixture-only"}});
+ await db.$executeRawUnsafe("INSERT INTO DebridConfig (userId,realDebridToken,updatedAt) VALUES (?,?,?)",user.id,"upgrade-fixture-only",Date.now());
  if(process.env.SMOKE_PRODUCT==="streamrd")await db.title.create({data:{name:"Container fixture"}});
  else await db.indexerConfig.create({data:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-only"}});
  const history=await db.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE name='_prisma_migrations'");if(history.length)throw Error("Historical fixture already has migration history");
@@ -95,7 +95,7 @@ wait_backend "$upgraded_id"; fixture "$upgraded_id" restore
 docker exec --interactive "$upgraded_id" node <<'NODE'
 (async()=>{
  const fs=require("node:fs"),{PrismaClient}=require("@prisma/client");
- const state=await require("./scripts/database-state.cjs").inspectDatabase();if(state.state!=="current"||state.applied!==2)throw Error("Adopted upgrade is not current");
+ const state=await require("./scripts/database-state.cjs").inspectDatabase();if(state.state!=="current"||state.applied!==state.total)throw Error("Adopted upgrade is not current");
  const files=fs.readdirSync("/app/data/backups").filter(name=>name.startsWith("pre-upgrade-")&&name.endsWith(".db"));if(files.length!==1)throw Error("Expected one automatic upgrade snapshot");
  const snapshot="/app/data/backups/"+files[0];if((fs.statSync(snapshot).mode&0o777)!==0o600)throw Error("Upgrade snapshot is not private");
  const db=new PrismaClient({datasources:{db:{url:"file:"+snapshot}}});try{

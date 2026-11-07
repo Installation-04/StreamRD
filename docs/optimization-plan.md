@@ -183,3 +183,13 @@ jobs. Clients play resolved provider URLs directly.
    deployments actually require more than one backend process.
 
 Local synthetic catalog benchmarks are recorded in catalog-benchmark.md. No production benchmarks or real-provider playback have been performed.
+
+## Automatic Libraries v0.5.0
+
+Metadata matching now supports TMDB and OMDb, background enrichment, reviewed
+corrections, field locks, bounded caches/concurrency and private account targets.
+Onboarding imports existing debrid torrents into owner-scoped libraries with
+durable paged scans, credential guards and play-time stream resolution. Future
+work includes measured scan/load behavior, scoped retention, native-client parity,
+optional richer metadata and reviewed provider-to-mount mapping. See
+[account library](account-library.md) and [metadata](metadata-automation.md).

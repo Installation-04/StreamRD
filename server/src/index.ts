@@ -1,3 +1,6 @@
+import { queueImportedMetadata } from "./metadata/account";
+import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
+import { startMetadataWorker } from "./metadata/automation";
 import { createApp } from "./app";
 import { config } from "./config";
 import { db } from "./db";
@@ -13,6 +16,9 @@ async function main() {
   }
   const app = createApp();
   app.listen(config.port, () => {
+    setAccountImportHook(queueImportedMetadata);
+    startAccountLibraryWorker();
+    startMetadataWorker();
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);
   });
 }

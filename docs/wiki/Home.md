@@ -14,15 +14,18 @@ Start with [Getting started](https://github.com/Installation-04/StreamRD/wiki/Ge
 For upgrades, read [System and upgrades](https://github.com/Installation-04/StreamRD/wiki/System-and-upgrades) and [Operations and recovery](https://github.com/Installation-04/StreamRD/wiki/Operations-and-recovery).
 
 - [Architecture](https://github.com/Installation-04/StreamRD/wiki/Architecture): request flow, provider handling, data, and optimization choices.
-- [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots): twenty Safe Upgrades screens with demo-data provenance.
+- [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots): thirty-six Automatic Libraries screens with demo-data provenance.
 - [Troubleshooting](https://github.com/Installation-04/StreamRD/wiki/Troubleshooting): ports, login, playback, indexers, and storage.
 - [Releases](https://github.com/Installation-04/StreamRD/wiki/Releases): versions, compatibility, validation, and downloads.
 
 The version-controlled source of this wiki is
 [docs/wiki](https://github.com/Installation-04/StreamRD/tree/main/docs/wiki).
-The documented server/web release is **v0.4.0**. Native clients remain separate
+The documented server/web release is **v0.5.0**. Native clients remain separate
 projects; this release does not provide newly built device binaries.
 
 - [Plex and Jellyfin](https://github.com/Installation-04/StreamRD/wiki/Plex-and-Jellyfin): optional mounted-media symlink libraries.
 
 - [Project HQ and community roadmap](https://github.com/Installation-04/StreamRD/wiki/Project-HQ)
+
+- [My library and account scans](https://github.com/Installation-04/StreamRD/wiki/Account-library): import existing debrid torrents privately during onboarding.
+- [Metadata and matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching): artwork, details, IMDb references and reviewed corrections.

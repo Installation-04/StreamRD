@@ -1,3 +1,6 @@
+import { accountLibraryRouter } from "./routes/account-library";
+import { accountMetadataRouter } from "./routes/accountMetadata";
+import { metadataRouter } from "./routes/metadata";
 import { systemRouter } from "./routes/system";
 import { setupRouter } from "./routes/setup";
 import { libraryRouter } from "./routes/library";
@@ -30,11 +33,14 @@ export function createApp(): Express {
 
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
+  app.use("/api/account/library/:id/metadata", accountMetadataRouter);
   app.use("/api/account/setup", setupRouter);
+  app.use("/api/account/library", accountLibraryRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/debrid", debridRouter);
   app.use("/api/catalog", catalogRouter);
   app.use("/api/play", playRouter);
+  app.use("/api/admin/metadata", metadataRouter);
   app.use("/api/admin/system", systemRouter);
   app.use("/api/admin/library", libraryRouter);
   app.use("/api/admin", adminRouter);

@@ -1,3 +1,6 @@
+import { protectCatalogEdits } from "../metadata/automation";
+import { getMetadataSettings } from "../metadata/settings";
+import { metadataSelectionSchema } from "./metadata";
 import { asyncHandler } from "../http";
 import { Router } from "express";
 import { z } from "zod";
@@ -111,13 +114,23 @@ function titleData(body: z.infer<typeof titleSchema>) {
 }
 
 adminRouter.post("/catalog/create", asyncHandler(async (req, res) => {
-  const body = parseBody(titleSchema, req.body, res);
+  const body = parseBody(titleSchema.extend({ metadataMatch: metadataSelectionSchema.optional() }), req.body, res);
   if (!body) return;
-  const title = await db.title.create({ data: titleData(body) });
+  const preferences = await getMetadataSettings();
+  if (body.metadataMatch && (body.metadataMatch.type !== body.type || !(body.metadataMatch.provider === "tmdb" ? preferences.tmdbApiKey : preferences.omdbApiKey))) {
+    res.status(400).json({ error: "Configure the chosen metadata provider and use the same movie/series type before saving a match" }); return;
+  }
+  const metadataQueued = Boolean(body.metadataMatch || preferences.automatic);
+  const title = await db.$transaction(async tx => {
+    const created = await tx.title.create({ data: titleData(body) });
+    if (metadataQueued) await tx.metadataRecord.create({ data: { targetType: "catalog", targetId: created.id, name: created.name, mediaType: created.type, year: created.year,
+      requestedBy: body.metadataMatch ? "manual" : "automatic", ...(body.metadataMatch ? { data: JSON.stringify({ selection: body.metadataMatch }) } : {}) } });
+    return created;
+  });
   await logEvent("info", "admin_action", `Created title "${title.name}"`, {
     userId: req.session!.sub,
   });
-  res.status(201).json({ title: publicTitle(title, { includeSources: true }) });
+  res.status(201).json({ title: publicTitle(title, { includeSources: true }), metadataQueued });
 }));
 
 adminRouter.patch("/catalog/:id/update", asyncHandler(async (req, res) => {
@@ -137,7 +150,12 @@ adminRouter.patch("/catalog/:id/update", asyncHandler(async (req, res) => {
   if (body.posterUrl !== undefined) data.posterUrl = body.posterUrl;
   if (body.backdropUrl !== undefined) data.backdropUrl = body.backdropUrl;
   if (body.sources !== undefined) data.sources = JSON.stringify(body.sources);
-  const title = await db.title.update({ where: { id: req.params.id }, data });
+  const title = await db.$transaction(async tx => {
+    const fields = Object.keys(data).filter(field => data[field] !== existing[field as keyof typeof existing]);
+    const identityChanged = ["name", "type", "year"].some(field => fields.includes(field));
+    await protectCatalogEdits(existing.id, fields, identityChanged, tx);
+    return tx.title.update({ where: { id: req.params.id }, data });
+  });
   res.json({ title: publicTitle(title, { includeSources: true }) });
 }));
 
@@ -147,7 +165,7 @@ adminRouter.delete("/catalog/:id/delete", asyncHandler(async (req, res) => {
     res.status(404).json({ error: "Title not found" });
     return;
   }
-  await db.title.delete({ where: { id: req.params.id } });
+  await db.$transaction([db.metadataRecord.deleteMany({ where: { targetType: "catalog", targetId: req.params.id } }), db.title.delete({ where: { id: req.params.id } })]);
   await logEvent("info", "admin_action", `Deleted title "${existing.name}"`, {
     userId: req.session!.sub,
   });

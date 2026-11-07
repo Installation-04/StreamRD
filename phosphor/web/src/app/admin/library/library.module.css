@@ -40,3 +40,34 @@
 @media(max-width:600px) { .header { flex-direction:column;gap:12px; }.header h2 { font-size:27px; }.metrics { gap:6px; }.metrics>div { flex-wrap:wrap;padding:13px;font-size:10px;gap:6px; }.metricValue { width:100%;font-size:24px; }.metrics i { display:none; }.panel { padding:16px; }.fields { gap:9px; }.exportRow { flex-wrap:wrap;padding:15px;gap:10px; }.exportMediaIcon { display:none; }.exportRow>.textButton { margin-left:auto; }.exportFilters { flex-direction:column; }.filterLabel { width:100%; }.setup { padding:22px;flex-direction:column; }.fileSize { display:none; } }
 .draft>label { display:block;font-size:10px;color:var(--dim);margin-bottom:12px; }.draft>label input { margin-top:5px; }.fileName small { display:block;font-size:9px;color:var(--dim);margin-top:4px; }
 .page input:not([type="checkbox"]),.page select { border-color:color-mix(in srgb,var(--dim) 65%,var(--bg)); }
+
+/* Provider metadata enriches the web view independently of scanner filenames. */
+.metadataPanel { margin:22px 0 28px;scroll-margin-top:165px;min-width:0;border-radius:16px; }
+.metadataPanel:focus-visible { outline:2px solid var(--brand);outline-offset:4px; }
+.metadataNotice { display:flex;gap:14px;align-items:center;padding:18px 20px;margin-bottom:25px;background:linear-gradient(110deg,color-mix(in srgb,var(--brand) 6%,var(--bg-raised)),var(--bg-raised));border:1px solid var(--border);border-radius:13px; }
+.metadataNotice>div { flex:1;min-width:0; }
+.metadataNotice strong { display:block;font-size:12px;margin-bottom:4px; }
+.metadataNotice p { font-size:11px;color:var(--dim);line-height:1.7;max-width:650px; }
+.metadataNotice>a { display:inline-flex;gap:8px;align-items:center;flex-shrink:0;font-size:11px;color:var(--brand);padding:9px 0; }
+.metadataNoticeIcon { display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;flex-shrink:0;color:var(--brand); }
+.draftMetadataButton,.metadataButton { display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;min-height:40px;border:1px solid color-mix(in srgb,var(--brand) 35%,var(--border));border-radius:8px;background:color-mix(in srgb,var(--brand) 5%,var(--bg));color:var(--ink);font-size:11px;text-align:left; }
+.draftMetadataButton { margin:12px 0; }
+.draftMetadataButton:hover,.metadataButton:hover { border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,var(--bg)); }
+.draftMetadataButton>span,.metadataButton>span { color:var(--brand); }
+.exportActions { display:flex;flex-direction:column;align-items:stretch;gap:5px;flex-shrink:0;max-width:170px; }
+.exportActions>.textButton { justify-content:center; }
+.exportArtwork { width:68px;height:102px;overflow:hidden;border-radius:8px;flex-shrink:0;background:var(--bg-hover);border:1px solid var(--border); }
+.exportArtwork img { display:block;width:100%;height:100%;object-fit:cover; }
+.exportTitle h4 { overflow-wrap:anywhere;line-height:1.5; }
+.metadataSummary { margin:8px 0 12px; }
+.metadataFacts,.metadataLinks { display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;font-size:10px;color:var(--dim); }
+.metadataSource { font-weight:700;letter-spacing:.6px;color:var(--brand); }
+.metadataDescription { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.75;color:var(--dim);margin-top:8px;max-width:720px; }
+.metadataGenres { font-size:10px;line-height:1.7;color:var(--dim);margin-top:6px; }
+.metadataLinks { gap:14px; }
+.metadataLinks>a { color:var(--brand);padding:5px 0;min-height:30px;display:inline-flex;align-items:center;gap:5px; }
+.metadataState { color:var(--dim);font-size:10px;margin:7px 0; }
+.exportPaths { border-top:1px solid var(--border);padding-top:9px; }
+.exportPaths code,.exportPaths p { display:block;font-size:10px;line-height:1.7;color:var(--dim);overflow-wrap:anywhere; }
+@media(max-width:800px) { .metadataNotice { align-items:flex-start;flex-wrap:wrap; }.metadataNotice>a { margin-left:50px; }.exportActions { max-width:140px; } }
+@media(max-width:600px) { .metadataNotice { padding:16px;gap:10px; }.metadataNotice>a { margin-left:0;width:100%; }.metadataNoticeIcon { width:30px;height:30px; }.metadataNotice>div { flex-basis:calc(100% - 42px); }.exportArtwork { width:54px;height:81px; }.exportActions { width:100%;max-width:none;flex-direction:row;justify-content:flex-end;align-items:center;padding-top:10px;border-top:1px solid var(--border); }.metadataButton { min-height:44px; }.metadataDescription { font-size:11px;-webkit-line-clamp:3; }.metadataFacts { gap:6px 10px; } }

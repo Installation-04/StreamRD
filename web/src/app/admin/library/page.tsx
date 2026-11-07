@@ -2,16 +2,43 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { del, get, post } from "@/lib/api";
+import Link from "next/link";
+import MetadataPicker from "@/components/MetadataPicker";
+import { imdbLink, metadataSourceLink, type MetadataDetails } from "@/lib/metadata";
 import styles from "./library.module.css";
 
 type Media = { name: string; year?: number; type: "movie" | "episode"; season?: number; episode?: number; sourcePath: string };
-type Entry = { id: string; media: Media; libraryPath: string; sourceAvailable: boolean; linked: boolean };
+type Entry = { id: string; media: Media; libraryPath: string; sourceAvailable: boolean; linked: boolean; metadata?: MetadataDetails | null; metadataStatus?: string | null };
+type MetadataTarget = { kind: "entry"; id: string } | { kind: "draft"; sourcePath: string };
 type LibraryStatus = { enabled: boolean; sourceRoot?: string; exportRoot?: string; entries: Entry[] };
 type BrowseItem = { kind: "directory" | "file"; name: string; path: string; sizeBytes?: number; suggested?: Media };
 type BrowsePage = { path: string; parentPath: string | null; items: BrowseItem[]; nextCursor: string | null };
 type Draft = { sourcePath: string; name: string; year: string; type: "movie" | "episode"; season: string; episode: string };
 type BatchResult = { index: number; sourcePath: string; status: "exported" | "error"; entry?: Entry; error?: string };
 const MAX_BATCH = 100;
+const METADATA_STATES: Record<string, string> = { queued: "Metadata queued", processing: "Matching metadata", matched: "Metadata matched", review: "Review metadata match", unmatched: "No metadata match found", error: "Metadata needs attention" };
+
+function MetadataArtwork({ poster }: { poster?: string | null }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!poster || poster === failed) return <div className={styles.exportMediaIcon}><FolderIcon file /></div>;
+  return <div className={styles.exportArtwork}><img src={poster} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(poster)} /></div>;
+}
+function MetadataSummary({ metadata }: { metadata: MetadataDetails }) {
+  const imdb = imdbLink(metadata.imdbId);
+  const providerLink = metadataSourceLink(metadata);
+  return <div className={styles.metadataSummary}>
+    <div className={styles.metadataFacts}>
+      <span className={styles.metadataSource}>{metadata.provider === "tmdb" ? "TMDB" : "OMDb"}</span>
+      {metadata.year && <span>{metadata.year}</span>}
+      {metadata.runtimeMinutes != null && metadata.runtimeMinutes > 0 && <span>{metadata.runtimeMinutes} min</span>}
+      {metadata.contentRating && <span>{metadata.contentRating}</span>}
+      {metadata.rating != null && <span>{metadata.ratingSource || "Rating"} {metadata.rating.toFixed(1)} / 10</span>}
+    </div>
+    {metadata.description && <p className={styles.metadataDescription}>{metadata.description}</p>}
+    {metadata.genres.length > 0 && <p className={styles.metadataGenres}>{metadata.genres.slice(0, 4).join(" · ")}</p>}
+    <div className={styles.metadataLinks}>{providerLink && providerLink !== imdb && <a href={providerLink} target="_blank" rel="noreferrer">View on {metadata.provider === "tmdb" ? "TMDB" : "OMDb"} <span aria-hidden="true">↗</span></a>}{imdb && <a href={imdb} target="_blank" rel="noreferrer">View on IMDb <span aria-hidden="true">↗</span></a>}</div>
+  </div>;
+}
 
 function makeDraft(media: Media): Draft {
   return { sourcePath: media.sourcePath, name: media.name, year: media.year?.toString() ?? "", type: media.type, season: media.season?.toString() ?? "1", episode: media.episode?.toString() ?? "1" };
@@ -47,6 +74,9 @@ export default function LibraryPage() {
   const [manualName, setManualName] = useState("");
   const [manualPath, setManualPath] = useState("");
   const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const [metadataTarget, setMetadataTarget] = useState<MetadataTarget | null>(null);
+  const metadataPanel = useRef<HTMLElement>(null);
+  const metadataTrigger = useRef<HTMLButtonElement | null>(null);
 
   const loadStatus = useCallback(async () => { setStatus(await get<LibraryStatus>("/api/admin/library")); }, []);
   const loadFolder = useCallback(async (directory: string, cursor?: string) => {
@@ -76,10 +106,31 @@ export default function LibraryPage() {
   const filtered = useMemo(() => (status?.entries ?? []).filter(entry => {
     const healthy = entry.sourceAvailable && entry.linked;
     const matchesHealth = healthFilter === "all" || (healthFilter === "ready" ? healthy : !healthy);
-    return matchesHealth && `${entry.media.name} ${entry.media.sourcePath} ${entry.libraryPath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    return matchesHealth && `${entry.media.name} ${entry.metadata?.name ?? ""} ${entry.metadata?.year ?? ""} ${entry.metadata?.genres.join(" ") ?? ""} ${entry.media.sourcePath} ${entry.libraryPath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase());
   }), [status?.entries, query, healthFilter]);
   const selectedPaths = useMemo(() => new Set(drafts.map(item => item.sourcePath)), [drafts]);
   const breadcrumbs = (browse?.path ?? "").split("/").filter(Boolean);
+  const metadataEntry = metadataTarget?.kind === "entry" ? status?.entries.find(entry => entry.id === metadataTarget.id) : undefined;
+  const metadataDraft = metadataTarget?.kind === "draft" ? drafts.find(draft => draft.sourcePath === metadataTarget.sourcePath) : undefined;
+  const metadataMedia = metadataEntry?.media ?? metadataDraft;
+  useEffect(() => {
+    if (!metadataTarget) return;
+    if (!metadataMedia) { setMetadataTarget(null); return; }
+    metadataPanel.current?.focus({ preventScroll: true });
+    metadataPanel.current?.scrollIntoView({ behavior: "auto", block: "start" });
+  }, [metadataTarget, metadataMedia]);
+  function openMetadata(target: MetadataTarget, trigger: HTMLButtonElement) {
+    metadataTrigger.current = trigger; setMetadataTarget(target);
+  }
+  function closeMetadata() {
+    setMetadataTarget(null);
+    requestAnimationFrame(() => { if (metadataTrigger.current?.isConnected) metadataTrigger.current.focus(); });
+  }
+  function useDraftMetadata(details: MetadataDetails) {
+    if (metadataTarget?.kind !== "draft") return;
+    updateDraft(metadataTarget.sourcePath, { name: details.name.slice(0, 160), ...(details.year ? { year: String(details.year) } : {}) });
+    setMessage("Matched title and year copied into review. Check the details before exporting."); closeMetadata();
+  }
 
   function addDraft(media: Media) {
     setError("");
@@ -120,6 +171,9 @@ export default function LibraryPage() {
     </header>
     {error && <div className={styles.error} role="alert">{error}</div>}
     {message && <div className={styles.notice} role="status">{message}</div>}
+    {metadataTarget && metadataMedia && <section className={styles.metadataPanel} ref={metadataPanel} tabIndex={-1} aria-label="Library metadata lookup">
+      <MetadataPicker key={metadataTarget.kind === "entry" ? `entry:${metadataTarget.id}` : `draft:${metadataTarget.sourcePath}`} query={metadataEntry?.metadata?.name ?? metadataMedia.name} type={metadataMedia.type === "episode" ? "series" : "movie"} year={metadataEntry?.metadata?.year ?? (metadataMedia.year ? Number(metadataMedia.year) : undefined)} target={metadataTarget.kind === "entry" ? { type: "library", id: metadataTarget.id } : undefined} onSelect={metadataTarget.kind === "draft" ? useDraftMetadata : undefined} onApplied={() => { void perform(async () => { closeMetadata(); setMessage("Metadata saved for this web library entry. Exported paths and original media were kept."); }); }} onClose={closeMetadata} />
+    </section>}
     {statusLoading && <div className={styles.empty} aria-busy="true"><span className={styles.loadingDot} /> Checking your library…</div>}
     {!statusLoading && !status && <div className={styles.empty}><h3>We couldn’t check the library</h3><p>Check the media mount and backend connection, then try again.</p><button className="btn btn-secondary" disabled={busy} onClick={() => void perform(loadStatus)}>Try again</button></div>}
     {status && !status.enabled && <section className={styles.setup}>
@@ -167,6 +221,7 @@ export default function LibraryPage() {
               <div className={styles.draftTop}><span className={styles.fileNumber}>{String(index + 1).padStart(2, "0")}</span><code title={draft.sourcePath}>{draft.sourcePath}</code><button type="button" className={styles.removeDraft} aria-label={`Remove ${draft.name || draft.sourcePath} from review`} onClick={() => setDrafts(previous => previous.filter(item => item.sourcePath !== draft.sourcePath))}>×</button></div>
               <label>Movie or series name<input required maxLength={160} value={draft.name} onChange={event => updateDraft(draft.sourcePath, { name: event.target.value })} /></label>
               <div className={styles.fields}><label>Type<select value={draft.type} onChange={event => updateDraft(draft.sourcePath, { type: event.target.value as Draft["type"] })}><option value="movie">Movie</option><option value="episode">TV episode</option></select></label><label>Year <span className={styles.optional}>(optional)</span><input type="number" min={1800} max={2200} value={draft.year} onChange={event => updateDraft(draft.sourcePath, { year: event.target.value })} /></label></div>
+              <button type="button" className={styles.draftMetadataButton} onClick={event => openMetadata({ kind: "draft", sourcePath: draft.sourcePath }, event.currentTarget)} aria-label={`Find metadata for ${draft.name || "this file"}`}><span aria-hidden="true">✦</span> Find title &amp; year</button>
               {draft.type === "episode" && <div className={styles.fields}><label>Season<input type="number" required min={0} max={999} value={draft.season} onChange={event => updateDraft(draft.sourcePath, { season: event.target.value })} /></label><label>Episode<input type="number" required min={1} max={9999} value={draft.episode} onChange={event => updateDraft(draft.sourcePath, { episode: event.target.value })} /></label></div>}
             </fieldset>)}</div>
             <div className={styles.exportFooter}><p>Creates symlinks. Original media stays in place.</p><button className="btn" disabled={busy || drafts.length === 0}>{busy ? "Working…" : `Export ${drafts.length || "selected"} ${drafts.length === 1 ? "file" : "files"}`} <span aria-hidden="true">↗</span></button></div>
@@ -175,15 +230,19 @@ export default function LibraryPage() {
         </section>
       </div>
       <section className={styles.exports} aria-labelledby="exports-heading">
+        <div className={styles.metadataNotice}><span className={styles.metadataNoticeIcon} aria-hidden="true">✦</span><div><strong>A richer web library</strong><p>Match posters, plot details and IMDb links without changing exported paths. Plex and Jellyfin still scan their own libraries.</p></div><Link href="/admin/metadata">Metadata &amp; automation <span aria-hidden="true">↗</span></Link></div>
         <div className={styles.exportHeading}><div><span className={styles.step}>03 / Scan</span><h3 id="exports-heading">Your exported library <span className={styles.count}>{status.entries.length}</span></h3><p>Run a library scan in Plex or Jellyfin after exporting. Scans stay under your control.</p></div><div className={styles.actions}><button className="btn btn-secondary" disabled={busy} onClick={() => void perform(async () => {
           const result = await post<{ results: { status: string }[] }>("/api/admin/library/repair");
           setMessage(`Checked ${result.results.length} exports: ${result.results.filter(item => item.status === "repaired").length} repaired, ${result.results.filter(item => item.status === "unavailable" || item.status === "conflict").length} need attention.`);
         })}>Check &amp; repair links</button><button className={styles.textButton} disabled={busy} onClick={() => void perform(async () => {})}>Refresh status</button></div></div>
         <div className={styles.exportFilters}><label className={styles.searchLabel}><span className={styles.srOnly}>Search exported files</span><input type="search" placeholder="Search titles or file paths…" value={query} onChange={event => setQuery(event.target.value)} /></label><label className={styles.filterLabel}><span className={styles.srOnly}>Export health</span><select value={healthFilter} onChange={event => setHealthFilter(event.target.value)}><option value="all">All statuses</option><option value="ready">Ready to scan</option><option value="attention">Needs attention</option></select></label></div>
         {status.entries.length === 0 ? <div className={styles.exportEmpty}><h4>No exports yet</h4><p>Your reviewed movie and episode links will appear here.</p></div> : filtered.length === 0 ? <div className={styles.exportEmpty}><h4>No matching exports</h4><p>Try another search or status filter.</p></div> : <div className={styles.exportList}>{filtered.slice(0, visibleExports).map(entry => <article className={styles.exportRow} key={entry.id}>
-          <div className={styles.exportMediaIcon}><FolderIcon file /></div><div className={styles.exportInfo}><div className={styles.exportTitle}><h4>{entry.media.name}</h4><span className={entry.sourceAvailable && entry.linked ? styles.readyBadge : styles.attentionBadge}>{!entry.sourceAvailable ? "Source unavailable" : entry.linked ? "Ready to scan" : "Check link"}</span></div><code>{entry.libraryPath}</code><p>Source: {entry.media.sourcePath}</p>
+          <MetadataArtwork poster={entry.metadata?.posterUrl} /><div className={styles.exportInfo}><div className={styles.exportTitle}><h4>{entry.metadata?.name || entry.media.name}</h4><span className={entry.sourceAvailable && entry.linked ? styles.readyBadge : styles.attentionBadge}>{!entry.sourceAvailable ? "Source unavailable" : entry.linked ? "Ready to scan" : "Check link"}</span></div>
+          {entry.metadata && <MetadataSummary metadata={entry.metadata} />}
+          {entry.metadataStatus && entry.metadataStatus !== "matched" && <p className={styles.metadataState}>{METADATA_STATES[entry.metadataStatus] || "Metadata status unavailable"}</p>}
+          <div className={styles.exportPaths}>{entry.metadata?.name && entry.metadata.name !== entry.media.name && <p>Export name: {entry.media.name}</p>}<code>{entry.libraryPath}</code><p>Source: {entry.media.sourcePath}</p></div>
           {removingId === entry.id && <div className={styles.removeConfirmation}><p>Remove this export? The source video will stay in your mount.</p><div><button className={styles.dangerButton} disabled={busy} onClick={() => void perform(async () => { await del(`/api/admin/library/entries/${entry.id}`); setRemovingId(null); setMessage("Export removed. Source media was kept."); })}>Remove export</button><button className={styles.textButton} disabled={busy} onClick={() => setRemovingId(null)}>Keep it</button></div></div>}</div>
-          {removingId !== entry.id && <button className={styles.textButton} disabled={busy} aria-label={`Remove export for ${entry.media.name}`} onClick={() => setRemovingId(entry.id)}>Remove link</button>}
+          {removingId !== entry.id && <div className={styles.exportActions}><button type="button" className={styles.metadataButton} disabled={busy} aria-label={`${entry.metadata ? "Fix metadata match" : "Find metadata"} for ${entry.media.name}`} onClick={event => openMetadata({ kind: "entry", id: entry.id }, event.currentTarget)}><span aria-hidden="true">✦</span> {entry.metadata ? "Fix match" : "Find metadata"}</button><button className={styles.textButton} disabled={busy} aria-label={`Remove export for ${entry.media.name}`} onClick={() => setRemovingId(entry.id)}>Remove link</button></div>}
         </article>)}</div>}
         {filtered.length > visibleExports && <button className={styles.loadMore} onClick={() => setVisibleExports(value => value + 40)}>Show more exports ({filtered.length - visibleExports} remaining)</button>}
       </section>

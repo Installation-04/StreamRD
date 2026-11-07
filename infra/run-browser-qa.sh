@@ -22,7 +22,10 @@ for item in "${products[@]}";do
   backend_name="$item-browser-api-$suffix";web_name="$item-browser-web-$suffix"
   for name in "$backend_name" "$web_name";do if docker container inspect "$name" >/dev/null 2>&1;then echo 'Refusing an existing test container' >&2;exit 1;fi;done
   containers+=("$backend_name" "$web_name")
-  backend="$(docker run --pull=never --name "$backend_name" -d -p "127.0.0.1:$api_port:$api_port" --mount "type=volume,src=$volume,dst=/app/data" -e "JWT_SECRET=$(openssl rand -hex 32)" -e MEDIA_SOURCE_ROOT=/app/data/mounted -e MEDIA_LIBRARY_ROOT=/app/data/library "$item-server")"
+  # Provider protocol fixtures are test-only preloads, outside the production image.
+  docker run --pull=never --rm --interactive --mount "type=volume,src=$volume,dst=/app/data" "$item-server" node -e 'require("node:fs").writeFileSync("/app/data/metadata-fixture.cjs",require("node:fs").readFileSync(0),{mode:0o600})' < qa/metadata-fixture.cjs
+  if [ "$item" = streamrd ]; then export QA_STREAMRD_BACKEND="$backend_name"; else export QA_PHOSPHOR_BACKEND="$backend_name"; fi
+  backend="$(docker run --pull=never --name "$backend_name" -d -p "127.0.0.1:$api_port:$api_port" --mount "type=volume,src=$volume,dst=/app/data" -e "JWT_SECRET=$(openssl rand -hex 32)" -e MEDIA_SOURCE_ROOT=/app/data/mounted -e MEDIA_LIBRARY_ROOT=/app/data/library -e QA_METADATA_FIXTURES=1 -e NODE_OPTIONS=--require=/app/data/metadata-fixture.cjs "$item-server")"
   docker exec "$backend" node -e 'const fs=require("node:fs");fs.mkdirSync("/app/data/mounted/Extras",{recursive:true});for(const name of ["Big.Buck.Bunny.2008.mp4","Example.Show.S01E02.mkv"])fs.writeFileSync(`/app/data/mounted/${name}`,"filesystem-only fixture; not playable media");'
   if [ "$item" = phosphor ];then docker exec -i "$backend" node -e 'require("node:fs").writeFileSync("/app/data/indexer-fixture.cjs",require("node:fs").readFileSync(0),{mode:0o600})' < qa/indexer-fixture.cjs;docker exec -d "$backend" node /app/data/indexer-fixture.cjs;fi
   web="$(docker run --pull=never --name "$web_name" -d -p "127.0.0.1:$web_port:$web_port" "$item-web")"
