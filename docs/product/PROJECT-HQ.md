@@ -1,10 +1,25 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.5.0 Automatic Libraries — local acceptance complete
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.6.0 Server Sharing
 
 This is the source of truth for the project tracker. Import the Markdown and CSV
 bundle into Notion when a workspace connection is available. **No live Notion page
 has been created yet:** this chat has no Notion connector or parent-page access.
+
+## Server-managed sharing — completed implementation
+
+The owner chose shared server libraries and playback instead of requiring invited
+users to bring their own debrid accounts. The v0.6.0 work implements
+email-bound invitations, signup policy, administrator session revocation, named
+libraries, per-user grants and owner-account playback. Both complete backend suites
+passed locally: **642 tests** (350 StreamRD, 292 Phosphor). Four production images
+and both disposable upgrade/backup/restore smoke checks passed. Browser acceptance and both CI pipelines gate the exact annotated release tag.
+
+Private libraries stay private unless the source administrator deliberately shares
+present/future imports by type. Plex Home PINs, managed children, parental controls,
+shared-import watch progress and legacy catalog ACLs remain future work; the
+[current guide](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing.md)
+states these limits. Released v0.5.0 tags and downloads remain unchanged.
 
 ## Product direction
 

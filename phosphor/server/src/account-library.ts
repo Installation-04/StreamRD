@@ -50,13 +50,16 @@ export async function getAccountScanStatus(userId: string) {
   }));
   return { automatic: cfg?.autoImportLibrary !== false, providers, totalImported };
 }
-export async function countReadyAccountMedia(userId: string) {
+export async function currentAccountMediaFilter(userId: string): Promise<Prisma.AccountMediaWhereInput> {
   const valid: Prisma.AccountMediaWhereInput[] = [];
   for (const provider of PROVIDER_IDS) {
     const ctx = await context(userId, provider);
     if (ctx.active && ctx.enabled && ctx.configured) valid.push({ provider, credentialFingerprint: ctx.fingerprint });
   }
-  return valid.length ? db.accountMedia.count({ where: { userId, phase: "finished", OR: valid } }) : 0;
+  return { userId, OR: valid.length ? valid : [{ id: { in: [] } }] };
+}
+export async function countReadyAccountMedia(userId: string) {
+  return db.accountMedia.count({ where: { AND: [await currentAccountMediaFilter(userId), { phase: "finished" }] } });
 }
 export async function cancelAccountScan(userId: string, provider: ProviderId) {
   await db.accountScan.updateMany({ where: { userId, provider, status: { in: ACTIVE } }, data: { status: "cancelled", leaseUntil: null, error: null, revision: { increment: 1 } } });
@@ -170,12 +173,14 @@ export function startAccountLibraryWorker() {
   return () => { stopped = true; clearTimeout(timer); };
 }
 /** A signed URL is resolved only for an owner-authenticated, explicitly played import. */
-export async function playImportedMedia(userId: string, id: string, fileToken?: string) {
+export async function playImportedMedia(userId: string, id: string, fileToken?: string, authorize?: () => Promise<void>) {
+  if (authorize) await authorize();
   const item = await db.accountMedia.findFirst({ where: { id, userId } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
   if (!PROVIDER_IDS.includes(item.provider as ProviderId)) throw new AccountLibraryError("This provider is not supported.", 409);
   const provider = item.provider as ProviderId, ctx = await context(userId, provider);
   if (!ctx.active || !ctx.enabled || !ctx.configured || item.credentialFingerprint !== ctx.fingerprint) throw new AccountLibraryError("The saved provider account changed. Rescan the current account before playing this import.", 409);
+  if (authorize) await authorize();
   let result: Awaited<ReturnType<typeof playAccountItem>>;
   try { result = await playAccountItem(provider, ctx.creds, item.providerRef, fileToken); }
   catch (error) {
@@ -186,6 +191,7 @@ export async function playImportedMedia(userId: string, id: string, fileToken?: 
   const fresh = await context(userId, provider);
   const stillOwned = await db.accountMedia.findFirst({ where: { id, userId, credentialFingerprint: item.credentialFingerprint } });
   if (!stillOwned || !fresh.active || !fresh.enabled || !fresh.configured || fresh.fingerprint !== item.credentialFingerprint) throw new AccountLibraryError("The account changed while resolving playback. Refresh your library and retry.", 409);
+  if (authorize) await authorize();
   if (result.stream) await db.accountMedia.updateMany({ where: { id, userId, credentialFingerprint: item.credentialFingerprint }, data: { phase: "finished", progress: 100 } });
   return result;
 }

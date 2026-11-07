@@ -52,3 +52,11 @@ plaintext** — the exported file is sensitive). Re-import on a fresh
 install. User accounts, debrid keys, and download history live in the
 database file; back that up separately (see
 [deployment.md](deployment.md#backups)).
+
+## Server-managed user access
+
+Admin → Users controls registration, invitations, roles, account status and signing
+other accounts out everywhere. Admin → Shared libraries publishes explicitly named
+views of your imported media and grants selected users playback through your server
+account. See the [users and sharing guide](../../docs/server-sharing.md) for setup, API contracts,
+revocation behavior and differences from Plex Home.

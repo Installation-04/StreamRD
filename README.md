@@ -19,6 +19,17 @@ You bring your own debrid subscriptions; StreamRD turns them into a private,
 multi-user streaming service with a curated catalog. Use it within the
 providers' terms of service and your local law.
 
+## Server Sharing — v0.6.0
+
+Invite users, publish named libraries from your imported account collection, and
+choose who can watch. Shared viewers use server-managed playback and need no
+personal debrid key. Admin → Users controls signup policy, expiring invitations,
+account status and signing users out everywhere.
+
+Read the [users and sharing guide](docs/server-sharing.md) for setup and permissions.
+Named-library grants do not change the legacy curated catalog's access rules.
+Plex Home PINs and parental restrictions remain future work.
+
 ## Features
 
 - **Multiservice debrid** — Real-Debrid, AllDebrid and Premiumize.me behind
@@ -200,3 +211,6 @@ ratings and IMDb IDs. Automatic matching is opt-in; uncertain results can be rev
 and corrected, and manual edits are protected. Metadata enriches personal imports,
 mounted exports and StreamRD catalog titles.
 [Metadata setup and matching guide](docs/metadata-automation.md).
+
+User administration and server-managed playback are documented in the
+[users and sharing guide](docs/server-sharing.md).

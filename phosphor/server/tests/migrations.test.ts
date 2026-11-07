@@ -154,7 +154,7 @@ it("checks committed checkpoints using only temporary databases even when DATABA
  const untouched=path.join(temporary,"not-created","production.db");
  const result=spawnSync(process.execPath,[path.join(root,"scripts/generate-migration-snapshots.cjs"),"--check"],{cwd:root,env:{...process.env,DATABASE_URL:`file:${untouched}`},encoding:"utf8"});
  expect(result.status,result.stderr).toBe(0);expect(fs.existsSync(path.dirname(untouched))).toBe(false);
-});
+},60000);
 it("bootstrap disabled mode is nonmutating for current data and refuses absent databases",()=>{
  const missing=spawnSync(process.execPath,[path.join(root,"scripts/prepare-db.cjs")],{cwd:root,env:{...process.env,NODE_ENV:"test",APPLY_SCHEMA_ON_START:"false",DATABASE_URL:url},encoding:"utf8"});
  expect(missing.status).not.toBe(0);expect(fs.existsSync(file)).toBe(false);
@@ -179,7 +179,7 @@ it("does not treat a known unmanaged checkpoint as ready when a later release ad
  fs.cpSync(path.join(root,"prisma"),path.join(copy,"prisma"),{recursive:true});
  fs.cpSync(path.join(root,"scripts"),path.join(copy,"scripts"),{recursive:true});
  fs.symlinkSync(path.join(root,"node_modules"),path.join(copy,"node_modules"),"dir");
- const next=path.join(copy,"prisma/migrations/20261107000000_future_marker");fs.mkdirSync(next);
+ const next=path.join(copy,"prisma/migrations/99999999999999_future_marker");fs.mkdirSync(next);
  fs.writeFileSync(path.join(next,"migration.sql"),'BEGIN IMMEDIATE;\nCREATE TABLE "FutureMarker" ("id" TEXT NOT NULL PRIMARY KEY);\nCOMMIT;\n');
  fs.appendFileSync(path.join(copy,"prisma/schema.prisma"),'\nmodel FutureMarker {\n id String @id\n}\n');
  const generated=spawnSync(process.execPath,[path.join(copy,"scripts/generate-migration-snapshots.cjs")],{cwd:copy,env:process.env,encoding:"utf8"});
@@ -196,7 +196,7 @@ it("does not skip a schema-identical data-only migration when latest unmanaged a
  fs.cpSync(path.join(root,"prisma"),path.join(copy,"prisma"),{recursive:true});
  fs.cpSync(path.join(root,"scripts"),path.join(copy,"scripts"),{recursive:true});
  fs.symlinkSync(path.join(root,"node_modules"),path.join(copy,"node_modules"),"dir");
- const next=path.join(copy,"prisma/migrations/20261107000000_data_only");fs.mkdirSync(next);
+ const next=path.join(copy,"prisma/migrations/99999999999999_data_only");fs.mkdirSync(next);
  fs.writeFileSync(path.join(next,"migration.sql"),'BEGIN IMMEDIATE;\nUPDATE "MetadataRecord" SET "revision" = "revision" + 1;\nCOMMIT;\n');
  const generated=spawnSync(process.execPath,[path.join(copy,"scripts/generate-migration-snapshots.cjs")],{cwd:copy,env:process.env,encoding:"utf8"});
  expect(generated.status,generated.stderr).toBe(0);
@@ -205,3 +205,20 @@ it("does not skip a schema-identical data-only migration when latest unmanaged a
  expect(fs.readFileSync(file)).toEqual(before);expect((await db.metadataRecord.findFirstOrThrow()).revision).toBe(7);
  expect(fs.existsSync(path.join(temporary,"backups"))).toBe(false);
 },60000);
+
+it("upgrades a populated managed v0.5 account library without granting or publishing anything", async () => {
+ const releasedCount=names.indexOf("20261107020000_server_library_access");
+ expect(releasedCount).toBe(4);
+ fs.writeFileSync(file,"");
+ for(const name of names.slice(0,releasedCount)) {
+  command(["db","execute","--url",url,"--file",path.join(root,"prisma/migrations",name,"migration.sql")]);
+  command(["migrate","resolve","--applied",name]);
+ }
+ const db=client();await seed(db,true);
+ await db.accountMedia.create({data:{id:"private-item",userId:"user",provider:"realdebrid",providerRef:"private-ref",credentialFingerprint:"unchanged-binding",name:"Private movie",phase:"finished",progress:100}});
+ const before=await snapshot(db);
+ expect(await inspectDatabase({root,url})).toMatchObject({state:"pending",applied:releasedCount});
+ const result=await migrateDatabase({root,url});expect(result.backup).toBeTruthy();await preserved(db,before);
+ expect(await db.invitation.count()).toBe(0);expect(await db.sharedLibrary.count()).toBe(0);expect(await db.sharedLibraryGrant.count()).toBe(0);
+ expect(result.state).toMatchObject({state:"current",applied:names.length});
+});

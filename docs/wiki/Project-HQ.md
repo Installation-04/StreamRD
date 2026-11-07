@@ -5,15 +5,15 @@ with workstreams, owners, acceptance criteria, completed milestones, and future 
 
 - [Task board CSV](https://github.com/Installation-04/StreamRD/blob/main/docs/product/tasks.csv)
 - [Notion import instructions](https://github.com/Installation-04/StreamRD/blob/main/docs/product/NOTION-IMPORT.md)
-- [Project tracker / Notion bundle](https://github.com/Installation-04/StreamRD/releases/download/v0.5.0/streamrd-v0.5.0-project-tracker.zip)
+- [Project tracker / Notion bundle](https://github.com/Installation-04/StreamRD/releases/download/v0.6.0/streamrd-v0.6.0-project-tracker.zip)
 - [Contribution guide](https://github.com/Installation-04/StreamRD/blob/main/CONTRIBUTING.md)
 
 A live Notion workspace is not connected to the development session, so no live
 Notion page URL is claimed. The maintained repository tracker and importable
 Markdown/CSV provide the concrete tracking system until workspace access is available.
 
-The current Safe Upgrades update adds versioned SQLite migrations, independently
-verified schema/history, snapshots before existing database changes, read-only System
-readiness pages, and upgrade/recovery acceptance checks. The previous community
-update delivered guided setup, mounted-library batches and responsive interfaces.
-Release and validation links in the delivery tracker record the actual evidence.
+Server Sharing adds invitations, signup policy, administrator session revocation,
+named collections and explicit per-user access to server-account playback.
+The tracker records validation and remaining Plex Home work; PIN gates and
+parental restrictions are not claimed. Release tags and validation links record
+publication evidence.

@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { t } from "@/lib/i18n";
 
 const NAV = [
+  { href: "/admin/shared-libraries", label: "Shared libraries" },
   { href: "/admin/metadata", label: "Metadata" },
   { href: "/admin/system", label: "System" },
   { href: "/admin/library", label: "Plex / Jellyfin" },

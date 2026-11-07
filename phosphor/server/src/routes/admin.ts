@@ -1,3 +1,5 @@
+import { AccessError } from "../auth/access";
+import { accessRouter } from "./access";
 import { asyncHandler } from "../http";
 import { clearIndexerSearchCache } from "../indexers/searchCache";
 import { Router } from "express";
@@ -16,6 +18,7 @@ import { parseBody, publicUser } from "./helpers";
 export const adminRouter = Router();
 // Every /api/admin/* route requires an authenticated admin.
 adminRouter.use(requireAuth, requireAdmin);
+adminRouter.use(accessRouter);
 
 /* ------------------------------ users ------------------------------ */
 
@@ -37,12 +40,30 @@ adminRouter.patch("/users/:id", asyncHandler(async (req, res) => {
     res.status(400).json({ error: "You cannot demote or deactivate your own account" });
     return;
   }
-  const existing = await db.user.findUnique({ where: { id: req.params.id } });
-  if (!existing) {
-    res.status(404).json({ error: "User not found" });
-    return;
+  let user;
+  try {
+    user = await db.$transaction(async tx => {
+      // Serialize actor checks and target changes. Two administrators cannot
+      // simultaneously remove one another and leave the server without an admin.
+      await tx.setting.upsert({ where: { key: "auth.admin.users.lock" }, create: { key: "auth.admin.users.lock", value: "1" }, update: { value: "1" } });
+      const actor = await tx.user.findFirst({
+        where: { id: req.session!.sub, active: true, sessionVersion: req.session!.version, revokedSessions: { none: { id: req.session!.jti } } },
+        select: { role: true },
+      });
+      if (!actor || req.session!.exp * 1000 <= Date.now()) throw new AccessError(401, "Session is no longer active");
+      if (actor.role !== "admin") throw new AccessError(403, "Admin role required");
+      const existing = await tx.user.findUnique({ where: { id: req.params.id } });
+      if (!existing) throw new AccessError(404, "User not found");
+      if (existing.active && existing.role === "admin" && (body.role === "user" || body.active === false)) {
+        const admins = await tx.user.count({ where: { active: true, role: "admin" } });
+        if (admins <= 1) throw new AccessError(409, "The server must retain at least one active administrator");
+      }
+      return tx.user.update({ where: { id: existing.id }, data: { ...body, ...(body.active === false ? { sessionVersion: { increment: 1 } } : {}) } });
+    }, { maxWait: 10000, timeout: 10000 });
+  } catch (error) {
+    if (error instanceof AccessError) { res.status(error.status).json({ error: error.message }); return; }
+    throw error;
   }
-  const user = await db.user.update({ where: { id: req.params.id }, data: { ...body, ...(body.active === false ? { sessionVersion: { increment: 1 } } : {}) } });
   await logEvent("info", "admin_action", `Updated user ${user.email}`, { userId: req.session!.sub, meta: body });
   res.json({ user: publicUser(user) });
 }));

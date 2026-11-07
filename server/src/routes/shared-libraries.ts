@@ -1,0 +1,146 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { Router, Request, Response } from "express";
+import { z } from "zod";
+import { db } from "../db";
+import { requireAuth, requireAdmin } from "../auth/middleware";
+import { asyncHandler } from "../http";
+import { logEvent } from "../logger";
+import { AccountLibraryError, playImportedMedia } from "../account-library";
+import { assertActiveSharedViewer, assertSharedViewer, assertUnchangedSharedViewer, sharedLibraryView, sharedMediaWhere, visibleSharedLibrary, visibleSharedLibraryWhere } from "../shared-libraries";
+import { accountMediaViews } from "./account-library";
+import { rateLimit } from "../util/rateLimit";
+
+export const sharedLibrariesRouter = Router();
+export const adminSharedLibrariesRouter = Router();
+const noStore = (_req: Request, res: Response, next: () => void) => { res.setHeader("Cache-Control", "private, no-store"); next(); };
+sharedLibrariesRouter.use(noStore, requireAuth);
+adminSharedLibrariesRouter.use(noStore, requireAuth, requireAdmin);
+const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
+const mediaType = z.enum(["all", "movie", "series"]);
+const fields = z.object({ name: z.string().trim().min(1).max(80), mediaType: mediaType.default("all") }).strict();
+const list = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: z.string().max(512).optional(), q: z.string().trim().max(200).optional(), type: z.enum(["movie", "series"]).optional() }).strict();
+const cursorSchema = z.object({ v: z.literal(1), id, at: z.string().datetime(), scope: z.string().regex(/^[a-f0-9]{32}$/) }).strict();
+function action(run: (req: Request, res: Response) => Promise<unknown>) {
+  return asyncHandler(async (req, res) => {
+    try { await run(req, res); }
+    catch (error) { if (error instanceof AccountLibraryError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
+  });
+}
+function parse<T extends z.ZodTypeAny>(schema: T, value: unknown, message = "Invalid library request."): z.output<T> {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new AccountLibraryError(message);
+  return parsed.data;
+}
+async function ownedLibrary(req: Request) {
+  if (!id.safeParse(req.params.id).success) throw new AccountLibraryError("Shared library not found.", 404);
+  const library = await db.sharedLibrary.findFirst({ where: { id: req.params.id, sourceUserId: req.session!.sub } });
+  if (!library) throw new AccountLibraryError("Shared library not found.", 404);
+  return library;
+}
+/** Withhold a stale page if account bindings or item eligibility changed while decorating it. */
+async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[]) {
+  const freshWhere = await sharedMediaWhere(library);
+  if (JSON.stringify(freshWhere) !== JSON.stringify(originalWhere)) throw new AccountLibraryError("Shared library account changed. Refresh and try again.", 409);
+  if (itemIds.length && await db.accountMedia.count({ where: { id: { in: itemIds }, AND: [freshWhere] } }) !== itemIds.length) throw new AccountLibraryError("Shared library items changed. Refresh and try again.", 409);
+}
+async function adminView(library: Awaited<ReturnType<typeof ownedLibrary>>) {
+  const grants = await db.sharedLibraryGrant.findMany({ where: { libraryId: library.id }, orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, email: true, displayName: true, active: true } } } });
+  return { ...await sharedLibraryView(library), enabled: library.enabled, createdAt: library.createdAt.toISOString(), updatedAt: library.updatedAt.toISOString(), users: grants.map(grant => grant.user) };
+}
+async function audit(req: Request, message: string, libraryId: string, userId?: string) {
+  await logEvent("info", "admin_action", message, { userId: req.session!.sub, meta: { libraryId, ...(userId ? { targetUserId: userId } : {}) } });
+}
+adminSharedLibrariesRouter.get("/", action(async (req, res) => {
+  const libraries = await db.sharedLibrary.findMany({ where: { sourceUserId: req.session!.sub }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
+  res.json({ libraries: await Promise.all(libraries.map(adminView)) });
+}));
+adminSharedLibrariesRouter.post("/", action(async (req, res) => {
+  const body = parse(fields, req.body);
+  const library = await db.$transaction(async tx => {
+    // Serialize the per-owner limit across concurrent requests/processes.
+    await tx.setting.upsert({ where: { key: "shared-libraries.create.lock" }, create: { key: "shared-libraries.create.lock", value: "1" }, update: { value: "1" } });
+    if (await tx.sharedLibrary.count({ where: { sourceUserId: req.session!.sub } }) >= 100) throw new AccountLibraryError("You can create at most 100 shared libraries.", 409);
+    return tx.sharedLibrary.create({ data: { ...body, sourceUserId: req.session!.sub } });
+  });
+  await audit(req, "Created a shared library", library.id);
+  res.status(201).json({ library: await adminView(library) });
+}));
+adminSharedLibrariesRouter.patch("/:id", action(async (req, res) => {
+  const library = await ownedLibrary(req);
+  const body = parse(z.object({ name: fields.shape.name.optional(), mediaType: mediaType.optional(), enabled: z.boolean().optional() }).strict().refine(value => Object.keys(value).length > 0), req.body);
+  const updated = await db.sharedLibrary.update({ where: { id: library.id }, data: body });
+  await audit(req, "Updated a shared library", library.id);
+  res.json({ library: await adminView(updated) });
+}));
+adminSharedLibrariesRouter.delete("/:id", action(async (req, res) => {
+  const library = await ownedLibrary(req);
+  await db.sharedLibrary.delete({ where: { id: library.id } });
+  await audit(req, "Removed a shared library", library.id);
+  res.json({ ok: true });
+}));
+adminSharedLibrariesRouter.post("/:id/users", action(async (req, res) => {
+  const library = await ownedLibrary(req), body = parse(z.object({ userId: id }).strict(), req.body);
+  const user = await db.user.findUnique({ where: { id: body.userId }, select: { id: true } });
+  if (!user) throw new AccountLibraryError("User not found.", 404);
+  if (user.id === library.sourceUserId) throw new AccountLibraryError("The source owner already has access.");
+  await db.sharedLibraryGrant.upsert({ where: { libraryId_userId: { libraryId: library.id, userId: user.id } }, create: { libraryId: library.id, userId: user.id }, update: {} });
+  await audit(req, "Granted shared library access", library.id, user.id);
+  res.json({ ok: true });
+}));
+adminSharedLibrariesRouter.delete("/:id/users/:userId", action(async (req, res) => {
+  const library = await ownedLibrary(req);
+  const userId = parse(id, req.params.userId);
+  await db.sharedLibraryGrant.deleteMany({ where: { libraryId: library.id, userId } });
+  await audit(req, "Revoked shared library access", library.id, userId);
+  res.json({ ok: true });
+}));
+sharedLibrariesRouter.get("/", action(async (req, res) => {
+  const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(req.session!.sub), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
+  const views = await Promise.all(libraries.map(sharedLibraryView));
+  await assertActiveSharedViewer(req.session!);
+  const fresh = await db.sharedLibrary.findMany({ where: { ...visibleSharedLibraryWhere(req.session!.sub), id: { in: libraries.map(library => library.id) } }, select: { id: true, updatedAt: true } });
+  const unchanged = new Set(fresh.filter(library => libraries.some(original => original.id === library.id && original.updatedAt.getTime() === library.updatedAt.getTime())).map(library => library.id));
+  res.json({ libraries: views.filter(library => unchanged.has(library.id)) });
+}));
+sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
+  const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
+  const { limit, cursor, q, type } = parse(list, req.query);
+  const sourceWhere = await sharedMediaWhere(library);
+  const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : [])] };
+  const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
+  let after: z.infer<typeof cursorSchema> | undefined;
+  if (cursor) {
+    try { const value = cursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"))); if (Buffer.from(JSON.stringify(value)).toString("base64url") !== cursor || value.scope !== scope) throw Error(); after = value; }
+    catch { throw new AccountLibraryError("This page cursor does not belong to the current shared library search."); }
+  }
+  const where: Prisma.AccountMediaWhereInput = after ? { AND: [filters, { OR: [{ createdAt: { lt: new Date(after.at) } }, { createdAt: new Date(after.at), id: { lt: after.id } }] }] } : filters;
+  const [items, total] = await Promise.all([db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 }), db.accountMedia.count({ where: filters })]);
+  const page = items.slice(0, limit), last = page.at(-1), views = await accountMediaViews(page);
+  await assertUnchangedSharedViewer(req.session!, library);
+  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id));
+  res.json({ items: views, total, nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
+}));
+sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
+  const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
+  const sourceWhere = await sharedMediaWhere(library);
+  const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
+  if (!item) throw new AccountLibraryError("Library item not found.", 404);
+  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library) };
+  await assertUnchangedSharedViewer(req.session!, library);
+  await assertCurrentSharedItems(library, sourceWhere, [item.id]);
+  res.json(result);
+}));
+sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
+  const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
+  const body = parse(z.object({ fileToken: z.string().min(1).max(512).optional() }).strict(), req.body ?? {});
+  const library = await assertSharedViewer(req.session!, libraryId);
+  const authorize = async () => {
+    const freshLibrary = await assertSharedViewer(req.session!, libraryId);
+    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary)] }, select: { id: true } });
+    if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
+  };
+  const result = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);
+  await authorize();
+  res.json(result);
+}));

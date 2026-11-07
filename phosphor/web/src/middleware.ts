@@ -14,12 +14,12 @@ export function middleware(req: NextRequest) {
     if (!token) return NextResponse.redirect(new URL("/login", req.url));
     if (role !== "admin") return NextResponse.redirect(new URL("/", req.url));
   }
-  if ((pathname.startsWith("/account") || pathname.startsWith("/downloads")) && !token) {
+  if ((pathname.startsWith("/shared-libraries") || pathname.startsWith("/account") || pathname.startsWith("/downloads")) && !token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/account/:path*", "/library/:path*", "/downloads/:path*"],
+  matcher: ["/shared-libraries/:path*", "/admin/:path*", "/account/:path*", "/library/:path*", "/downloads/:path*"],
 };

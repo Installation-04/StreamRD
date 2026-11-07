@@ -31,7 +31,9 @@ the navbar for admin accounts). Non-admins are redirected away and every
 2. Admin → Providers → test connectivity to confirm the server can reach the
    debrid APIs.
 3. Admin → Catalog → add titles with at least one source each.
-4. Invite users — they sign up themselves and add their own keys.
+4. Choose invitation-only registration in Admin → Users, create invitation links,
+   then grant accepted users access in Admin → Shared libraries. Shared viewers
+   do not need their own debrid keys.
 
 ### Curating content
 
@@ -56,3 +58,11 @@ Export config (Server page) regularly — it contains server settings, provider
 settings, and the full catalog with sources, and can be re-imported on a
 fresh install. User accounts and keys live in the database file; back that up
 separately (see [deployment.md](deployment.md#backups)).
+
+## Server-managed user access
+
+Admin → Users controls registration, invitations, roles, account status and signing
+other accounts out everywhere. Admin → Shared libraries publishes explicitly named
+views of your imported media and grants selected users playback through your server
+account. See the [users and sharing guide](server-sharing.md) for setup, API contracts,
+revocation behavior and differences from Plex Home.

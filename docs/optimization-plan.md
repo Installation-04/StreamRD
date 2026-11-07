@@ -193,3 +193,18 @@ durable paged scans, credential guards and play-time stream resolution. Future
 work includes measured scan/load behavior, scoped retention, native-client parity,
 optional richer metadata and reviewed provider-to-mount mapping. See
 [account library](account-library.md) and [metadata](metadata-automation.md).
+
+
+## Server-managed access foundation
+
+The `plex-style-access` work adds expiring invitations, configurable registration,
+admin session revocation and explicit named sharing of an administrator's imported
+account library. Viewer playback uses server credentials, with grant/session/source
+checks before and after provider work. Original private imports remain private.
+See [users and sharing](server-sharing.md) for contracts and existing catalog limits.
+
+Full Plex Home parity is a separate milestone: managed household users, PIN gates,
+enforced maturity/label restrictions across every browse/play route, named sharing
+for the legacy curated catalog, device inventories/concurrency controls and watch
+progress for shared imports. These require common authorization rather than merely
+hiding UI controls. No such restrictions are claimed by the current type filters.

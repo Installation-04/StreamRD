@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import request from "supertest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { app, auth, resetDb, adminAndUser } from "./helpers";
@@ -54,4 +55,33 @@ it("does not count disabled indexers or return private indexer configuration", a
   await db.indexerConfig.update({ where: { id: indexer.id }, data: { enabled: true } });
   const data = await setup(); expect(data.indexers.configured).toBe(true); expect(JSON.stringify(data)).not.toMatch(/private-indexer|private-key-marker/);
   expect((await request(app).get("/api/account/setup").set(auth(admin.token))).status).toBe(200);
+});
+
+it("lets granted viewers finish onboarding without personal provider keys or indexers", async () => {
+ const {admin,user}=await adminAndUser();
+ const key="shared-server-fixture-key";
+ await db.debridConfig.update({where:{userId:admin.id},data:{realDebridToken:key}});
+ const credentialFingerprint=createHash("sha256").update(JSON.stringify([admin.id,"realdebrid",key,""])).digest("hex");
+ await db.accountMedia.create({data:{userId:admin.id,provider:"realdebrid",providerRef:"private-owner-ref",credentialFingerprint,name:"Server movie",phase:"finished",progress:100}});
+ const library=await db.sharedLibrary.create({data:{name:"Movie night",sourceUserId:admin.id,grants:{create:{userId:user.id}}}});
+ const fetch=vi.spyOn(globalThis,"fetch").mockRejectedValue(new Error("Unexpected setup provider request"));
+ const response=await request(app).get("/api/account/setup").set(auth(user.token));
+ expect(response.status).toBe(200);expect(response.body.configurationReady).toBe(true);
+ expect(response.body.sharedLibraries).toEqual({libraryCount:1,readyCount:1});
+ expect(response.body.checks.find((c:{id:string})=>c.id==="providers")).toMatchObject({required:false,status:"complete",href:"/shared-libraries"});
+ expect(response.body.providers.every((p:{configured:boolean})=>!p.configured)).toBe(true);
+ expect(JSON.stringify(response.body)).not.toMatch(/shared-server-fixture-key|private-owner-ref|credentialFingerprint/);
+ expect(fetch).not.toHaveBeenCalled();
+ await db.sharedLibraryGrant.delete({where:{libraryId_userId:{libraryId:library.id,userId:user.id}}});
+ const removed=await request(app).get("/api/account/setup").set(auth(user.token));
+ expect(removed.body.sharedLibraries).toEqual({libraryCount:0,readyCount:0});expect(removed.body.configurationReady).toBe(false);
+});
+it("does not claim playable sharing when its source credentials are missing or the library is disabled", async () => {
+ const {admin,user}=await adminAndUser();
+ const library=await db.sharedLibrary.create({data:{name:"Empty server library",sourceUserId:admin.id,grants:{create:{userId:user.id}}}});
+ const response=await request(app).get("/api/account/setup").set(auth(user.token));
+ expect(response.body.sharedLibraries).toEqual({libraryCount:1,readyCount:0});expect(response.body.configurationReady).toBe(false);
+ await db.sharedLibrary.update({where:{id:library.id},data:{enabled:false}});
+ const disabled=await request(app).get("/api/account/setup").set(auth(user.token));
+ expect(disabled.body.sharedLibraries).toEqual({libraryCount:0,readyCount:0});
 });

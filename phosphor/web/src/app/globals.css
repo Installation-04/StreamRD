@@ -543,3 +543,6 @@ button,input,select,textarea { font:inherit;min-height:40px; }input,select,texta
 @media(max-width:600px) { .landing-console { padding:45px 20px; }.landing-console h1 { font-size:45px; }.landing-steps { flex-direction:column;gap:15px;margin-top:35px; } }
 @media(max-width:680px) { .admin-sidebar { flex-direction:row;border-right:0;border-bottom:1px solid var(--border); } }
 .filters input,.filters select,.auth-panel input { border-color:color-mix(in srgb,var(--fg-dim) 65%,var(--bg)); }
+
+/* Keep the expanded library navigation usable at intermediate widths. */
+.nav-links { min-width:0; max-width:100%; overflow-x:auto; scrollbar-width:thin; }

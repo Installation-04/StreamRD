@@ -8,7 +8,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string, inviteToken?: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -48,8 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const signup = useCallback(async (email: string, password: string, displayName: string) => {
-    const res = await post<{ token: string; user: User }>("/api/auth/signup", { email, password, displayName });
+  const signup = useCallback(async (email: string, password: string, displayName: string, inviteToken?: string) => {
+    const res = await post<{ token: string; user: User }>("/api/auth/signup", { email, password, displayName, ...(inviteToken ? { inviteToken } : {}) });
     storeSession(res.token, res.user.role);
     setUser(res.user);
   }, []);

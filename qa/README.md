@@ -29,6 +29,15 @@ workflow coverage, not a complete WCAG audit, native-client test, or live-provid
 validation. The separate backend filesystem suite verifies original preservation,
 collisions, mount outages, and path confinement.
 
+The automatic-library journeys also exercise server-only metadata settings,
+background account scans, private matching and synthetic-video playback. The
+server-sharing journeys create an email-bound one-use invitation through the UI,
+accept its fragment link in a fresh browser context, grant a named server library,
+and play without personal debrid credentials. They verify source-private isolation,
+access removal and administrative session revocation, then restore open signup and
+remove their shared-library fixture. Provider HTTP transport is intercepted only
+inside disposable QA volumes; these checks do not establish live-account playback.
+
 CI pins the browser/Docker jobs to Ubuntu 24.04, which supports the pinned
 Playwright 1.57.0 browser packages. Do not switch those jobs to a newer runner OS
 until its browser support has been verified.

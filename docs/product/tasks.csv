@@ -21,4 +21,10 @@ Automatic enrichment and field ownership,Done,P0,v0.5.0,Lead,Durable jobs locks 
 Private account import and onboarding scan,Done,P0,v0.5.0,Scanner backend and UI,Read-only paged imports preserve privacy and skip duplicates
 Personal library playback and metadata correction,Done,P0,v0.5.0,Product design and lead,Owner-only views explicit stream resolution and video choice
 Metadata and account migrations,Done,P0,v0.5.0,Storage and lead,Preserved old data immutable released checkpoints and owner cascades
-Production browser and publication acceptance,Local acceptance passed,P0,v0.5.0,Lead,Four builds upgrade restore real-app fixture journeys screenshots and CI pass
+Production browser and publication acceptance,Done,P0,v0.5.0,Lead,Four builds upgrade restore real-app fixture journeys screenshots and CI pass
+Expiring invitations and registration policy,Done,P0,v0.6.0,Access backend and UI,One-use hashed email-bound invitations and open invite closed signup policies
+Named libraries and selected-user grants,Done,P0,v0.6.0,Sharing backend and UI,Only source admins publish current and future matching imports
+Shared server playback and viewer setup,Done,P0,v0.6.0,Sharing backend and lead,Explicit provider streams use owner credentials with no viewer keys required
+Administrator concurrency and session protection,Done,P0,v0.6.0,Access backend,Concurrent mutations retain an active admin and recheck live actor permissions
+Server Sharing acceptance and release,Implementation complete,P0,v0.6.0,Lead,Backend production upgrade browser and exact commit CI gate the annotated release tag
+Plex Home managed users and restrictions,Planned,P1,Future,Product and security,Managed households PIN gates common parental ACL and shared watch progress

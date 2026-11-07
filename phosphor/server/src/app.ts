@@ -1,3 +1,4 @@
+import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
 import { accountLibraryRouter } from "./routes/account-library";
 import { accountMetadataRouter } from "./routes/accountMetadata";
 import { metadataRouter } from "./routes/metadata";
@@ -40,6 +41,8 @@ export function createApp(): Express {
   app.use("/api/debrid", debridRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/downloads", downloadsRouter);
+  app.use("/api/shared-libraries", sharedLibrariesRouter);
+  app.use("/api/admin/shared-libraries", adminSharedLibrariesRouter);
   app.use("/api/admin/metadata", metadataRouter);
   app.use("/api/admin/system", systemRouter);
   app.use("/api/admin/library", libraryRouter);

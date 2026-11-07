@@ -485,3 +485,10 @@ are rate limited; metadata provider keys remain server-managed.
 
 See the repository metadata and account-library guides for provider support,
 matching rules, migration requirements, limits and fixture versus live evidence.
+
+## Invitations and server-shared libraries
+
+Account registration now supports `open`, `invite` and `closed` modes, with
+one-use email-bound invitation tokens. Named server libraries use explicit
+per-user grants and server-side provider credentials. See the
+[complete endpoint contracts and access rules](server-sharing.md).

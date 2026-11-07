@@ -289,3 +289,6 @@ button { transition:background .16s,color .16s,transform .16s; }
 /* Keep compact text and button labels legible in both palettes. */
 .btn:not(.btn-secondary):not(.btn-danger) { background:#c92d40;color:#fff; }.btn:not(.btn-secondary):not(.btn-danger):hover { background:#ad2537; }
 [data-theme="light"] { --accent:#b9233e;--accent-hover:#a51d35;--ok:#15733f;--warn:#875205;--err:#b92b39; }
+
+/* Keep the expanded library navigation usable at intermediate widths. */
+.nav-links { min-width:0; max-width:100%; overflow-x:auto; scrollbar-width:thin; }

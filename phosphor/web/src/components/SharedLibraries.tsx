@@ -1,0 +1,66 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
+import { SharedLibrary, SharedLibraryItems, libraryTypeLabel } from "@/lib/shared-libraries";
+import styles from "./SharedLibraries.module.css";
+import gallery from "@/app/library/library.module.css";
+
+export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
+  const { user, loading: authLoading } = useAuth(), router = useRouter();
+  const [libraries, setLibraries] = useState<SharedLibrary[]>([]), [items, setItems] = useState<AccountMedia[]>([]);
+  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [query, setQuery] = useState(""), [type, setType] = useState("all");
+  const [total, setTotal] = useState(0), [cursor, setCursor] = useState<string | null>(null), [loadedMore, setLoadedMore] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  const load = useCallback(async (next?: string) => {
+    request.current?.abort(); const controller = new AbortController(); request.current = controller; setLoading(true); setError("");
+    try {
+      const response = await api<{ libraries: SharedLibrary[] }>("/api/shared-libraries", { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setLibraries(response.libraries);
+      if (libraryId) {
+        if (!response.libraries.some(library => library.id === libraryId)) { setItems([]); setTotal(0); setCursor(null); throw new Error("This library is unavailable. Ask the server owner to check your access."); }
+        const params = new URLSearchParams({ limit: "30" });
+        if (query.trim()) params.set("q", query.trim()); if (type !== "all") params.set("type", type); if (next) params.set("cursor", next);
+        const page = await api<SharedLibraryItems>(`/api/shared-libraries/${encodeURIComponent(libraryId)}/items?${params}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setItems(current => next ? [...current.filter(item => !page.items.some(other => other.id === item.id)), ...page.items].slice(-200) : page.items);
+        setTotal(page.total); setCursor(page.nextCursor); setLoadedMore(Boolean(next));
+      }
+    } catch (reason) { if (!controller.signal.aborted) { if (reason instanceof ApiError && [401, 403, 404].includes(reason.status)) { setLibraries([]); setItems([]); setTotal(0); setCursor(null); } setError(reason instanceof Error ? reason.message : "Shared libraries could not be loaded."); } }
+    finally { if (!controller.signal.aborted) setLoading(false); }
+  }, [libraryId, query, type]);
+  useEffect(() => {
+    if (!authLoading && !user) router.replace("/login");
+    if (!user) return;
+    const timer = setTimeout(() => void load(), libraryId ? 250 : 0);
+    return () => { clearTimeout(timer); request.current?.abort(); };
+  }, [user, authLoading, router, load, libraryId]);
+  if (authLoading || !user) return <main className={styles.page}><p role="status">Checking your account…</p></main>;
+  const library = libraries.find(candidate => candidate.id === libraryId);
+  return <main className={styles.page}>
+    {libraryId && <Link className={styles.back} href="/shared-libraries">← Shared libraries</Link>}
+    <header className={styles.intro}><div><p className={styles.eyebrow}>FROM YOUR SERVER. READY TO WATCH.</p><h1>{libraryId ? library?.name ?? "Shared library" : "Shared libraries."}</h1><p>{libraryId ? "A collection shared with you by this server. Browse its titles and press Play; your server handles the connection." : "Your invitation opens the door. Explore the collections your server owner has shared with you, with no personal debrid account needed."}</p></div><div className={styles.introActions}>{user.role === "admin" && <Link className="btn btn-secondary" href="/admin/shared-libraries">Manage sharing</Link>}<button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}>Refresh libraries</button></div></header>
+    {error && <div className={styles.error} role="alert"><p>{error}</p><button type="button" disabled={loading} onClick={() => void load()}>Try again</button></div>}
+    {loading && !libraries.length && <section className={styles.notice} role="status">Opening your server’s collections…</section>}
+    {!libraryId && <>
+      {!loading && !error && !libraries.length && <section className={styles.empty}><p className={styles.eyebrow}>YOUR SEAT IS SAVED</p><h2>No libraries shared yet.</h2><p>{user.role === "admin" ? "Create a shared library from your imported account collection, then choose who can watch." : "Your account is ready. Ask the server owner to give you access to a library; you don’t need to connect a provider."}</p>{user.role === "admin" && <Link className="btn" href="/admin/shared-libraries">Create a shared library</Link>}</section>}
+      <section className={styles.libraryGrid} aria-label="Libraries shared with you" aria-busy={loading}>{libraries.map(collection => <Link key={collection.id} href={`/shared-libraries/${encodeURIComponent(collection.id)}`} className={styles.libraryTile} aria-label={`Open library ${collection.name}`}><div className={styles.tileArt}><span className={styles.tileIcon} aria-hidden="true">{collection.mediaType === "series" ? "▤" : "◈"}</span><span>{libraryTypeLabel(collection.mediaType)}</span></div><div className={styles.tileCopy}><h2>{collection.name}</h2><p><span>{collection.itemCount} {collection.itemCount === 1 ? "title" : "titles"}</span><span>Explore collection ↗</span></p></div></Link>)}</section>
+    </>}
+    {libraryId && library && <>
+      <section className={gallery.toolbar} aria-label="Shared library filters"><label className={gallery.search}><span>Find your next watch</span><input type="search" aria-label="Search shared library" value={query} maxLength={160} placeholder="Search titles…" onChange={event => setQuery(event.target.value)} /></label>{library.mediaType === "all" && <label className={gallery.type}><span>Show</span><select aria-label="Filter shared library by type" value={type} onChange={event => setType(event.target.value)}><option value="all">Everything</option><option value="movie">Movies</option><option value="series">Series</option></select></label>}<div className={gallery.total}><strong>{total}</strong><span>{total === 1 ? "title" : "titles"}</span></div></section>
+      {loading && !items.length && <div className={gallery.skeleton} role="status">Gathering this collection…</div>}
+      {!loading && !items.length && !error && <section className={styles.empty}><h2>{query || type !== "all" ? "No titles match this view." : "This collection is getting started."}</h2><p>{query || type !== "all" ? "Try another title or clear your filters." : "Titles appear here as the server’s account library is imported. Check back soon."}</p>{(query || type !== "all") && <button type="button" className="btn btn-secondary" onClick={() => { setQuery(""); setType("all"); }}>Clear filters</button>}</section>}
+      <section className={gallery.grid} aria-label="Shared library titles" aria-busy={loading}>{items.map(item => {
+        const name = accountMediaName(item), poster = safeMediaUrl(item.metadata?.posterUrl), ready = item.phase === "finished";
+        return <Link key={item.id} href={`/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}`} className={gallery.card} aria-label={`Open ${name}`}><div className={`${gallery.poster} ${gallery[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={gallery.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "SERVER COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} onLoad={event => { event.currentTarget.style.display = ""; }} />}<span className={gallery.provider}>SHARED BY YOUR SERVER</span><span className={`${gallery.readiness} ${ready ? gallery.ready : ""}`}>{ready ? "Provider reports ready" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span><span className={gallery.open}><span aria-hidden="true">↗</span> View title</span></div><div className={gallery.cardInfo}><h2>{name}</h2><p>{item.year ?? item.metadata?.year ?? "Year unknown"}<span>·</span>{item.type === "series" ? "Series" : "Movie"}{item.metadata?.rating != null && <><span>·</span>★ {item.metadata.rating.toFixed(1)}</>}</p></div></Link>;
+      })}</section>
+      {(cursor || loadedMore) && <div className={gallery.more}><p>Showing {items.length} loaded titles. This view keeps up to 200; search or Refresh libraries to return to the first page.</p>{cursor && <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load(cursor)}>{loading ? "Loading…" : "Load more titles"}</button>}</div>}
+    </>}
+    <footer className={styles.notice}><strong>One server, a shared collection.</strong> Your access is managed by the server owner. Playback uses the server’s configured account; your personal connections and private library remain separate.</footer>
+  </main>;
+}

@@ -1,8 +1,19 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.5.0 Automatic Libraries** follows v0.4.0 Safe Upgrades.
+`vMAJOR.MINOR.PATCH`. **v0.6.0 Server Sharing** follows v0.5.0 Automatic Libraries.
 Native-client versions remain independent.
+
+- [v0.6.0 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.6.0)
+- [Users and sharing guide](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing.md)
+- [Sharing validation](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing-validation.md)
+
+Server Sharing adds invitations, registration policy, administrator session
+revocation, named collections and explicit per-user access to playback through the
+source administrator's provider account. It preserves private accounts and media;
+full Plex Home managed users, PINs and parental controls remain future work.
+
+## Previous: v0.5.0 Automatic Libraries
 
 - [v0.5.0 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.5.0)
 - [Versioned source](https://github.com/Installation-04/StreamRD/tree/v0.5.0)

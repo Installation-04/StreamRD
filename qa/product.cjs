@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {chromium}=require('playwright');
 const automaticLibraries=require('./automatic-libraries.cjs');
+const serverSharing=require('./server-sharing.cjs');
 if(process.env.QA_DISPOSABLE_FIXTURES!=='1')throw Error('Use infra/run-browser-qa.sh: tests require fresh disposable services.');
 const products=(process.env.QA_PRODUCT==='both'?['streamrd','phosphor']:[process.env.QA_PRODUCT]);
 if(products.some(p=>!['streamrd','phosphor'].includes(p)))throw Error('Invalid QA product');
@@ -70,13 +71,14 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
    await page.route('**/api/downloads',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Temporary fixture outage'})}));await page.reload({waitUntil:'networkidle'});await page.getByRole('alert').filter({hasText:'Temporary fixture outage'}).waitFor();await page.unroute('**/api/downloads');await page.getByRole('button',{name:'Try again',exact:true}).click();await page.getByRole('heading',{name:'Good things are worth finding.'}).waitFor();report.journeys.push('phosphor: real local-indexer search, saved search, queue empty/error/retry states');
   }
   await automaticLibraries({product,page,url,api,admin,member,call,shot,noOverflow,report});
+  await serverSharing({product,page,url,api,admin,member,call,shot,noOverflow,report});
   await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement!==document.body),'Keyboard focus must reach an interactive control');
   // A member session must not expose the filesystem administration interface.
   await context.clearCookies();await context.addCookies([{name:sr?'sr_token':'ph_token',value:member.token,domain:'localhost',path:'/'},{name:sr?'sr_role':'ph_role',value:'user',domain:'localhost',path:'/'}]);
   await page.goto(`${url}/admin/library`,{waitUntil:'networkidle'});assert.ok(!new URL(page.url()).pathname.startsWith('/admin'));await context.close();
   const newContext=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'}),signupPage=await newContext.newPage();
   signupPage.on('pageerror',error=>report.pageErrors.push({product,message:error.message}));
-  await signupPage.goto(`${url}/signup`,{waitUntil:'networkidle'});await signupPage.getByLabel(/Display name/i).fill('New community member');await signupPage.getByLabel('Email',{exact:true}).fill('new-member@example.invalid');await signupPage.getByLabel(/^Password/).fill(credentials.password);await signupPage.getByRole('button',{name:/create account/i}).click();await signupPage.waitForURL(/\/setup$/);await signupPage.getByRole('heading',{name:'Make yourself at home.'}).waitFor();await newContext.close();report.journeys.push(`${product}: mobile signup routes into guided setup`);
+  await signupPage.goto(`${url}/signup`,{waitUntil:'networkidle'});await signupPage.getByLabel(/Display name/i).fill('New community member');await signupPage.getByLabel('Email',{exact:true}).fill('new-member@example.invalid');await signupPage.getByLabel(/^Password/).fill(credentials.password);await signupPage.getByRole('button',{name:/^(create account|sign up)$/i}).click();await signupPage.waitForURL(/\/setup$/);await signupPage.getByRole('heading',{name:'Make yourself at home.'}).waitFor();await newContext.close();report.journeys.push(`${product}: mobile signup routes into guided setup`);
  }
  assert.deepEqual(report.pageErrors,[],'Browser page errors must be resolved');
  console.log(`Passed ${report.journeys.length} browser journeys; ${report.screenshots.length} screenshots; no page errors.`);
