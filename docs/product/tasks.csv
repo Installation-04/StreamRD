@@ -21,4 +21,4 @@ Automatic enrichment and field ownership,Done,P0,v0.5.0,Lead,Durable jobs locks 
 Private account import and onboarding scan,Done,P0,v0.5.0,Scanner backend and UI,Read-only paged imports preserve privacy and skip duplicates
 Personal library playback and metadata correction,Done,P0,v0.5.0,Product design and lead,Owner-only views explicit stream resolution and video choice
 Metadata and account migrations,Done,P0,v0.5.0,Storage and lead,Preserved old data immutable released checkpoints and owner cascades
-Production browser and publication acceptance,In progress,P0,v0.5.0,Lead,Four builds upgrade restore real-app fixture journeys screenshots and CI pass
+Production browser and publication acceptance,Local acceptance passed,P0,v0.5.0,Lead,Four builds upgrade restore real-app fixture journeys screenshots and CI pass

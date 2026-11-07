@@ -1,6 +1,6 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.5.0 Automatic Libraries — production acceptance in progress
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.5.0 Automatic Libraries — local acceptance complete
 
 This is the source of truth for the project tracker. Import the Markdown and CSV
 bundle into Notion when a workspace connection is available. **No live Notion page
@@ -17,12 +17,12 @@ stays optional and uses real mounted files.
 
 | Workstream | Owner | State | Acceptance |
 |---|---|---|---|
-| TMDB / OMDb metadata services | Provider engineering | Implemented | Server-only keys, normalized details, bounded caches/requests and safe failures |
-| Automatic enrichment and field ownership | Lead | Implemented | Durable queue, confident matching, locks and stale-result guards |
-| Personal debrid library and onboarding scan | Scanner backend + UI | Implemented | Owner-only imports, paged read-only scans, cancellation and duplicate-free rescans |
-| Private playback and matching UI | Product design + lead | Implemented | Explicit temporary streams, video choices, owner-scoped metadata corrections |
-| Additive migrations and recovery | Storage + lead | Implemented | Existing rows preserved, released checkpoints immutable, private metadata cascades |
-| Production / browser / release acceptance | Lead | In progress | All builds, upgrade/restore checks, browser journeys, screenshots and CI pass |
+| TMDB / OMDb metadata services | Provider engineering | Delivered | Server-only keys, normalized details, bounded caches/requests and safe failures |
+| Automatic enrichment and field ownership | Lead | Delivered | Durable queue, confident matching, locks and stale-result guards |
+| Personal debrid library and onboarding scan | Scanner backend + UI | Delivered | Owner-only imports, paged read-only scans, cancellation and duplicate-free rescans |
+| Private playback and matching UI | Product design + lead | Delivered | Explicit temporary streams, video choices, owner-scoped metadata corrections |
+| Additive migrations and recovery | Storage + lead | Delivered | Existing rows preserved, released checkpoints immutable, private metadata cascades |
+| Production / browser / release acceptance | Lead | Local checks passed; CI/tag gates publication | All builds, upgrade/restore checks, browser journeys, screenshots and CI pass |
 
 ## Current delivery board
 
@@ -61,6 +61,14 @@ stays optional and uses real mounted files.
   CI pipelines; its tag and Release workflow record publication evidence.
   [Release](https://github.com/Installation-04/StreamRD/releases/tag/v0.4.0) ·
   [Validation](https://github.com/Installation-04/StreamRD/blob/v0.4.0/docs/safe-upgrades-validation.md)
+
+- **v0.5.0 Automatic Libraries:** TMDB/OMDb enrichment, field ownership and locks,
+  private onboarding account imports, durable paged scans and explicit owner
+  playback. Local acceptance includes 550 backend cases, four production builds,
+  both upgrade/restore checks, 20 browser journeys and 36 screenshots. The exact
+  release commit must pass both CI pipelines before its annotated version tag.
+  [Release](https://github.com/Installation-04/StreamRD/releases/tag/v0.5.0) ·
+  [Validation](https://github.com/Installation-04/StreamRD/blob/v0.5.0/docs/automatic-libraries-validation.md)
 
 ## Product principles
 

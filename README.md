@@ -171,7 +171,7 @@ clients, own port (61337) — see `phosphor/README.md` to get started.
 
 ## Screenshots and external media libraries
 
-![Application screenshot](docs/screenshots/v0.4.0/streamrd-discover.png)
+![Application screenshot](docs/screenshots/v0.5.0/streamrd-discover.png)
 
 See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
 Optional mounted-file symlink export for **Plex and Jellyfin** is available under
