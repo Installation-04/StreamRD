@@ -69,7 +69,7 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   }
   await page.goto(`${url}/admin/library`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Fix metadata match for Big Buck Bunny', exact: true }).click();
-  await page.getByLabel('Provider', { exact: true }).selectOption('omdb');
+  await page.getByRole('combobox', { name: /^Provider/ }).selectOption('omdb');
   await page.getByRole('button', { name: 'Search metadata', exact: true }).click();
   await page.getByRole('button', { name: 'Preview Big Buck Bunny (2008)', exact: true }).click();
   await page.getByRole('region', { name: 'Metadata preview' }).waitFor();
@@ -96,8 +96,12 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   const privateTitle = imports.items.find(item => item.name === 'Sintel'); assert.ok(privateTitle);
   await poll(() => call(api, `/api/account/library/${privateTitle.id}`, null, admin.token), result => result.item.metadata?.imdbId === 'tt1727587', 'imported title metadata');
   const globalActivity = await call(api, '/api/admin/metadata/records', null, admin.token); assert.ok(globalActivity.records.every(record => record.targetType !== 'account'));
+  execFileSync('docker', ['exec', backend, 'node', '-e', 'require("node:fs").writeFileSync("/app/data/metadata-qa-override.json",JSON.stringify({rating:8.1,delayMs:2000}),{mode:0o600})']);
+  await call(api, `/api/account/library/${privateTitle.id}/metadata/refresh`, {}, admin.token);
   await page.goto(`${url}/library`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'My library.', exact: true }).waitFor(); await page.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Open Sintel', exact: true }).getByText('★ 8.1', { exact: false }).waitFor();
+  execFileSync('docker', ['exec', backend, 'node', '-e', 'require("node:fs").unlinkSync("/app/data/metadata-qa-override.json")']);
   await noOverflow('private gallery desktop'); await shot('account-library');
   await page.setViewportSize({ width: 390, height: 844 }); await noOverflow('private gallery mobile'); await shot('account-library-mobile'); await page.setViewportSize({ width: 1440, height: 1050 });
   await page.getByRole('searchbox', { name: 'Search my library', exact: true }).fill('Sintel'); await page.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();

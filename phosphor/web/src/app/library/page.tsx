@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { ACCOUNT_PROVIDER_NAMES, AccountLibraryPage, AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
+import { useAccountMetadataRefresh } from "@/lib/useAccountMetadataRefresh";
 import AccountScanPanel from "@/components/AccountScanPanel";
 import styles from "./library.module.css";
 
@@ -27,6 +28,7 @@ export default function AccountLibraryPageView() {
   }, [query, type]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; request.current?.abort(); }; }, []);
   useEffect(() => { if (!authLoading && !user) router.replace("/login"); if (!user) return; const timer = setTimeout(() => void load(), 250); return () => { clearTimeout(timer); request.current?.abort(); }; }, [user, authLoading, router, load]);
+  useAccountMetadataRefresh(items, setItems, Boolean(user) && !authLoading);
   if (authLoading || !user) return <main className={styles.page}><p role="status">Checking your account…</p></main>;
   return <main className={styles.page}>
     <header className={styles.header}><div><p className={styles.eyebrow}>ALREADY IN YOUR ACCOUNT. READY TO DISCOVER.</p><h1>My library<span>.</span></h1><p>Your debrid accounts, together in one private collection. Artwork and details appear as metadata is matched.</p></div><div className={styles.headerActions}><Link className="btn btn-secondary" href="/account/debrid">Connections</Link><button type="button" className="btn" aria-expanded={scanOpen} aria-controls="library-scans" onClick={() => setScanOpen(open => !open)}>{scanOpen ? "Hide account scans" : "Scan my accounts"}</button></div></header>
@@ -38,7 +40,7 @@ export default function AccountLibraryPageView() {
     <section className={styles.grid} aria-label="Private account library" aria-busy={loading}>{items.map(item => {
       const name = accountMediaName(item), poster = safeMediaUrl(item.metadata?.posterUrl), ready = item.phase === "finished";
       return <Link key={item.id} href={`/library/${encodeURIComponent(item.id)}`} className={styles.card} aria-label={`Open ${name}`}>
-        <div className={`${styles.poster} ${styles[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={styles.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "YOUR COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} />}<span className={styles.provider}>{ACCOUNT_PROVIDER_NAMES[item.provider] ?? "Debrid"}</span><span className={`${styles.readiness} ${ready ? styles.ready : ""}`}>{ready ? "In your account" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span><span className={styles.open}><span aria-hidden="true">↗</span> View title</span></div>
+        <div className={`${styles.poster} ${styles[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={styles.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "YOUR COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} onLoad={event => { event.currentTarget.style.display = ""; }} />}<span className={styles.provider}>{ACCOUNT_PROVIDER_NAMES[item.provider] ?? "Debrid"}</span><span className={`${styles.readiness} ${ready ? styles.ready : ""}`}>{ready ? "In your account" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span><span className={styles.open}><span aria-hidden="true">↗</span> View title</span></div>
         <div className={styles.cardInfo}><h2>{name}</h2><p>{item.year ?? item.metadata?.year ?? "Year unknown"}<span>·</span>{item.type === "series" ? "Series" : "Movie"}{item.metadata?.rating != null && <><span>·</span>★ {item.metadata.rating.toFixed(1)}</>}</p></div>
       </Link>;
     })}</section>

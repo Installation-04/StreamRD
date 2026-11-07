@@ -42,6 +42,9 @@ globalThis.fetch = async function(input, init) {
     return respond({ error: "Disposable fixture refuses any unplanned provider operation" }, 405);
   }
   if (!["api.themoviedb.org", "www.omdbapi.com"].includes(url.hostname)) return originalFetch(input, init);
+  let override = {};
+  try { override = JSON.parse(fs.readFileSync("/app/data/metadata-qa-override.json", "utf8")); } catch {}
+  if (Number.isFinite(override.delayMs)) await new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(2000, override.delayMs))));
   fs.appendFileSync("/app/data/metadata-provider-requests.jsonl", JSON.stringify({ provider: url.hostname, path: url.pathname }) + "\n", { mode: 0o600 });
   if (url.hostname === "api.themoviedb.org") {
     if (new Headers(init?.headers).get("Authorization") !== "Bearer metadata-fixture-only") return respond({ success: false, status_code: 7 }, 401);
@@ -53,7 +56,7 @@ globalThis.fetch = async function(input, init) {
     const external = /^\/3\/find\/(tt\d+)$/.exec(url.pathname);
     if (external) return respond({ movie_results: titles.filter(title => title.imdb === external[1]).map(tmdb), tv_results: [] });
     const detail = /^\/3\/movie\/(\d+)$/.exec(url.pathname), title = detail && titles.find(item => item.id === Number(detail[1]));
-    return title ? respond(tmdb(title)) : respond({ success: false, status_code: 34 }, 404);
+    return title ? respond({ ...tmdb(title), ...(typeof override.rating === "number" ? { vote_average: override.rating } : {}) }) : respond({ success: false, status_code: 34 }, 404);
   }
   if (url.searchParams.get("apikey") !== "metadata-fixture-only") return respond({ Response: "False", Error: "Invalid API key!" });
   const id = url.searchParams.get("i");
