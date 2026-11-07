@@ -13,7 +13,8 @@ users to bring their own debrid accounts. The v0.6.0 work implements
 email-bound invitations, signup policy, administrator session revocation, named
 libraries, per-user grants and owner-account playback. Both complete backend suites
 passed locally: **642 tests** (350 StreamRD, 292 Phosphor). Four production images
-and both disposable upgrade/backup/restore smoke checks passed. Browser acceptance and both CI pipelines gate the exact annotated release tag.
+and both disposable upgrade/backup/restore smoke checks passed. The final production browser run passed **26 journeys with 50 screenshots and no
+page errors**. Both CI pipelines gate the exact annotated release tag.
 
 Private libraries stay private unless the source administrator deliberately shares
 present/future imports by type. Plex Home PINs, managed children, parental controls,

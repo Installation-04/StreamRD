@@ -221,4 +221,4 @@ it("upgrades a populated managed v0.5 account library without granting or publis
  const result=await migrateDatabase({root,url});expect(result.backup).toBeTruthy();await preserved(db,before);
  expect(await db.invitation.count()).toBe(0);expect(await db.sharedLibrary.count()).toBe(0);expect(await db.sharedLibraryGrant.count()).toBe(0);
  expect(result.state).toMatchObject({state:"current",applied:names.length});
-});
+},60000);

@@ -1,8 +1,9 @@
 # StreamRD and Phosphor wiki
 
-This repository contains two self-hosted apps that connect your own debrid accounts
-to a web interface and device clients. They have separate servers, databases,
-accounts, and deployments. Neither service is a transcoding media server.
+This repository contains two self-hosted apps with private and explicitly shared
+debrid media libraries. Administrators connect their server account; invited web
+viewers can watch granted libraries without their own provider keys. The apps have
+separate servers, databases, accounts and deployments. Neither transcodes video.
 
 | Choose | Purpose | API / web ports |
 |---|---|---|

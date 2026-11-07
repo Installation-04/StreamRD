@@ -35,7 +35,8 @@ Plex Home PINs and parental restrictions remain future work.
 - **Multiservice debrid** — Real-Debrid, AllDebrid and Premiumize.me behind
   one pluggable `DebridProvider` interface, with per-user primary provider
   and automatic fallback ordering (per-user or global).
-- **Accounts & RBAC** — signup/login (JWT), `user`/`admin` roles, per-user
+- **Accounts & RBAC** — invitations and signup policies, JWT login, `user`/`admin`
+  roles, named-library grants, administrator session revocation, per-user
   debrid keys (stored server-side, returned only as redacted hints),
   Netflix-style viewing profiles (up to 5 per account).
 - **My List** — one-click favorite/unfavorite from any title card or the

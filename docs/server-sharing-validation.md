@@ -29,6 +29,10 @@ persistence, historical database adoption and mounted-library exports.
 
 ## Production browser acceptance
 
+**26 journeys passed, with 50 screenshots and no page errors** against the final
+0.6.0 images. The [report](screenshots/v0.6.0/validation.json) and
+[provenance](screenshots/v0.6.0/README.md) record exact scope.
+
 The reproducible runner exercises real production web/API images with fresh
 SQLite volumes. Invitation signup, sharing and playback use the same APIs as users.
 Provider transport is replaced only by an explicit test preload in disposable
