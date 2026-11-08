@@ -70,34 +70,24 @@ and **Shared libraries** shows a Continue watching row ([notes](docs/releases/v0
 
 ## Quick start
 
-Prerequisites: Docker (for the stack) or Node.js 22 (to run pieces directly).
-
-On Debian/Ubuntu, `infra/install.sh` does the rest of this section for you —
-installs Docker if needed, picks free ports, and starts the stack:
+Install Docker Engine with its Compose plugin, then run from the repository root:
 
 ```bash
-git clone https://github.com/installation-04/streamrd.git
-cd streamrd/infra && sudo ./install.sh   # sudo ./uninstall.sh to remove it
-```
-
-Or set it up by hand:
-
-```bash
-git clone https://github.com/installation-04/streamrd.git
-cd streamrd
-
-# Backend + web + HTTPS proxy
-cd infra
-cp ../server/.env.example .env    # set JWT_SECRET (openssl rand -hex 32)
+git clone https://github.com/Installation-04/StreamRD.git
+cd StreamRD
 docker compose up -d --build
-
-# Optional demo catalog
-docker compose exec backend node dist/prisma/seed.js
 ```
 
-Open http://localhost:3000, **sign up — the first account becomes admin**,
-add your debrid API keys under Account → Debrid services, then add titles in
-Admin → Catalog.
+This starts **one container** containing StreamRD, Phosphor, their APIs/workers and
+qBittorrent. Open StreamRD at http://localhost:8080 and Phosphor at
+http://localhost:8081. Sign up in each product you want to use; its first account
+becomes administrator. The data, downloads and generated secrets persist in one
+named volume.
+
+[Single-container setup and local downloads](docs/single-container.md) ·
+[Discover, request and track media](docs/media-requests.md).
+Existing split deployments and the legacy Debian/Ubuntu installer remain described
+in [deployment.md](docs/deployment.md); their volumes are not migrated automatically.
 
 Run pieces directly during development:
 

@@ -1,5 +1,19 @@
 # Deployment
 
+## Recommended: one container
+
+From the repository root, run `docker compose up -d --build`. The default
+`compose.yaml` starts one service with StreamRD on 8080, Phosphor on 8081 and
+qBittorrent internally. Both APIs, workers, databases and downloader are bundled.
+See the [single-container guide](single-container.md) for persistent data, generated
+credentials, local requests and HTTPS.
+
+## Existing split deployments
+
+The remaining instructions describe the legacy topology under `infra/`. Its
+installer and data volumes remain supported; do not replace an existing deployment
+with the new data layout without a backup and explicit migration.
+
 For existing installations, read the [production upgrade and backup guide](production-runtime.md)
 before replacing images: runtime containers now use UID 1000.
 

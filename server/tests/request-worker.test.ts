@@ -128,3 +128,12 @@ it("requires administrator access for local client settings and never fetches on
  expect((await request(app).get("/api/admin/request-settings")).status).toBe(401);expect((await request(app).get("/api/admin/request-settings").set(auth(member.token))).status).toBe(403);
  expect((await request(app).put("/api/admin/request-settings").set(auth(admin.token)).send({qbit:{enabled:true,baseUrl:"https://qbit.fixture.invalid",username:"operator",password:"fake-password"}})).status).toBe(200);expect(fetch).not.toHaveBeenCalled();
 });
+
+it("accepts qBittorrent v4 base64 session cookies without allowing cookie separators", async () => {
+ const { QbitClient } = await import("../src/requests/clients");
+ const sid="AbCdEfGhIjKlMnOpQrStUv+/12345678=";
+ const fetch=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(new Response("Ok.",{headers:{"set-cookie":`SID=${sid}; HttpOnly; path=/; SameSite=Strict`}})).mockResolvedValueOnce(new Response("[]"));
+ const client=new QbitClient({enabled:true,baseUrl:"http://127.0.0.1:8082",username:"admin",password:"fake-password-only",ownerId:"fixture"});
+ await client.login();expect(await client.info("1".repeat(40))).toBeNull();
+ expect(new Headers(fetch.mock.calls[1][1]?.headers).get("Cookie")).toBe(`SID=${sid}`);
+});

@@ -58,7 +58,7 @@ export class QbitClient {
   }
   async login(): Promise<void> {
     const response = await this.request("/api/v2/auth/login", new URLSearchParams({ username: this.settings.username, password: this.settings.password }));
-    const sid = /(?:^|[;,]\s*)SID=([A-Za-z0-9]{16,128})(?:;|$)/.exec(response.headers.get("set-cookie") ?? "")?.[1];
+    const sid = /(?:^|[;,]\s*)SID=([A-Za-z0-9+/_=-]{16,128})(?:;|$)/.exec(response.headers.get("set-cookie") ?? "")?.[1];
     if (response.text.trim() !== "Ok." || !sid) throw new RequestClientError("qBittorrent authentication failed. Check its saved credentials.");
     this.sid = sid;
   }

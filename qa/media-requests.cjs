@@ -44,7 +44,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
   async function requestMovie(name, id) {
     await viewer.goto(`${url}/discover`, { waitUntil: 'networkidle' });
     await viewer.getByLabel('Search movies or shows', { exact: true }).fill(name);
-    await viewer.getByLabel('Metadata source', { exact: true }).selectOption('tmdb');
+    await viewer.getByRole('combobox', { name: /^Metadata source/ }).selectOption('tmdb');
     await viewer.getByRole('link', { name: `View ${name}`, exact: true }).click();
     await viewer.getByRole('heading', { name, exact: true }).waitFor();
     const response = viewer.waitForResponse(value => value.url().endsWith('/api/requests') && value.request().method() === 'POST');
@@ -58,10 +58,10 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
     await page.goto(`${url}/admin/requests`, { waitUntil: 'networkidle' });
     const article = page.getByRole('article', { name: `Request for ${request.name}`, exact: true });
     await article.getByRole('button', { name: 'Review request', exact: true }).click();
-    await article.getByLabel('Download destination', { exact: true }).selectOption(destination);
+    await article.getByRole('combobox', { name: /^Download destination/ }).selectOption(destination);
     if (destination === 'cloud') {
-      await article.getByLabel('Cloud provider', { exact: true }).selectOption('realdebrid');
-      await article.getByLabel('Shared library after import', { exact: true }).selectOption(libraryId);
+      await article.getByRole('combobox', { name: /^Cloud provider/ }).selectOption('realdebrid');
+      await article.getByRole('combobox', { name: /^Shared library after import/ }).selectOption(libraryId);
     }
     await article.getByLabel('Approved release magnet', { exact: true }).fill(`magnet:?xt=urn:btih:${(destination === 'cloud' ? '1' : '2').repeat(40)}`);
     const response = page.waitForResponse(value => value.url().endsWith(`/api/admin/requests/${request.id}/approve`) && value.request().method() === 'POST');
@@ -94,7 +94,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
 
     await viewer.goto(`${url}/discover`, { waitUntil: 'networkidle' });
     await viewer.getByLabel('Search movies or shows', { exact: true }).fill('Elephants Dream');
-    await viewer.getByLabel('Metadata source', { exact: true }).selectOption('tmdb');
+    await viewer.getByRole('combobox', { name: /^Metadata source/ }).selectOption('tmdb');
     await viewer.getByRole('link', { name: 'View Elephants Dream', exact: true }).waitFor();
     await viewerNoOverflow('desktop request discovery'); await viewerShot('request-discovery');
     const cloud = await requestMovie('Elephants Dream', 1003);
@@ -145,8 +145,8 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
     report.journeys.push(`${product}: real qBittorrent client protocol reports 42 percent then downloaded locally without inventing library availability or duplicate submissions`);
 
     await viewer.goto(`${url}/discover`, { waitUntil: 'networkidle' });
-    await viewer.getByLabel('Media type', { exact: true }).selectOption('series');
-    await viewer.getByLabel('Metadata source', { exact: true }).selectOption('tmdb');
+    await viewer.getByRole('combobox', { name: /^Media type/ }).selectOption('series');
+    await viewer.getByRole('combobox', { name: /^Metadata source/ }).selectOption('tmdb');
     await viewer.getByLabel('Search movies or shows', { exact: true }).fill('Request Series Fixture');
     await viewer.getByRole('link', { name: 'View Request Series Fixture', exact: true }).click();
     const seriesResponse = viewer.waitForResponse(value => value.url().endsWith('/api/requests') && value.request().method() === 'POST');
