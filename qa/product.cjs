@@ -4,6 +4,7 @@ const path=require('node:path');
 const {chromium}=require('playwright');
 const automaticLibraries=require('./automatic-libraries.cjs');
 const serverSharing=require('./server-sharing.cjs');
+const mediaRequests=require('./media-requests.cjs');
 if(process.env.QA_DISPOSABLE_FIXTURES!=='1')throw Error('Use infra/run-browser-qa.sh: tests require fresh disposable services.');
 const products=(process.env.QA_PRODUCT==='both'?['streamrd','phosphor']:[process.env.QA_PRODUCT]);
 if(products.some(p=>!['streamrd','phosphor'].includes(p)))throw Error('Invalid QA product');
@@ -72,6 +73,7 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
   }
   await automaticLibraries({product,page,url,api,admin,member,call,shot,noOverflow,report});
   await serverSharing({product,page,url,api,admin,member,call,shot,noOverflow,report});
+  await mediaRequests({product,page,url,api,admin,member,call,shot,noOverflow,report});
   await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>document.activeElement!==document.body),'Keyboard focus must reach an interactive control');
   // A member session must not expose the filesystem administration interface.
   await context.clearCookies();await context.addCookies([{name:sr?'sr_token':'ph_token',value:member.token,domain:'localhost',path:'/'},{name:sr?'sr_role':'ph_role',value:'user',domain:'localhost',path:'/'}]);

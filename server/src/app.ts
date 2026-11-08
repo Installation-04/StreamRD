@@ -1,3 +1,5 @@
+import { discoveryRouter, requestsRouter, adminRequestsRouter } from "./routes/requests";
+import { requestSettingsRouter } from "./requests/config";
 import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
 import { accountLibraryRouter } from "./routes/account-library";
 import { accountMetadataRouter } from "./routes/accountMetadata";
@@ -33,6 +35,10 @@ export function createApp(): Express {
   app.use(attachSession);
 
   app.use("/api/health", healthRouter);
+  app.use("/api/discovery", discoveryRouter);
+  app.use("/api/requests", requestsRouter);
+  app.use("/api/admin/requests", adminRequestsRouter);
+  app.use("/api/admin/request-settings", requestSettingsRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/account/library/:id/metadata", accountMetadataRouter);
   app.use("/api/account/setup", setupRouter);

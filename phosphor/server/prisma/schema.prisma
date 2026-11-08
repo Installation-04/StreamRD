@@ -12,6 +12,8 @@ datasource db {
 }
 
 model User {
+  mediaRequests MediaRequest[]
+  requestFollows RequestFollower[]
   sharedLibraries SharedLibrary[]
   libraryGrants SharedLibraryGrant[]
   id             String         @id @default(cuid())
@@ -218,6 +220,7 @@ model Invitation {
 
 // An administrator deliberately publishes their imported account library to selected users.
 model SharedLibrary {
+  mediaRequests MediaRequest[]
   id String @id @default(cuid())
   name String
   sourceUserId String
@@ -238,4 +241,62 @@ model SharedLibraryGrant {
   createdAt DateTime @default(now())
   @@id([libraryId, userId])
   @@index([userId])
+}
+
+// A canonical title request is shared; followers remain private to their accounts.
+model MediaRequest {
+ id String @id @default(cuid())
+ canonicalKey String @unique
+ provider String
+ externalId String
+ mediaType String
+ name String
+ year Int?
+ metadata String
+ status String @default("requested")
+ destination String?
+ sourceUserId String?
+ sourceUser User? @relation(fields: [sourceUserId], references: [id], onDelete: SetNull)
+ sharedLibraryId String?
+ sharedLibrary SharedLibrary? @relation(fields: [sharedLibraryId], references: [id], onDelete: SetNull)
+ sourceUrl String?
+ providerId String?
+ providerRef String?
+ sourceFingerprint String?
+ progress Int?
+ downloadState String?
+ error String?
+ revision Int @default(0)
+ attempts Int @default(0)
+ leaseUntil DateTime?
+ nextPollAt DateTime @default(now())
+ startedAt DateTime?
+ downloadedAt DateTime?
+ availableAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ followers RequestFollower[]
+ events RequestEvent[]
+ @@index([status, nextPollAt])
+ @@index([sourceUserId])
+ @@index([sharedLibraryId])
+}
+model RequestFollower {
+ requestId String
+ request MediaRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+ userId String
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ createdAt DateTime @default(now())
+ @@id([requestId, userId])
+ @@index([userId, createdAt])
+}
+model RequestEvent {
+ id String @id @default(cuid())
+ requestId String
+ request MediaRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+ status String
+ message String
+ progress Int?
+ createdAt DateTime @default(now())
+ @@index([requestId, createdAt])
 }

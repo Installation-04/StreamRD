@@ -36,6 +36,7 @@ async function context(userId: string, provider: ProviderId, client: Client = db
   const creds: ProviderCredentials = { apiKey, baseUrl, timeoutMs: Number.isFinite(timeout) ? Math.max(1000, Math.min(timeout, 15000)) : 15000, deadline: Date.now() + 20000 };
   return { cfg, configured: Boolean(apiKey), enabled, active: cfg?.user.active === true, fingerprint, creds };
 }
+export const accountProviderContext = context;
 function current(scan: AccountScan, ctx: Awaited<ReturnType<typeof context>>) {
   return ctx.active && ctx.configured && ctx.enabled && ctx.fingerprint === scan.credentialFingerprint && (!scan.automatic || ctx.cfg?.autoImportLibrary === true);
 }
