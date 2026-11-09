@@ -22,6 +22,21 @@ qBittorrent Web UI binds to loopback port 8082 and is not published to the host.
 Plex, Jellyfin, debrid subscriptions, metadata providers and external indexers are
 integrations rather than software bundled in this image.
 
+## Prebuilt image
+
+Each version tag also publishes the image to this repository's GitHub Container
+Registry (`publish-image.yml`), for `linux/amd64` only:
+
+```bash
+docker pull ghcr.io/installation-04/streamrd:latest   # or a version such as :0.8.0
+```
+
+To run it instead of building, set `image:` to that name in
+`infra/docker-compose.single.yml`. The package is created private by default; make it
+public in the repository's package settings if you want anonymous pulls. Pin a
+version in production and use **Admin → System** or your updater to move forward.
+The image is built from the tagged source by GitHub Actions; it is not signed.
+
 ## Persistent data
 
 | Path inside the container | Purpose |

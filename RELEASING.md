@@ -35,6 +35,11 @@ tested separately.
    preserving pages owned by others. Inspect and commit the wiki update, then push
    its normal branch. Do not put application secrets or databases into the wiki.
 
+Pushing the tag also runs `publish-image.yml`, which publishes the all-in-one image to
+the repository's container registry (after checking the tag matches the package
+versions). Verify the package page and, if you want anonymous pulls, make it public.
+
 Release publication does not deploy a running installation or publish a cloud
 environment configuration. GitHub supplies source archives automatically; the
-workflow publishes documentation assets, not container images or native installers.
+release workflow publishes documentation assets, and `publish-image.yml` publishes the
+all-in-one image; native installers are not published.
