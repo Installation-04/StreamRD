@@ -1,11 +1,19 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.6.0 Server Sharing** follows v0.5.0 Automatic Libraries.
+`vMAJOR.MINOR.PATCH`. **v0.7.0 Shared Watch Progress** follows v0.6.0 Server Sharing.
 Native-client versions remain independent.
 
+- [v0.7.0 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.7.0)
+- [Release notes](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/releases/v0.7.0.md)
+- [Users and sharing guide](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/server-sharing.md)
+- [Screenshot provenance](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/screenshots/v0.7.0/README.md)
+
+Shared Watch Progress lets each viewer of a StreamRD shared library resume where they stopped and adds a Continue watching row. It adds one additive migration and stores no provider links or credentials. Validation covers 644 backend tests, four production builds, both upgrade/restore smoke checks and 27 browser journeys with 52 screenshots. Phosphor is unchanged.
+
+## Previous: v0.6.0 Server Sharing
+
 - [v0.6.0 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.6.0)
-- [Users and sharing guide](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing.md)
 - [Sharing validation](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing-validation.md)
 
 Server Sharing adds invitations, registration policy, administrator session

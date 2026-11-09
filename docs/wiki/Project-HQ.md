@@ -5,7 +5,7 @@ with workstreams, owners, acceptance criteria, completed milestones, and future 
 
 - [Task board CSV](https://github.com/Installation-04/StreamRD/blob/main/docs/product/tasks.csv)
 - [Notion import instructions](https://github.com/Installation-04/StreamRD/blob/main/docs/product/NOTION-IMPORT.md)
-- [Project tracker / Notion bundle](https://github.com/Installation-04/StreamRD/releases/download/v0.6.0/streamrd-v0.6.0-project-tracker.zip)
+- [Project tracker / Notion bundle](https://github.com/Installation-04/StreamRD/releases/download/v0.7.0/streamrd-v0.7.0-project-tracker.zip)
 - [Contribution guide](https://github.com/Installation-04/StreamRD/blob/main/CONTRIBUTING.md)
 
 A live Notion workspace is not connected to the development session, so no live
