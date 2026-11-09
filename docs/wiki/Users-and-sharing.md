@@ -18,8 +18,10 @@ The legacy curated catalog/search retain their existing server-wide rules.
 
 This is the core server sharing model, not full Plex Home parity. PIN-protected
 managed users, parental restrictions, device inventories, concurrency limits and
-watch progress for shared imports remain future work. Direct provider URLs already
+per-profile progress for shared imports remain future work. Each viewer account
+resumes shared titles where it stopped, and **Shared libraries** shows a Continue
+watching row (StreamRD; Phosphor does not yet record shared progress). Direct provider URLs already
 issued may work until the provider expires them.
 
-See the [full guide](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing.md)
+See the [full guide](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/server-sharing.md)
 for the v0.6.0 implementation and API contract.
