@@ -30,6 +30,9 @@ Read the [users and sharing guide](docs/server-sharing.md) for setup and permiss
 Named-library grants do not change the legacy curated catalog's access rules.
 Plex Home PINs and parental restrictions remain future work.
 
+v0.8.0 adds media discovery/requests, an all-in-one container, and update/backup/restore
+controls in Admin → System ([notes](docs/releases/v0.8.0.md)).
+
 v0.7.0 adds per-viewer watch progress for StreamRD shared libraries: playback resumes
 and **Shared libraries** shows a Continue watching row ([notes](docs/releases/v0.7.0.md)).
 

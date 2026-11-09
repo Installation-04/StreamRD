@@ -60,10 +60,35 @@ async function migrateDatabase({root=path.resolve(__dirname,".."),url=process.en
     process.umask(previousUmask);
   }
 }
+
+/** Apply a restore staged by the admin panel. Runs before the database is opened by any writer. */
+async function applyPendingRestore({root=path.resolve(__dirname,".."),url=process.env.DATABASE_URL}={}) {
+  const target=databaseFile(root,url), directory=path.dirname(target), marker=path.join(directory,"restore-pending.json");
+  if(!fs.existsSync(marker))return null;
+  let request;
+  try { request=JSON.parse(fs.readFileSync(marker,"utf8")); } catch { throw new UpgradeError("restore-request-invalid"); }
+  const name=request?.backup;
+  if(typeof name!=="string"||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.db$/.test(name))throw new UpgradeError("restore-request-invalid");
+  const source=path.join(directory,"backups",name);
+  if(!fs.existsSync(source)||!fs.lstatSync(source).isFile())throw new UpgradeError("restore-backup-missing");
+  const state=await inspectDatabase({root,url:`file:${source}`});
+  if(["failed","drifted"].includes(state.state)||state.state==="unavailable")throw new UpgradeError("restore-backup-invalid");
+  const staged=target+".restoring";
+  const previousUmask=process.umask(0o077);
+  try {
+    fs.copyFileSync(source,staged);
+    const descriptor=fs.openSync(staged,"r+");fs.fsyncSync(descriptor);fs.closeSync(descriptor);
+    for(const suffix of ["-wal","-shm","-journal"])fs.rmSync(target+suffix,{force:true});
+    fs.renameSync(staged,target);
+    fs.chmodSync(target,0o600);
+    fs.rmSync(marker,{force:true});
+  } finally { fs.rmSync(staged,{force:true});process.umask(previousUmask); }
+  return {restored:name};
+}
 function describeError(error) {
   const code=error?.code ?? "database-not-ready";
   const guidance=code==="upgrade-locked"?"Another upgrade owns the database lock. Do not delete it while its process is running; review a stale lock only after stopping all writers.":code==="baseline-history-incomplete"?"Baseline history is incomplete. Restore the verified pre-upgrade snapshot or review migration history with an administrator before resolving it.":code==="disabled-schema-not-ready"?"Schema application is disabled and this database is not ready. Prepare a backed-up upgrade explicitly before starting the app.":"The database was not prepared. Stop writers and review schema/history, permissions, and the verified pre-upgrade snapshot before retrying.";
   return `Database upgrade refused (${code}). ${guidance}`;
 }
-module.exports={migrateDatabase,describeError,UpgradeError};
+module.exports={migrateDatabase,applyPendingRestore,describeError,UpgradeError};
 if(require.main===module)migrateDatabase().then(result=>console.log(JSON.stringify(result))).catch(error=>{console.error(describeError(error));process.exitCode=1;});

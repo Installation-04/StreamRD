@@ -19,6 +19,11 @@ services:
       PHOSPHOR_ADMIN_EMAIL: ${PHOSPHOR_ADMIN_EMAIL:-}
       STREAMRD_JWT_SECRET: ${STREAMRD_JWT_SECRET:-}
       PHOSPHOR_JWT_SECRET: ${PHOSPHOR_JWT_SECRET:-}
+      # The restart policy above brings the service back, so the admin panel may restart it to apply a restore.
+      ADMIN_RESTART: "true"
+      # Optional one-click updates: a host-side updater endpoint (see docs/admin-guide.md).
+      UPDATE_WEBHOOK_URL: ${UPDATE_WEBHOOK_URL:-}
+      UPDATE_WEBHOOK_TOKEN: ${UPDATE_WEBHOOK_TOKEN:-}
       QBIT_USERNAME: ${QBIT_USERNAME:-admin}
       QBIT_PASSWORD: ${QBIT_PASSWORD:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
