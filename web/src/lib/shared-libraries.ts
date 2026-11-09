@@ -15,3 +15,4 @@ export interface ManagedSharedLibrary extends SharedLibrary {
 }
 export interface SharedLibraryItems { items: AccountMedia[]; total: number; nextCursor: string | null }
 export const libraryTypeLabel = (type: SharedLibrary["mediaType"]) => type === "movie" ? "Movies" : type === "series" ? "Series" : "Movies & series";
+export interface SharedContinueItem { libraryId: string; item: AccountMedia; positionSeconds: number; durationSeconds: number; updatedAt: string }

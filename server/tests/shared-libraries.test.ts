@@ -189,3 +189,52 @@ it.each(["list-key", "detail-key", "list-provider", "detail-provider"])("withhol
   expect(response.status).toBe(409); expect(response.body.item).toBeUndefined(); expect(response.body.items).toBeUndefined();
   expect(JSON.stringify(response.body)).not.toMatch(/Server Movie|private-film-ref|private-key|rotated-during/);
 });
+
+const keyed = { ...stream, mediaKey: "a".repeat(64) };
+async function started() {
+  const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member);
+  play.mockResolvedValue(keyed);
+  const begin = await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({});
+  expect(begin.status).toBe(200);
+  return { owner, member, film, shared, begin };
+}
+const progressUrl = (libraryId: string, itemId: string) => `/api/shared-libraries/${libraryId}/items/${itemId}/progress`;
+
+it("saves per-viewer resume positions for shared imports and exposes them in Continue Watching", async () => {
+  const { owner, member, film, shared, begin } = await started();
+  expect(begin.body).toMatchObject({ resumeSeconds: 0 }); expect(begin.body.mediaKey).toBeUndefined();
+  const put = (sequence: number, positionSeconds: number, token = member.token, sessionId = begin.body.progressSessionId) =>
+    request(app).put(progressUrl(shared.id, film.id)).set(auth(token)).send({ sessionId, sequence, positionSeconds, durationSeconds: 1000 });
+  expect((await put(1, 120)).body).toEqual({ accepted: true });
+  expect((await put(1, 500)).body).toEqual({ accepted: false, reason: "out-of-order" });
+  const list = await request(app).get("/api/shared-libraries/continue").set(auth(member.token));
+  expect(list.body.items).toHaveLength(1);
+  expect(list.body.items[0]).toMatchObject({ libraryId: shared.id, positionSeconds: 120, durationSeconds: 1000, item: { id: film.id } });
+  expect(JSON.stringify(list.body)).not.toMatch(/temporary-stream|server-only-private-key|private-film-ref/);
+  // The owner's own resume list and other viewers are unaffected.
+  expect((await request(app).get("/api/shared-libraries/continue").set(auth(owner.token))).body.items).toEqual([]);
+  const again = await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({});
+  expect(again.body.resumeSeconds).toBe(120); expect(again.body.durationSeconds).toBe(1000);
+  // The previous player session is superseded; the new one may continue.
+  expect((await put(2, 130)).status).toBe(404);
+  expect((await put(1, 400, member.token, again.body.progressSessionId)).body.accepted).toBe(true);
+  expect((await put(2, 990, member.token, again.body.progressSessionId)).body.accepted).toBe(true);
+  expect((await request(app).get("/api/shared-libraries/continue").set(auth(member.token))).body.items).toEqual([]);
+  expect((await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({})).body.resumeSeconds).toBe(0);
+});
+it("rejects invalid, foreign and revoked shared progress and hides revoked items", async () => {
+  const { owner, member, film, shared, begin } = await started(), other = await user();
+  const body = { sessionId: begin.body.progressSessionId, sequence: 1, positionSeconds: 10, durationSeconds: 100 };
+  expect((await request(app).put(progressUrl(shared.id, film.id)).send(body)).status).toBe(401);
+  expect((await request(app).put(progressUrl(shared.id, film.id)).set(auth(member.token)).send({ ...body, positionSeconds: 500 })).status).toBe(400);
+  expect((await request(app).put(progressUrl(shared.id, film.id)).set(auth(other.token)).send(body)).status).toBe(404);
+  expect((await request(app).put(progressUrl(shared.id, film.id)).set(auth(member.token)).send({ ...body, sessionId: "unknown" })).status).toBe(404);
+  expect((await request(app).put(progressUrl(shared.id, film.id)).set(auth(member.token)).send(body)).status).toBe(200);
+  await request(app).delete(`/api/admin/shared-libraries/${shared.id}/users/${member.id}`).set(auth(owner.token));
+  expect((await request(app).put(progressUrl(shared.id, film.id)).set(auth(member.token)).send({ ...body, sequence: 2 })).status).toBe(404);
+  expect((await request(app).get("/api/shared-libraries/continue").set(auth(member.token))).body.items).toEqual([]);
+  expect(await db.sharedLibraryProgress.count()).toBe(1);
+  await db.user.delete({ where: { id: member.id } });
+  expect(await db.sharedLibraryProgress.count()).toBe(0);
+});

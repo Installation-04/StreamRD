@@ -14,6 +14,7 @@ datasource db {
 model User {
   sharedLibraries SharedLibrary[]
   libraryGrants SharedLibraryGrant[]
+  sharedProgress SharedLibraryProgress[]
   id             String         @id @default(cuid())
   sessionVersion Int @default(0)
   revokedSessions RevokedSession[]
@@ -240,6 +241,7 @@ model AccountMedia {
   progress              Int @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  sharedProgress        SharedLibraryProgress[]
   @@unique([userId, provider, providerRef])
   @@index([userId, createdAt, id])
 }
@@ -305,4 +307,23 @@ model SharedLibraryGrant {
   createdAt DateTime @default(now())
   @@id([libraryId, userId])
   @@index([userId])
+}
+
+// A viewer's resume position for a shared import. Contains no provider links or credentials.
+model SharedLibraryProgress {
+  id              String @id @default(cuid())
+  userId          String
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            AccountMedia @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  mediaKey        String
+  positionSeconds Float @default(0)
+  durationSeconds Float @default(0)
+  completed       Boolean @default(false)
+  activeSessionId String
+  lastSequence    Int @default(-1)
+  updatedAt       DateTime @default(now())
+  @@unique([userId, itemId, mediaKey])
+  @@index([userId, completed, updatedAt, id])
+  @@index([itemId])
 }

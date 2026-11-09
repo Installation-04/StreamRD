@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { Router, Request, Response } from "express";
 import { z } from "zod";
@@ -103,6 +103,24 @@ sharedLibrariesRouter.get("/", action(async (req, res) => {
   const unchanged = new Set(fresh.filter(library => libraries.some(original => original.id === library.id && original.updatedAt.getTime() === library.updatedAt.getTime())).map(library => library.id));
   res.json({ libraries: views.filter(library => unchanged.has(library.id)) });
 }));
+sharedLibrariesRouter.get("/continue", action(async (req, res) => {
+  const { limit } = parse(z.object({ limit: z.coerce.number().int().min(1).max(20).default(12) }).strict(), req.query);
+  const userId = req.session!.sub;
+  const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
+  const rows = libraries.length ? await db.sharedLibraryProgress.findMany({ where: { userId, completed: false, positionSeconds: { gt: 0 } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }) : [];
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) if (!latest.has(row.itemId)) latest.set(row.itemId, row);
+  const pending = new Map(latest), items: Array<{ progress: (typeof rows)[number]; libraryId: string; media: Awaited<ReturnType<typeof accountMediaViews>>[number] }> = [];
+  for (const library of libraries) {
+    if (!pending.size) break;
+    const found = await db.accountMedia.findMany({ where: { id: { in: [...pending.keys()] }, AND: [await sharedMediaWhere(library)] } });
+    const views = await accountMediaViews(found);
+    found.forEach((media, index) => { items.push({ progress: pending.get(media.id)!, libraryId: library.id, media: views[index] }); pending.delete(media.id); });
+  }
+  await assertActiveSharedViewer(req.session!);
+  items.sort((a, b) => b.progress.updatedAt.getTime() - a.progress.updatedAt.getTime() || (a.progress.id < b.progress.id ? 1 : -1));
+  res.json({ items: items.slice(0, limit).map(({ progress, libraryId, media }) => ({ libraryId, item: media, positionSeconds: progress.positionSeconds, durationSeconds: progress.durationSeconds, updatedAt: progress.updatedAt.toISOString() })) });
+}));
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type } = parse(list, req.query);
@@ -140,7 +158,34 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
     const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary)] }, select: { id: true } });
     if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
   };
-  const result = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);
+  const { mediaKey, ...result } = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);
   await authorize();
-  res.json(result);
+  if (!result.stream || !mediaKey) { res.json(result); return; }
+  // Resume state belongs to the viewer; each play supersedes older player sessions.
+  const userId = req.session!.sub, progressSessionId = randomUUID();
+  const saved = await db.sharedLibraryProgress.upsert({
+    where: { userId_itemId_mediaKey: { userId, itemId, mediaKey } },
+    create: { userId, itemId, mediaKey, activeSessionId: progressSessionId },
+    update: { activeSessionId: progressSessionId, lastSequence: -1 },
+  });
+  res.json({ ...result, progressSessionId, resumeSeconds: saved.completed ? 0 : saved.positionSeconds, durationSeconds: saved.durationSeconds });
+}));
+const progressBody = z.object({
+  sessionId: z.string().min(1).max(200), sequence: z.number().int().min(0).max(2147483647),
+  positionSeconds: z.number().finite().min(0).max(604800), durationSeconds: z.number().finite().positive().max(604800),
+}).strict().refine(body => body.positionSeconds <= body.durationSeconds + 1);
+sharedLibrariesRouter.put("/:id/items/:itemId/progress", rateLimit({ windowMs: 60_000, max: 240 }), action(async (req, res) => {
+  const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId), body = parse(progressBody, req.body, "Invalid playback progress.");
+  const library = await assertSharedViewer(req.session!, libraryId);
+  const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(library)] }, select: { id: true } });
+  if (!item) throw new AccountLibraryError("Library item not found.", 404);
+  const positionSeconds = Math.min(body.positionSeconds, body.durationSeconds);
+  const updated = await db.sharedLibraryProgress.updateMany({
+    where: { userId: req.session!.sub, itemId, activeSessionId: body.sessionId, lastSequence: { lt: body.sequence } },
+    data: { positionSeconds, durationSeconds: body.durationSeconds, completed: positionSeconds >= body.durationSeconds * 0.95, lastSequence: body.sequence, updatedAt: new Date() },
+  });
+  if (updated.count) { res.json({ accepted: true }); return; }
+  const known = await db.sharedLibraryProgress.findFirst({ where: { userId: req.session!.sub, itemId, activeSessionId: body.sessionId }, select: { id: true } });
+  if (!known) throw new AccountLibraryError("Playback session not found or superseded.", 404);
+  res.json({ accepted: false, reason: "out-of-order" });
 }));
