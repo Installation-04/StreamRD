@@ -10,6 +10,8 @@ export interface ExistingAccountItem {
 export interface AccountPage { items: ExistingAccountItem[]; nextCursor: string | null; warning?: string }
 export interface AccountPlayResult {
   stream?: { provider: ProviderId; url: string; filename: string; filesize?: number; mimeType?: string };
+  /** Stable file identity (no credentials or links) used to resume playback. */
+  mediaKey?: string;
   selectionRequired?: boolean;
   files?: Array<{ token: string; name: string; size?: number }>;
   pending?: boolean;
@@ -263,5 +265,6 @@ export async function playAccountItem(provider: ProviderId, creds: ProviderCrede
     const data = await read(ctx, "/api/torrents/requestdl", { token: creds.apiKey, torrent_id: reference, file_id: file.id, redirect: "false" });
     stream = { url: data };
   }
-  return { stream: { provider, url: url(provider, stream.url), filename: name(stream.filename) || file.name.split(/[\/\\]/).pop() || "Video", ...(size(stream.filesize) === undefined && file.size === undefined ? {} : { filesize: size(stream.filesize) ?? file.size }), ...(typeof stream.mimeType === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(stream.mimeType) ? { mimeType: stream.mimeType } : {}) } };
+  const mediaKey = createHash("sha256").update(JSON.stringify(["account", provider, reference, file.id, file.name, file.size ?? null])).digest("hex");
+  return { mediaKey, stream: { provider, url: url(provider, stream.url), filename: name(stream.filename) || file.name.split(/[\/\\]/).pop() || "Video", ...(size(stream.filesize) === undefined && file.size === undefined ? {} : { filesize: size(stream.filesize) ?? file.size }), ...(typeof stream.mimeType === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(stream.mimeType) ? { mimeType: stream.mimeType } : {}) } };
 }

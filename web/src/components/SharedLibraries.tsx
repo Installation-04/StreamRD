@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
-import { SharedLibrary, SharedLibraryItems, libraryTypeLabel } from "@/lib/shared-libraries";
+import { SharedContinueItem, SharedLibrary, SharedLibraryItems, libraryTypeLabel } from "@/lib/shared-libraries";
 import styles from "./SharedLibraries.module.css";
 import gallery from "@/app/library/library.module.css";
 
@@ -14,6 +14,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
   const { user, loading: authLoading } = useAuth(), router = useRouter();
   const [libraries, setLibraries] = useState<SharedLibrary[]>([]), [items, setItems] = useState<AccountMedia[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [query, setQuery] = useState(""), [type, setType] = useState("all");
+  const [resume, setResume] = useState<SharedContinueItem[]>([]);
   const [total, setTotal] = useState(0), [cursor, setCursor] = useState<string | null>(null), [loadedMore, setLoadedMore] = useState(false);
   const request = useRef<AbortController | null>(null);
   const load = useCallback(async (next?: string) => {
@@ -22,6 +23,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
       const response = await api<{ libraries: SharedLibrary[] }>("/api/shared-libraries", { signal: controller.signal });
       if (controller.signal.aborted) return;
       setLibraries(response.libraries);
+      if (!libraryId) api<{ items: SharedContinueItem[] }>("/api/shared-libraries/continue", { signal: controller.signal }).then(next => { if (!controller.signal.aborted) setResume(next.items); }).catch(() => { if (!controller.signal.aborted) setResume([]); });
       if (libraryId) {
         if (!response.libraries.some(library => library.id === libraryId)) { setItems([]); setTotal(0); setCursor(null); throw new Error("This library is unavailable. Ask the server owner to check your access."); }
         const params = new URLSearchParams({ limit: "30" });
@@ -49,6 +51,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
     {loading && !libraries.length && <section className={styles.notice} role="status">Opening your server’s collections…</section>}
     {!libraryId && <>
       {!loading && !error && !libraries.length && <section className={styles.empty}><p className={styles.eyebrow}>YOUR SEAT IS SAVED</p><h2>No libraries shared yet.</h2><p>{user.role === "admin" ? "Create a shared library from your imported account collection, then choose who can watch." : "Your account is ready. Ask the server owner to give you access to a library; you don’t need to connect a provider."}</p>{user.role === "admin" && <Link className="btn" href="/admin/shared-libraries">Create a shared library</Link>}</section>}
+      {resume.length > 0 && <section className={styles.libraryGrid} aria-label="Continue watching" style={{ marginBottom: "2rem" }}>{resume.map(entry => { const name = accountMediaName(entry.item), percent = Math.max(1, Math.min(99, Math.round(entry.positionSeconds / Math.max(1, entry.durationSeconds) * 100))); return <Link key={entry.item.id} href={`/shared-libraries/${encodeURIComponent(entry.libraryId)}/${encodeURIComponent(entry.item.id)}`} className={styles.libraryTile} aria-label={`Continue watching ${name}`}><div className={styles.tileArt}><span className={styles.tileIcon} aria-hidden="true">▶</span><span>Pick up where you left off</span></div><div className={styles.tileCopy}><h2>{name}</h2><p><span>{percent}% watched</span><span>Resume ↗</span></p></div></Link>; })}</section>}
       <section className={styles.libraryGrid} aria-label="Libraries shared with you" aria-busy={loading}>{libraries.map(collection => <Link key={collection.id} href={`/shared-libraries/${encodeURIComponent(collection.id)}`} className={styles.libraryTile} aria-label={`Open library ${collection.name}`}><div className={styles.tileArt}><span className={styles.tileIcon} aria-hidden="true">{collection.mediaType === "series" ? "▤" : "◈"}</span><span>{libraryTypeLabel(collection.mediaType)}</span></div><div className={styles.tileCopy}><h2>{collection.name}</h2><p><span>{collection.itemCount} {collection.itemCount === 1 ? "title" : "titles"}</span><span>Explore collection ↗</span></p></div></Link>)}</section>
     </>}
     {libraryId && library && <>

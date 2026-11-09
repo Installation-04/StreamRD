@@ -19,7 +19,10 @@ the user can subsequently sign in again. Deactivation also prevents a new login.
 Users keep their own passwords and preferences. StreamRD additionally supports up
 to five viewing profiles per account and separate catalog playback progress.
 These profiles currently have no PIN gate or enforced maturity restrictions.
-Shared imported-media playback does not yet record separate watch progress.
+Shared imported-media playback records each viewer's own resume position (not
+per profile): the player resumes where that account stopped and **Shared libraries**
+shows a Continue watching row. Progress is stored by file, never includes provider
+links or credentials, and is removed with the account or the import.
 
 ## Choose how new accounts join
 
@@ -93,7 +96,7 @@ named-library filters as parental controls or a restriction on the legacy catalo
 
 Full Plex Home parity remains future work: managed child accounts, PIN-protected
 profile switching, enforced age/label restrictions, device/session inventories,
-stream concurrency limits and shared-library watch progress are not implemented.
+stream concurrency limits and per-profile shared-library progress are not implemented.
 Plex/Jellyfin mounted exports continue to use their own server permissions.
 
 ## API outline

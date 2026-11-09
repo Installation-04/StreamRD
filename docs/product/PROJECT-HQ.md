@@ -18,7 +18,8 @@ page errors**. Both CI pipelines gate the exact annotated release tag.
 
 Private libraries stay private unless the source administrator deliberately shares
 present/future imports by type. Plex Home PINs, managed children, parental controls,
-shared-import watch progress and legacy catalog ACLs remain future work; the
+legacy catalog ACLs remain future work (shared-import watch progress is
+implemented on the v0.7.0 development line); the
 [current guide](https://github.com/Installation-04/StreamRD/blob/v0.6.0/docs/server-sharing.md)
 states these limits. Released v0.5.0 tags and downloads remain unchanged.
 

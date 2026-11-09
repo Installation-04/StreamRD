@@ -492,3 +492,18 @@ Account registration now supports `open`, `invite` and `closed` modes, with
 one-use email-bound invitation tokens. Named server libraries use explicit
 per-user grants and server-side provider credentials. See the
 [complete endpoint contracts and access rules](server-sharing.md).
+
+## Shared-library watch progress
+
+All routes require an active session and current access to the library.
+
+- `POST /api/shared-libraries/:id/items/:itemId/play` — when a stream is returned it
+  also includes `progressSessionId`, `resumeSeconds` and `durationSeconds`. Each play
+  supersedes earlier player sessions for that viewer and file.
+- `PUT /api/shared-libraries/:id/items/:itemId/progress`
+  `{sessionId, sequence, positionSeconds, durationSeconds}` → `{accepted:true}` or
+  `{accepted:false, reason:"out-of-order"}`. Unknown/superseded sessions and
+  inaccessible items return 404; positions past the duration are rejected (400).
+  95% watched marks the file complete and resets the resume position.
+- `GET /api/shared-libraries/continue?limit=12` → `{items:[{libraryId,item,positionSeconds,durationSeconds,updatedAt}]}`
+  for incomplete, currently accessible items, newest first, one per item.

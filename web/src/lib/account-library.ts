@@ -18,6 +18,8 @@ export interface AccountPlayResult {
   stream?: { provider: AccountProvider; url: string; filename: string; filesize?: number; mimeType?: string };
   selectionRequired?: boolean; files?: Array<{ token: string; name: string; size?: number }>;
   pending?: boolean; progress?: number;
+  /** Shared-library plays only: resume support for the signed-in viewer. */
+  progressSessionId?: string; resumeSeconds?: number; durationSeconds?: number;
 }
 export function safeMediaUrl(value: string | null | undefined): string | null {
   try { const url = new URL(value ?? ""); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }

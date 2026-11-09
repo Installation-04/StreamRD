@@ -127,8 +127,29 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     assert.equal(await viewer.getByRole('button', { name: /readme\.nfo/ }).count(), 0);
     await viewer.getByRole('button', { name: /Sintel\.2010\.mp4/ }).click();
     await viewer.locator('video').waitFor();
-    await viewer.waitForFunction(() => { const video = document.querySelector('video'); return video && video.currentTime > 0; });
+    // Pause as soon as playback starts: the synthetic clip is one second long and must not finish.
+    // Pausing mid-clip must persist this viewer's position without exposing any stream data.
+    await viewer.waitForFunction(() => { const video = document.querySelector('video'); if (video && video.currentTime > 0 && !video.paused) { video.pause(); return true; } return false; }, null, { polling: 'raf' });
     await viewer.getByRole('button', { name: 'Close player', exact: true }).click();
+    // Watch progress is implemented for StreamRD shared libraries only; Phosphor keeps its v0.6.0 behavior.
+    if (product === 'streamrd') {
+    let resumed;
+    for (let attempt = 0; attempt < 20 && !resumed; attempt++) {
+      resumed = (await call(api, '/api/shared-libraries/continue', null, viewerToken)).items[0];
+      if (!resumed) await new Promise(done => setTimeout(done, 250));
+    }
+    assert.ok(resumed && resumed.positionSeconds > 0 && resumed.libraryId === libraryId && resumed.item.id === sintel.id, 'Paused playback should create a Continue watching entry');
+    assert.doesNotMatch(JSON.stringify(resumed), /example\.invalid|private/i, 'Continue watching must not expose provider links or references');
+    assert.equal((await call(api, '/api/shared-libraries/continue', null, admin.token)).items.length, 0, 'Progress is per viewer');
+    await viewer.goto(`${url}/shared-libraries`, { waitUntil: 'networkidle' });
+    await viewer.getByRole('link', { name: 'Continue watching Sintel', exact: true }).waitFor();
+    await viewerNoOverflow('desktop continue watching'); await viewerShot('shared-continue-watching');
+    await viewer.setViewportSize({ width: 390, height: 844 }); await viewerNoOverflow('mobile continue watching'); await viewerShot('shared-continue-watching-mobile'); await viewer.setViewportSize({ width: 1440, height: 1050 });
+    const again = await fetch(`http://127.0.0.1:${api}/api/shared-libraries/${libraryId}/items/${sintel.id}/play`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${viewerToken}` }, body: JSON.stringify({ fileToken: undefined }) });
+    const resumeBody = await again.json();
+    if (resumeBody.stream) assert.ok(resumeBody.resumeSeconds > 0, 'Playing again should resume at the saved position');
+    report.journeys.push(`${product}: shared-library watch progress, per-viewer Continue watching and resume`);
+    }
     report.journeys.push(`${product}: named server library grant, no-key onboarding, private-source isolation, file choice and synthetic-video playback`);
 
     const revokedResponse = page.waitForResponse(response => response.url().endsWith(`/api/admin/shared-libraries/${libraryId}/users/${viewerUser.id}`) && response.request().method() === 'DELETE');
