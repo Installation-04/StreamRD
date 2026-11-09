@@ -131,6 +131,8 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     // Pausing mid-clip must persist this viewer's position without exposing any stream data.
     await viewer.waitForFunction(() => { const video = document.querySelector('video'); if (video && video.currentTime > 0 && !video.paused) { video.pause(); return true; } return false; }, null, { polling: 'raf' });
     await viewer.getByRole('button', { name: 'Close player', exact: true }).click();
+    // Watch progress is implemented for StreamRD shared libraries only; Phosphor keeps its v0.6.0 behavior.
+    if (product === 'streamrd') {
     let resumed;
     for (let attempt = 0; attempt < 20 && !resumed; attempt++) {
       resumed = (await call(api, '/api/shared-libraries/continue', null, viewerToken)).items[0];
@@ -146,8 +148,9 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     const again = await fetch(`http://127.0.0.1:${api}/api/shared-libraries/${libraryId}/items/${sintel.id}/play`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${viewerToken}` }, body: JSON.stringify({ fileToken: undefined }) });
     const resumeBody = await again.json();
     if (resumeBody.stream) assert.ok(resumeBody.resumeSeconds > 0, 'Playing again should resume at the saved position');
-    report.journeys.push(`${product}: named server library grant, no-key onboarding, private-source isolation, file choice and synthetic-video playback`);
     report.journeys.push(`${product}: shared-library watch progress, per-viewer Continue watching and resume`);
+    }
+    report.journeys.push(`${product}: named server library grant, no-key onboarding, private-source isolation, file choice and synthetic-video playback`);
 
     const revokedResponse = page.waitForResponse(response => response.url().endsWith(`/api/admin/shared-libraries/${libraryId}/users/${viewerUser.id}`) && response.request().method() === 'DELETE');
     await library.getByRole('button', { name: `Remove access for ${viewerEmail}`, exact: true }).click();
