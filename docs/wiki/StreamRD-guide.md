@@ -6,7 +6,7 @@ Premiumize credentials; provider order and fallback are configurable.
 
 ## Browse and save
 
-Home shows Continue Watching, My List, recent titles, and catalog rows. The web
+Home shows Continue watching, New in your libraries, Popular on this server, Trending now, Popular movies and Popular TV shows (the last three are public lists), then My List and catalog rows. The web
 client loads compact, bounded pages and offers load-more controls. Use Search
 for a title, open its details, and use the heart button to add/remove My List.
 Favorites belong to the account and are shared across its viewing profiles.

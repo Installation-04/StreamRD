@@ -1,4 +1,6 @@
-# My library and account scans
+# Imports (My library) and account scans
+
+In the navigation this screen is **Imports** and is for administrators: they import the media that the server's libraries show. People who are invited to the server watch through **Library** and do not need to connect an account.
 
 Connect your own debrid account during onboarding and leave **Automatically scan
 existing torrents after connecting** enabled. **My library** imports existing
