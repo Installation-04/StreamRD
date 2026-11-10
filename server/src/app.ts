@@ -7,7 +7,7 @@ import { metadataRouter } from "./routes/metadata";
 import { systemRouter } from "./routes/system";
 import { setupRouter } from "./routes/setup";
 import { libraryRouter } from "./routes/library";
-import { errorHandler, requestId } from "./http";
+import { errorHandler, requestId, securityHeaders } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
 import { attachSession } from "./auth/middleware";
@@ -25,9 +25,10 @@ export function createApp(): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(requestId);
+  app.use(securityHeaders);
   app.use(
     cors({
-      origin: config.corsOrigins === "*" ? true : config.corsOrigins.split(","),
+      origin: config.corsOrigins === "*" ? true : config.corsOrigins.split(",").map(origin => origin.trim()).filter(Boolean),
       credentials: true,
       // Lets the browser read the file name when it downloads an export across origins.
       exposedHeaders: ["Content-Disposition"],

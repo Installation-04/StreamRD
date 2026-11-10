@@ -26,8 +26,10 @@ catalogRouter.use("/browse", browseRouter);
  * GET /api/catalog/rows — Netflix-style home rows: recently added,
  * movies, series, then one row per genre.
  */
+/** The home rows view shows the newest titles; the paged browse API reaches the rest. */
+const HOME_ROWS_MAX_TITLES = 2000;
 catalogRouter.get("/rows", asyncHandler(async (_req, res) => {
-  const titles = await db.title.findMany({ orderBy: { createdAt: "desc" } });
+  const titles = await db.title.findMany({ orderBy: { createdAt: "desc" }, take: HOME_ROWS_MAX_TITLES });
   const decoded = titles.map((t) => publicTitle(t));
   const byGenre = new Map<string, typeof decoded>();
   for (const title of decoded) {
