@@ -21,8 +21,7 @@ For upgrades, read [System and upgrades](https://github.com/Installation-04/Stre
 
 The version-controlled source of this wiki is
 [docs/wiki](https://github.com/Installation-04/StreamRD/tree/main/docs/wiki).
-The documented server/web release is **v0.9.0**. Native clients remain separate
-projects; this release does not provide newly built device binaries.
+The documented release is **v0.10.1**. The repository contains the two server/web products; the former native client apps were removed.
 
 - [Discover and request media](https://github.com/Installation-04/StreamRD/wiki/Media-requests): search TMDB/OMDb, request titles and track them.
 - [Plex and Jellyfin](https://github.com/Installation-04/StreamRD/wiki/Plex-and-Jellyfin): optional mounted-media symlink libraries.

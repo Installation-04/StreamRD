@@ -1,9 +1,7 @@
 # Releasing StreamRD and Phosphor
 
 The four server/web packages share a SemVer version and one annotated repository
-tag: `vMAJOR.MINOR.PATCH`. This release line covers both products. Native clients
-remain independently versioned; only advertise device binaries when built and
-tested separately.
+tag: `vMAJOR.MINOR.PATCH`. This release line covers both products.
 
 1. Update `version` in `package.json`, `package-lock.json`, and its root package
    entry in `server/`, `web/`, `phosphor/server/`, and `phosphor/web/`. Preserve

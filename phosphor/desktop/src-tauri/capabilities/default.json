@@ -1,7 +1,0 @@
-{
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main Phosphor window. Only core window/app/event permissions are granted; the wrapper does not use any filesystem, shell, or HTTP plugins.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
-}

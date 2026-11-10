@@ -76,7 +76,7 @@ Provider keys, indexer keys and the qBittorrent password are encrypted at rest s
 origin (the single container) the browser session lives in an HttpOnly, SameSite=Lax cookie that page
 scripts cannot read; the sign-in response then omits the token, and cookie-authenticated changes are
 rejected unless they come from the same site (`Sec-Fetch-Site`, `Origin` against `Host`, or an origin
-listed in `CORS_ORIGINS`). Bearer requests, mobile/TV clients and split installs on another origin keep
+listed in `CORS_ORIGINS`). Bearer requests (scripts and other API clients) and split installs on another origin keep
 the earlier behaviour: the token is returned in the body and a script-readable cookie. In that case an
 XSS bug could still read it. Business/provider logs need a separate redaction review.
 Expired revocations need retention cleanup. Production entrypoints, frozen installs,
