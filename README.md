@@ -121,6 +121,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 
 **Watch**
 - A streaming-style web UI in black and orange (dark, light or system theme), responsive, with up to five viewing profiles per account.
+- A full-page player with resume, Up next, keyboard shortcuts and a VLC/mpv hand-off for files a browser cannot play.
 - A Plex-style home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
 - My List and per-viewer resume across all libraries.
 - Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
@@ -180,8 +181,8 @@ flowchart LR
 ## 🗺 Where it is going
 
 StreamRD is becoming **one library managed by the administrator, like Plex**. Done so far: one Library page, libraries visible to
-everyone or chosen people, a Plex-style home page, viewing limits for a kids account, and invitation links that carry library
-access. Next: a dedicated player page. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
+everyone or chosen people, a Plex-style home page, viewing limits for a kids account, invitation links that carry library
+access, and a full-page player. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
 
 ## 📚 Documentation
 

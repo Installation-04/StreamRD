@@ -40,7 +40,7 @@ export function Nav() {
   const limited = Boolean(user && user.role !== "admin" && user.maxAge != null);
   const pathname = usePathname(), router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
-  if (pathname.startsWith("/watch/")) return null;
+  if (pathname.startsWith("/watch/") || pathname.startsWith("/play/")) return null;
   const link = (href: string, label: string, icon: IconName) => {
     const active = href === "/" ? pathname === "/" : pathname.startsWith(href.split("/").slice(0, 2).join("/"));
     return <Link href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon name={icon} size={17} /><span>{label}</span></Link>;

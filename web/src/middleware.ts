@@ -15,12 +15,12 @@ export function middleware(req: NextRequest) {
     if (!token) return NextResponse.redirect(new URL("/login", req.url));
     if (role !== "admin") return NextResponse.redirect(new URL("/", req.url));
   }
-  if ((pathname.startsWith("/discover") || pathname.startsWith("/requests") || pathname.startsWith("/shared-libraries") || pathname.startsWith("/account") || pathname.startsWith("/library")) && !token) {
+  if ((pathname.startsWith("/discover") || pathname.startsWith("/requests") || pathname.startsWith("/shared-libraries") || pathname.startsWith("/account") || pathname.startsWith("/library") || pathname.startsWith("/play")) && !token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/discover/:path*", "/requests/:path*", "/shared-libraries/:path*", "/admin/:path*", "/account/:path*", "/library/:path*"],
+  matcher: ["/discover/:path*", "/requests/:path*", "/shared-libraries/:path*", "/admin/:path*", "/account/:path*", "/library/:path*", "/play/:path*"],
 };
