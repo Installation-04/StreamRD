@@ -4,6 +4,15 @@ Where StreamRD and Phosphor go from here. The headline item is replacing today's
 with **one library, managed by the administrator, the way Plex does it**. Everything else is smaller and
 independent of it. Sizes are rough (S = days, M = a week or two, L = several weeks of focused work).
 
+## Status
+
+Shipped so far, as the visible half of this plan: **v0.11.0** one Library page and libraries visible to everyone or chosen people (Phase A,
+plus the Plex-style *Share* idea as an *Everyone* switch); **v0.12.0 and v0.13.0** a Plex-style home page with a featured carousel;
+**v0.14.0** viewing limits for a kids account (part of Phase C); **v0.15.0** invitations that carry library access (part of Phase C);
+**v0.16.0** a full-page player. Still ahead are the parts that change the data model underneath (Phases B, D and E below): a unified
+library model with one row per movie or episode, merging duplicates, and retiring the old catalogue, personal-library and request
+surfaces. These are deliberately left until they can be tested against a copy of real data.
+
 ## What exists today, and why it feels confusing
 
 | Concept today | What it actually is | Where users see it |

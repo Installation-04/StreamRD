@@ -36,6 +36,12 @@ The home page has Plex-style rows, from top to bottom: **Continue watching**, **
 - The banner at the top is a **carousel** of featured titles (your own matched titles first, then what is trending). Trailers are optional
   per viewer: nothing is loaded from YouTube until a viewer presses *Watch trailer* or ticks *Autoplay trailers*, and `HOME_TRAILERS=false` removes the option.
 
+## The player
+
+**Play from server** opens a full-page player (`/play/<library>/<title>`): black, with a title bar that fades while you watch, resume, a searchable
+chooser when a torrent holds several videos, **Up next** for the following file, fullscreen, and keyboard shortcuts (Space/K play-pause, J/L or
+arrows ±10 s, Up/Down volume, M mute, F fullscreen, N next, Esc back). Files a browser cannot play get the VLC/mpv hand-off help. Nothing is transcoded.
+
 ## Invitations that carry access
 
 When you invite someone (Admin → Users → Invite someone) you choose the **libraries** they will get and, optionally, a **viewing limit** to start
