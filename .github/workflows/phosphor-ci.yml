@@ -2,7 +2,7 @@ name: Phosphor CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, beta, dev]
     paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml", "infra/smoke-images.sh", "infra/run-browser-qa.sh", "qa/**"]
   pull_request:
     paths: ["phosphor/**", ".github/workflows/phosphor-ci.yml", "infra/smoke-images.sh", "infra/run-browser-qa.sh", "qa/**"]
