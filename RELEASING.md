@@ -28,13 +28,28 @@ Requirements: the workflow needs the repository's *Workflow permissions* to allo
 GitHub Actions bot. A tag pushed by a workflow does not trigger other workflows, which is why this one starts
 Release and Publish image itself. Pushing a tag by hand (steps 5 and 6 below) still works and starts them as before.
 
+## Updates must never cost anyone data
+
+Everyone updates the same way (Admin → System, `docker compose pull && docker compose up -d`, or the installer), so every release
+has to be safe to apply on top of any earlier supported version. These rules are enforced by tests that run on every pull request:
+
+- **Migrations only add.** A migration may create tables, columns and indexes. Dropping, renaming, deleting or truncating anything
+  fails the *keeps every migration additive* test unless the file carries a reviewed `-- destructive-ok: <reason>` line, and then the release notes must say so.
+- **Every earlier checkpoint upgrades.** The *upgrades from every earlier checkpoint* test builds a database at each point in the committed
+  migration chain, fills it with data, runs the real upgrade and requires a verified backup first and every existing row unchanged afterwards.
+  A new migration is covered automatically.
+- **New settings and columns default to the old behaviour**, so an update changes nothing until an administrator opts in.
+- **Never delete user data in code that runs at start-up.** Removing something (an item type, an old screen) is a separate, announced step with a backup, never part of an automatic upgrade.
+- **Release notes have an *Upgrading* section** that says what the upgrade does to the database and whether anything needs doing by hand (normally nothing).
+
+If a change cannot follow these rules, it does not ship as an ordinary release.
+
 ## Release checklist
 
 1. Update `version` in `package.json`, `package-lock.json`, and its root package
    entry in `server/`, `web/`, `phosphor/server/`, and `phosphor/web/`. Preserve
    dependency resolutions unless a dependency change is intentional.
-2. Write `docs/releases/vMAJOR.MINOR.PATCH.md` with behavior changes, upgrade
-   requirements, verification evidence, and limits. Update wiki sources and real
+2. Write `docs/releases/vMAJOR.MINOR.PATCH.md` with behavior changes, an *Upgrading* section (what happens to existing data, and that it is safe), verification evidence, and limits. Update wiki sources and real
    screenshots as needed; never include live credentials or private data.
 3. Run server tests/type checks and production builds for both products. Build all
    four Docker images and run both `infra/smoke-images.sh` checks. For filesystem
