@@ -1,0 +1,54 @@
+name: Auto release
+
+# Creates the version tag, then runs the Release and Publish image workflows for it, as soon as the
+# packages carry a version that has no tag yet and every check on that commit has passed. So the release
+# flow is: a pull request bumps the version and adds docs/releases/vX.Y.Z.md, you merge it, and the
+# release follows by itself. To release by hand, use "Run workflow" below. To switch the automatic path
+# off, set the repository variable AUTO_RELEASE to false.
+on:
+  workflow_run:
+    workflows: ["CI", "Phosphor CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only report what would be released"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # create the tag
+  actions: write  # start the Release and Publish image workflows for it
+  checks: read    # read the results of the commit's checks
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and publish release
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && vars.AUTO_RELEASE != 'false' &&
+       github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tag the release and start its workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          SELF_CHECK_NAME: Tag and publish release
+        run: bash infra/auto-release.sh

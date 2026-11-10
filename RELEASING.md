@@ -3,6 +3,33 @@
 The four server/web packages share a SemVer version and one annotated repository
 tag: `vMAJOR.MINOR.PATCH`. This release line covers both products.
 
+## Automatic releases
+
+Releases are created by the **Auto release** workflow (`.github/workflows/auto-release.yml`, logic in
+`infra/auto-release.sh`), so nobody has to push a tag:
+
+1. A pull request bumps `version` in the four packages (step 1 below) and adds `docs/releases/vX.Y.Z.md` (step 2).
+2. You merge it. When **every check** on the merge commit has passed (both CI workflows, the container
+   build and the browser journeys), the workflow creates the annotated tag `vX.Y.Z` on that commit and
+   starts the **Release** workflow (packages the documentation, publishes the GitHub Release with the notes)
+   and the **Publish image** workflow (builds and pushes `ghcr.io/<owner>/streamrd:X.Y.Z` and `:latest`).
+3. Nothing happens for a merge that does not change the version, or whose version is already tagged. If a
+   check is still running or has failed, nothing is released; the last workflow to finish tries again, and a failed
+   check means no release until it is fixed and the commit passes.
+
+To release by hand (for example after fixing a red check), open **Actions → Auto release → Run workflow**
+on `main`; tick *dry run* to see what it would do. A manual run fails visibly instead of waiting.
+To switch the automatic path off, set the repository variable `AUTO_RELEASE` to `false`
+(Settings → Secrets and variables → Actions → Variables). If the tag was created but a later step failed, run
+**Release** and **Publish image** from the Actions tab and choose the tag as the branch/tag to run on.
+
+Requirements: the workflow needs the repository's *Workflow permissions* to allow it to write
+(it declares `contents: write`, `actions: write`, `checks: read`), and a tag ruleset on `v*` must not block the
+GitHub Actions bot. A tag pushed by a workflow does not trigger other workflows, which is why this one starts
+Release and Publish image itself. Pushing a tag by hand (steps 5 and 6 below) still works and starts them as before.
+
+## Release checklist
+
 1. Update `version` in `package.json`, `package-lock.json`, and its root package
    entry in `server/`, `web/`, `phosphor/server/`, and `phosphor/web/`. Preserve
    dependency resolutions unless a dependency change is intentional.
