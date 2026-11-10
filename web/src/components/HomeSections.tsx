@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { ExternalCard, HomeData, LibraryCard } from "@/lib/home";
 import { SharedContinueItem } from "@/lib/shared-libraries";
+import HomeCarousel from "./HomeCarousel";
 import styles from "./HomeSections.module.css";
 
 type Tile = { key: string; href: string; name: string; sub: string; poster: string | null; kind: string; progress?: number };
@@ -31,18 +32,19 @@ function Row({ title, note, tiles, label }: { title: string; note?: string; tile
 }
 
 /** Plex-style rows: what the viewer can watch (continue, recently added, popular here) and what the world is watching (trending, popular). */
-export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: number) => void }) {
+export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: number, slides: number) => void }) {
   const [home, setHome] = useState<HomeData | null>(null), [resume, setResume] = useState<SharedContinueItem[]>([]);
   useEffect(() => {
     const controller = new AbortController();
-    api<HomeData>("/api/home", { signal: controller.signal }).then(data => { if (!controller.signal.aborted) { setHome(data); onLoaded?.(data.recentlyAdded.length); } })
-      .catch(() => { if (!controller.signal.aborted) onLoaded?.(0); });
+    api<HomeData>("/api/home", { signal: controller.signal }).then(data => { if (!controller.signal.aborted) { setHome(data); onLoaded?.(data.recentlyAdded.length, data.featured.length); } })
+      .catch(() => { if (!controller.signal.aborted) onLoaded?.(0, 0); });
     api<{ items: SharedContinueItem[] }>("/api/shared-libraries/continue?limit=12", { signal: controller.signal }).then(data => { if (!controller.signal.aborted) setResume(data.items); }).catch(() => {});
     return () => controller.abort();
   }, [onLoaded]);
   const continueTiles = resume.map((entry): Tile => ({ ...libraryTile({ libraryId: entry.libraryId, item: entry.item }), progress: entry.durationSeconds > 0 ? Math.max(2, Math.min(98, entry.positionSeconds / entry.durationSeconds * 100)) : undefined }));
   if (!home && !continueTiles.length) return null;
   return <div className={styles.sections}>
+    {home && <HomeCarousel slides={home.featured} trailersEnabled={home.trailersEnabled} />}
     <Row title="Continue watching" tiles={continueTiles} label="Resume" />
     <Row title="New in your libraries" note="Newest on this server" tiles={(home?.recentlyAdded ?? []).map(libraryTile)} label="Open" />
     <Row title="Popular on this server" note="Most watched in the last 30 days" tiles={(home?.popularHere ?? []).map(libraryTile)} label="Open" />
