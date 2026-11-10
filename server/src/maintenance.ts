@@ -5,6 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { db } from "./db";
 import { version } from "../package.json";
+import { PRODUCT } from "./product";
 
 const run = promisify(execFile);
 const MAX_MANUAL_BACKUPS = 20;
@@ -155,7 +156,7 @@ export async function checkForUpdates(force = false): Promise<UpdateInfo> {
   if (!UPDATE_SLUG.test(repository)) return { ...base, error: "UPDATE_REPOSITORY is not a valid owner/name." };
   if (!force && cache && Date.now() - cache.at < 30 * 60 * 1000) return fill(base, cache);
   try {
-    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "streamrd-update-check" }, signal: AbortSignal.timeout(6000) });
+    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, { headers: { Accept: "application/vnd.github+json", "User-Agent": `${PRODUCT.id}-update-check` }, signal: AbortSignal.timeout(6000) });
     if (!response.ok) throw new Error(String(response.status));
     const body = await response.json() as { tag_name?: unknown; published_at?: unknown; html_url?: unknown };
     if (typeof body.tag_name !== "string" || !parse(body.tag_name)) throw new Error("unrecognized-release");
@@ -176,11 +177,11 @@ export function requestUpdate(targetVersion: string): Promise<{ backup: BackupIn
     const info = await checkForUpdates(true);
     if (!info.latest || info.latest !== targetVersion || !info.updateAvailable) throw new MaintenanceError("That version is not the available update. Check for updates again.", 409);
     const backup = await snapshot("pre-update");
-    const headers: Record<string, string> = { "Content-Type": "application/json", "User-Agent": "streamrd-update" };
+    const headers: Record<string, string> = { "Content-Type": "application/json", "User-Agent": `${PRODUCT.id}-update` };
     if (process.env.UPDATE_WEBHOOK_TOKEN) headers.Authorization = `Bearer ${process.env.UPDATE_WEBHOOK_TOKEN}`;
     let status: number;
     try {
-      const response = await fetch(hook, { method: "POST", headers, body: JSON.stringify({ product: "streamrd", from: version, to: targetVersion }), signal: AbortSignal.timeout(15000), redirect: "error" });
+      const response = await fetch(hook, { method: "POST", headers, body: JSON.stringify({ product: PRODUCT.id, from: version, to: targetVersion }), signal: AbortSignal.timeout(15000), redirect: "error" });
       status = response.status;
       if (!response.ok) throw new Error(String(status));
     } catch { throw new MaintenanceError("The update hook did not accept the request. Your backup was kept; nothing was changed.", 502); }

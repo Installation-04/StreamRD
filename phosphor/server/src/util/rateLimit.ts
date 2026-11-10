@@ -11,16 +11,16 @@ export interface RateLimitOptions {
   message?: string;
 }
 
-// Above this many tracked IPs, sweep expired buckets before adding a new one
-// so a flood of one-off callers (or IP spoofing) can't grow this unbounded.
-const MAX_TRACKED_KEYS = 5000;
-
 /**
  * Minimal in-memory fixed-window rate limiter keyed by client IP. Enough to
  * blunt scripted brute-forcing on a single-process self-hosted deployment;
  * swap for a shared store (Redis) if you run multiple instances behind a
  * load balancer.
  */
+// Above this many tracked IPs, sweep expired buckets before adding a new one
+// so a flood of one-off callers (or IP spoofing) can't grow this unbounded.
+const MAX_TRACKED_KEYS = 5000;
+
 export function rateLimit({ windowMs, max, message }: RateLimitOptions) {
   const buckets = new Map<string, Bucket>();
   return (req: Request, res: Response, next: NextFunction) => {

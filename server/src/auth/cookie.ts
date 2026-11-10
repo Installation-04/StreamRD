@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { PRODUCT } from "../product";
 import { verifySession } from "./jwt";
 
 /**
@@ -7,7 +8,7 @@ import { verifySession } from "./jwt";
  * page scripts can never read it, and the response body omits it. Other clients (mobile, TV, split
  * installs that use another origin) keep receiving the token in the body and sending it as a Bearer header.
  */
-export const SESSION_COOKIE = "sr_token";
+export const SESSION_COOKIE = PRODUCT.sessionCookie;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 export const wantsCookieSession = (req: Request): boolean => req.get("x-session") === "cookie";
 function secure(req: Request): boolean {

@@ -5,7 +5,10 @@ import { db } from "../db";
 
 export const healthRouter = Router();
 
-/** GET /api/health — public liveness probe for reverse proxies, Docker healthchecks, and every client's "test connection" button. */
+/**
+ * GET /api/health — public liveness probe used by every client's
+ * "test connection" button, reverse proxies and Docker healthchecks.
+ */
 healthRouter.get("/", asyncHandler(async (_req, res) => {
   let dbOk = true;
   try {

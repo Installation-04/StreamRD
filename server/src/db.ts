@@ -1,10 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { decryptSecret, encryptSecret, isEncrypted } from "./crypto";
+import { PRODUCT } from "./product";
 
 /** Credential columns that are encrypted at rest, by model. Reads return plaintext; writes store ciphertext. */
-const SECRET_FIELDS: Record<string, string[]> = {
-  debridConfig: ["realDebridToken", "allDebridApiKey", "premiumizeApiKey"],
-};
+const SECRET_FIELDS = PRODUCT.secretFields;
 
 const base = new PrismaClient();
 type Row = Record<string, unknown>;

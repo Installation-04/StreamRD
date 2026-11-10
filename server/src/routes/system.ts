@@ -1,3 +1,4 @@
+import { PRODUCT } from "../product";
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireAdmin } from "../auth/middleware";
@@ -12,7 +13,7 @@ import {
 export const systemRouter = Router();
 systemRouter.use(requireAuth, requireAdmin);
 systemRouter.use((_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
-systemRouter.get("/", asyncHandler(async (_req, res) => { res.json(await systemStatus("streamrd")); }));
+systemRouter.get("/", asyncHandler(async (_req, res) => { res.json(await systemStatus(PRODUCT.id)); }));
 
 function guarded(run: (req: Request, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req, res) => {

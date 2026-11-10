@@ -16,6 +16,9 @@ jobs:
         working-directory: phosphor/server
     steps:
       - uses: actions/checkout@v4
+      - name: Shared files are identical in StreamRD and Phosphor
+        working-directory: .
+        run: node scripts/sync-shared.cjs --check
       - uses: actions/setup-node@v4
         with:
           node-version: 22
