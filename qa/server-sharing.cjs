@@ -196,6 +196,7 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     assert.equal(await responseStatus(`/api/shared-libraries/${libraryId}/items/${sintel.id}`, viewerToken), 200, 'Removing the limit applies at once');
     report.journeys.push(`${product}: invitation carrying libraries and a viewing limit, signup preview, administrator title rating, limited account view`);
 
+    await page.goto(`${url}/admin/shared-libraries`, { waitUntil: 'networkidle' });
     const revokedResponse = page.waitForResponse(response => response.url().endsWith(`/api/admin/shared-libraries/${libraryId}/users/${viewerUser.id}`) && response.request().method() === 'DELETE');
     await library.getByRole('button', { name: `Remove access for ${viewerEmail}`, exact: true }).click();
     assert.equal((await revokedResponse).status(), 200);
