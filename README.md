@@ -54,6 +54,14 @@ You decide who joins and what they can see, and nobody else needs a debrid subsc
     <td align="center"><img src="docs/assets/readme/people-access.png" alt="Admin page for members, invitations and registration policy"><br><sub><b>People &amp; access</b>: invitations, members, sign-out everywhere</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/assets/readme/invitations.png" alt="Creating an invitation that carries library access and a viewing limit"><br><sub><b>Invitations</b>: pick the libraries and a viewing limit; works over your LAN or Tailscale</sub></td>
+    <td align="center"><img src="docs/assets/readme/kids-library.png" alt="A library as a kids account sees it"><br><sub><b>Kids accounts</b>: an age-rating limit hides everything above it</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/viewing-limits.png" alt="Per-member viewing limit in People and access"><br><sub><b>Viewing limits</b>: set per member, applied at once</sub></td>
+    <td align="center"><img src="docs/assets/readme/player.png" alt="The full-page player"><br><sub><b>Player</b>: its own page with keyboard shortcuts</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/assets/readme/system.png" alt="Admin system page with updates and backups"><br><sub><b>System</b>: update checks, verified backups and restore</sub></td>
     <td align="center"><img src="docs/assets/readme/discover-mobile.png" alt="StreamRD on a phone" height="420"><br><sub><b>Phones and tablets</b>: responsive everywhere</sub></td>
   </tr>
