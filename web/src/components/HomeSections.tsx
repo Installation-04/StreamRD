@@ -44,7 +44,7 @@ export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: 
   if (!home && !continueTiles.length) return null;
   return <div className={styles.sections}>
     <Row title="Continue watching" tiles={continueTiles} label="Resume" />
-    <Row title="Recently added" note="Newest on this server" tiles={(home?.recentlyAdded ?? []).map(libraryTile)} label="Open" />
+    <Row title="New in your libraries" note="Newest on this server" tiles={(home?.recentlyAdded ?? []).map(libraryTile)} label="Open" />
     <Row title="Popular on this server" note="Most watched in the last 30 days" tiles={(home?.popularHere ?? []).map(libraryTile)} label="Open" />
     <Row title="Trending now" note="Across movies and TV shows" tiles={(home?.trending ?? []).map(externalTile)} label="See" />
     <Row title="Popular movies" tiles={(home?.popularMovies ?? []).map(externalTile)} label="See" />
