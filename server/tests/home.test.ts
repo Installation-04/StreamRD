@@ -129,3 +129,16 @@ it("leads the banner with matched titles from the viewer's own libraries that ha
   expect(home.body.featured.filter((slide: { kind: string }) => slide.kind === "library")).toHaveLength(1);
   expect(home.body.featured.length).toBeLessThanOrEqual(6);
 });
+
+it("adds a My List row from the viewer's own list, and marks the other rows' titles that are on it", async () => {
+  const owner = await user("admin"), member = await user(), [film, show] = await imports(owner);
+  const created = await request(app).post("/api/admin/shared-libraries").set(auth(owner.token)).send({ name: "Everything", mediaType: "all" });
+  await request(app).post(`/api/admin/shared-libraries/${created.body.library.id}/users`).set(auth(owner.token)).send({ userId: member.id });
+  expect((await request(app).get("/api/home").set(auth(member.token))).body.myList).toEqual([]);
+  expect((await request(app).put(`/api/shared-libraries/${created.body.library.id}/items/${show.id}/favorite`).set(auth(member.token))).status).toBe(200);
+  const home = (await request(app).get("/api/home").set(auth(member.token))).body;
+  expect(home.myList).toHaveLength(1); expect(home.myList[0]).toMatchObject({ libraryId: created.body.library.id, item: { id: show.id, favorite: true } });
+  expect(home.recentlyAdded.find((row: { item: { id: string } }) => row.item.id === show.id).item.favorite).toBe(true);
+  expect(home.recentlyAdded.find((row: { item: { id: string } }) => row.item.id === film.id).item.favorite).toBe(false);
+  expect((await request(app).get("/api/home").set(auth(owner.token))).body.myList).toEqual([]); // each person's list is their own
+});

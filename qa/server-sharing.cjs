@@ -117,9 +117,18 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();
     await viewerNoOverflow('desktop shared library'); await viewerShot('shared-library');
     await viewer.setViewportSize({ width: 390, height: 844 }); await viewerNoOverflow('mobile shared library'); await viewerShot('shared-library-mobile'); await viewer.setViewportSize({ width: 1440, height: 1050 });
+    // My List: heart a title from the library grid, find it on the viewer's own list, and see that nobody else's list changes.
+    await viewer.getByRole('button', { name: 'Add Sintel to My List', exact: true }).click();
+    await viewer.getByRole('button', { name: 'Remove Sintel from My List', exact: true }).waitFor();
+    await viewer.goto(`${url}/my-list`, { waitUntil: 'networkidle' });
+    await viewer.getByRole('heading', { name: 'My List', exact: true }).waitFor(); await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();
+    await viewerNoOverflow('desktop my list'); await viewerShot('my-list');
+    assert.equal((await call(api, '/api/shared-libraries/favorites', null, admin.token)).items.length, 0, 'Each person has their own list');
+    await viewer.goto(`${url}/shared-libraries/${libraryId}`, { waitUntil: 'networkidle' });
+    await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();
     await viewer.getByRole('searchbox', { name: 'Search shared library', exact: true }).fill('Sintel');
     await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).click();
-    await viewer.getByRole('button', { name: 'Play from server', exact: true }).waitFor();
+    await viewer.getByRole('button', { name: 'Play from server', exact: true }).waitFor(); await viewer.getByRole('button', { name: 'On My List', exact: true }).waitFor();
     await viewerNoOverflow('desktop shared title'); await viewerShot('shared-title');
     await viewer.route('https://example.invalid/qa-account-video.mp4', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: fs.readFileSync(path.join(__dirname, 'fixtures/account-video.mp4')) }));
     await viewer.getByRole('button', { name: 'Play from server', exact: true }).click();

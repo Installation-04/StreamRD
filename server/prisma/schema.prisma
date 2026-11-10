@@ -16,6 +16,7 @@ model User {
   requestFollows RequestFollower[]
   sharedLibraries SharedLibrary[]
   libraryGrants SharedLibraryGrant[]
+  libraryFavorites LibraryFavorite[]
   sharedProgress SharedLibraryProgress[]
   id             String         @id @default(cuid())
   sessionVersion Int @default(0)
@@ -90,7 +91,7 @@ model Title {
   @@index([type, createdAt, id])
 }
 
-// "My List" — a user's saved titles, Netflix-style.
+// The retired catalogue's "My List" (kept, unused since v0.18.0).
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -259,6 +260,17 @@ model AccountMedia {
   @@index([userId, createdAt, id])
   @@index([userId, groupKey])
   @@index([health, healthCheckedAt])
+}
+
+// A viewer's own list of titles ("My List"). A title is its owner plus its group, so every version of it shares one entry.
+model LibraryFavorite {
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ownerId   String // the administrator whose import it is
+  groupKey  String // AccountMedia.groupKey: names the title across its versions
+  createdAt DateTime @default(now())
+  @@id([userId, ownerId, groupKey])
+  @@index([userId, createdAt])
 }
 
 // One recoverable read-only scan per account/provider. Cursor and identity are private.

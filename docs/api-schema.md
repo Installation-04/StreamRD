@@ -194,6 +194,30 @@ genres, cast, runtimeMinutes, rating/ratingSource, contentRating, imdbId/tmdbId,
 providerUrl and fetchedAt. Record views add status, revision, locks, attempts and
 sanitized error. Internal field-ownership bookkeeping is omitted.
 
+## Media servers (administrators only)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/admin/media-servers` | `{ manager: { available }, servers: { jellyfin, plex } }`; each server has `port`, `state` (`unknown` without the media manager, then `absent`, `pulling`, `starting`, `running`, `stopped`, `failed`), `error?` and `secretHint` (the last four characters of the saved token, never the token). |
+| PUT | `/api/admin/media-servers` | `{ plex?: { port?, secret? }, jellyfin?: { port?, secret? } }`; `secret` is a Plex token or Jellyfin API key (stored encrypted) and `null` clears it. |
+| POST | `/api/admin/media-servers/:server/launch` | `{ port?, claim? }` → 202 `{ state }`. `claim` is a Plex claim token, passed to the launch and never stored. 409 when the media manager is not installed. |
+| POST | `/api/admin/media-servers/:server/stop` | Stops the container started from here. |
+| DELETE | `/api/admin/media-servers/:server` | Removes it (its settings under `config/` are kept). |
+| GET | `/api/admin/media-servers/:server/logs?tail=100` | `{ deploy: [{ time, message }], container: [line] }`: what the helper did to start the server, then the server's own output (tail 1-200). Tokens are blanked. 409 without the media manager. |
+| POST | `/api/admin/media-servers/:server/test` | `{ reachable, accepted }`: whether the server answers and accepted the saved token. |
+| POST | `/api/admin/media-servers/:server/refresh` | Asks the server to rescan the libraries under `/library` → `{ refreshed }`. |
+
+`:server` is `jellyfin` or `plex`. Everything here answers 403 to non-administrators.
+## My List (any signed-in viewer)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/shared-libraries/favorites` | `{ items: [{ libraryId, item }] }`: the viewer's list, newest first, one entry per title (the version a library shows), only from libraries and within the viewing limit the viewer has now. |
+| PUT | `/api/shared-libraries/:id/items/:itemId/favorite` | Adds the title → `{ favorite: true }`; 404 if the item is not visible to the viewer; 409 when the list holds 500 titles. |
+| DELETE | `/api/shared-libraries/:id/items/:itemId/favorite` | Removes it → `{ favorite: false }`. |
+
+Library item views (a library's items, one item, and `GET /api/home` rows) carry `favorite: boolean`, and `GET /api/home` has a `myList` row (StreamRD). Entries name a title by owner and group, so every version of a title shares one entry.
+
 ## Link health (administrators only, v0.19.0)
 
 | Method | Path | Description |

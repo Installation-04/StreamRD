@@ -54,6 +54,10 @@ Release order: v0.17.0 (versions, released) → v0.18.0 (retire the catalogue an
    gives the same result users asked for (one card per title) without that risk. Per-episode rows are worth doing only together with a
    feature that needs them (for example per-episode watched marks across a pack).
 
+## My List (built on the libraries)
+
+The retired catalogue's favourites are replaced by a list on the libraries themselves. An entry (`LibraryFavorite`) names a title by its owner and its group, so all versions of a title share one heart and the list follows whichever version a library shows. It is per viewer, only returns titles in libraries the viewer may currently see and within their viewing limit (a title that stops being visible stays on the list but is not shown, and returns with access), holds up to 500 titles, and goes with the account. One additive table; nothing existing changes.
+
 ## Rules every step follows
 
 Migrations only add; nothing is dropped, renamed or deleted without a reviewed `-- destructive-ok:` reason; new settings default to the old

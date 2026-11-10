@@ -62,6 +62,17 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
   report.journeys.push(`${product}: mount browsing, reviewed movie/episode batch, real link status, repair and export search`);
   await page.getByRole('button',{name:'Remove export for Example Show',exact:true}).click();await page.getByRole('button',{name:'Remove export',exact:true}).click();await page.getByRole('status').filter({hasText:'Source media was kept'}).waitFor();assert.equal((await call(api,'/api/admin/library',null,admin.token)).entries.length,1);
   report.journeys.push(`${product}: explicit link removal`);
+  // Media server onboarding: tokens are saved (encrypted) from the page; launching needs the helper, which is not installed here.
+  await page.getByRole('region',{name:'Media servers',exact:true}).waitFor();await page.getByText('Launching from here needs the media manager.',{exact:true}).waitFor();
+  const plexCard=page.getByRole('article',{name:'Plex media server'});
+  await plexCard.getByLabel('Plex token',{exact:false}).fill('qa-plex-token-9876');await plexCard.getByLabel('Plex port',{exact:false}).fill('32410');await plexCard.getByRole('button',{name:'Save settings',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'Plex settings saved.'}).waitFor();
+  const mediaServers=await call(api,'/api/admin/media-servers',null,admin.token);assert.equal(mediaServers.servers.plex.port,32410);assert.equal(mediaServers.servers.plex.secretHint,'****9876');assert.equal(mediaServers.manager.available,false);assert.ok(!JSON.stringify(mediaServers).includes('qa-plex-token'));
+  assert.equal(await plexCard.getByRole('button',{name:'Launch Plex',exact:true}).isDisabled(),true);
+  assert.equal((await fetch(`http://127.0.0.1:${api}/api/admin/media-servers`,{headers:{Authorization:`Bearer ${member.token}`}})).status,403);
+  await noOverflow('desktop media servers');await shot('media-servers');
+  report.journeys.push(`${product}: media server onboarding, token saved encrypted, launch off without the helper`);
+
   await page.goto(`${url}${sr?'/':'/search'}`,{waitUntil:'networkidle'});
   if(sr){await page.getByRole('heading',{name:/^Welcome back/}).waitFor();await shot('discover');await page.getByRole('button',{name:/^Theme:/}).click();assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');await shot('discover-light');await page.getByRole('button',{name:/^Theme:/}).click();await page.getByRole('button',{name:/^Theme:/}).click();await page.setViewportSize({width:390,height:844});await noOverflow('mobile discover');await shot('discover-mobile');await page.setViewportSize({width:1440,height:1050});report.journeys.push('streamrd: home page, theme switch and mobile layout');for(const retired of ['/search','/title/x','/watch/x','/account/profiles','/admin/catalog']){const gone=await page.goto(`${url}${retired}`,{waitUntil:'networkidle'});assert.equal(gone.status(),404,`${retired} must be gone`);}await page.goto(`${url}/`,{waitUntil:'networkidle'});}
   else {

@@ -10,6 +10,7 @@ export interface HomeData {
   trailersEnabled: boolean;
   featured: Slide[];
   recentlyAdded: LibraryCard[];
+  myList?: LibraryCard[];
   popularHere: LibraryCard[];
   trending: ExternalCard[];
   popularMovies: ExternalCard[];

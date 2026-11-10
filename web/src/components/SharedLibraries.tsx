@@ -7,6 +7,7 @@ import { ApiError, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { SharedContinueItem, SharedLibrary, SharedLibraryItems, libraryTypeLabel } from "@/lib/shared-libraries";
+import LibraryCard from "@/components/LibraryCard";
 import styles from "./SharedLibraries.module.css";
 import gallery from "@/app/library/library.module.css";
 
@@ -59,8 +60,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
       {loading && !items.length && <div className={gallery.skeleton} role="status">Gathering this collection…</div>}
       {!loading && !items.length && !error && <section className={styles.empty}><h2>{query || type !== "all" ? "No titles match this view." : "This collection is getting started."}</h2><p>{query || type !== "all" ? "Try another title or clear your filters." : "Titles appear here as the server’s account library is imported. Check back soon."}</p>{(query || type !== "all") && <button type="button" className="btn btn-secondary" onClick={() => { setQuery(""); setType("all"); }}>Clear filters</button>}</section>}
       <section className={gallery.grid} aria-label="Shared library titles" aria-busy={loading}>{items.map(item => {
-        const name = accountMediaName(item), poster = safeMediaUrl(item.metadata?.posterUrl), ready = item.phase === "finished";
-        return <Link key={item.id} href={`/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}`} className={gallery.card} aria-label={`Open ${name}`}><div className={`${gallery.poster} ${gallery[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={gallery.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "SERVER COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} onLoad={event => { event.currentTarget.style.display = ""; }} />}<span className={gallery.provider}>SHARED BY YOUR SERVER</span><span className={`${gallery.readiness} ${ready && item.health !== "broken" ? gallery.ready : ""}`}>{item.health === "broken" ? "Link needs attention" : ready ? "Provider reports ready" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span><span className={gallery.open}><span aria-hidden="true">↗</span> View title</span></div><div className={gallery.cardInfo}><h2>{name}</h2><p>{item.year ?? item.metadata?.year ?? "Year unknown"}<span>·</span>{item.type === "series" ? "Series" : "Movie"}{item.metadata?.rating != null && <><span>·</span>★ {item.metadata.rating.toFixed(1)}</>}</p></div></Link>;
+        return <LibraryCard key={item.id} libraryId={libraryId} item={item} onFavorite={favorite => setItems(list => list.map(row => row.id === item.id ? { ...row, favorite } : row))} />;
       })}</section>
       {(cursor || loadedMore) && <div className={gallery.more}><p>Showing {items.length} loaded titles. This view keeps up to 200; search or Refresh libraries to return to the first page.</p>{cursor && <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load(cursor)}>{loading ? "Loading…" : "Load more titles"}</button>}</div>}
     </>}
