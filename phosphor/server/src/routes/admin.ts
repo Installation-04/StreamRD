@@ -226,9 +226,10 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
   } catch {
     dbStatus = "down";
   }
-  const [userCount, indexerCount, stats, providerSettings, serverSettings] = await Promise.all([
+  const [userCount, indexerCount, brokenLinks, stats, providerSettings, serverSettings] = await Promise.all([
     db.user.count(),
     db.indexerConfig.count({ where: { enabled: true } }),
+    db.accountMedia.count({ where: { phase: "finished", health: "broken", user: { role: "admin" } } }),
     downloadStats(),
     getProviderSettings(),
     getServerSettings(),
@@ -236,6 +237,7 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
   res.json({
     db: dbStatus,
     users: userCount,
+    brokenLinks,
     enabledIndexers: indexerCount,
     downloads: stats,
     counters: snapshotCounters(),

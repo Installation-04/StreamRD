@@ -4,6 +4,7 @@ import { db } from "./db";
 import { DEFAULT_SERVER_SETTINGS } from "./settings";
 import { classifyTitle } from "./media-filter";
 import { refreshPrimaries, titleKey } from "./versions";
+import { recordLinkResult } from "./link-state";
 import { PROVIDER_IDS, ProviderCredentials, ProviderError, ProviderId } from "./providers/types";
 import { ExistingAccountItem, playAccountItem, scanAccountPage } from "./providers/account-library";
 
@@ -191,6 +192,7 @@ export async function playImportedMedia(userId: string, id: string, fileToken?: 
   try { result = await playAccountItem(provider, ctx.creds, item.providerRef, fileToken); }
   catch (error) {
     const status = error instanceof ProviderError ? error.statusCode : undefined;
+    if (status === 404 || status === 410 || status === 422) await recordLinkResult(item.id, { state: "gone", message: "The provider no longer serves this item" }).catch(() => undefined);
     const recoverable: Record<number, string> = { 400: "Choose an available video file from this import.", 404: "This item is no longer available in the provider account. Rescan your private library.", 409: "Video choices changed. Open Play again and choose an available file.", 422: "This item has no selected playable video. Review it in your provider dashboard." };
     throw new AccountLibraryError(status && recoverable[status] ? recoverable[status] : "Playback could not be resolved. Check the provider connection and try again.", status && recoverable[status] ? status : 503);
   }
@@ -198,6 +200,6 @@ export async function playImportedMedia(userId: string, id: string, fileToken?: 
   const stillOwned = await db.accountMedia.findFirst({ where: { id, userId, credentialFingerprint: item.credentialFingerprint } });
   if (!stillOwned || !fresh.active || !fresh.enabled || !fresh.configured || fresh.fingerprint !== item.credentialFingerprint) throw new AccountLibraryError("The account changed while resolving playback. Refresh your library and retry.", 409);
   if (authorize) await authorize();
-  if (result.stream) { await db.accountMedia.updateMany({ where: { id, userId, credentialFingerprint: item.credentialFingerprint }, data: { phase: "finished", progress: 100 } }); await refreshPrimaries(db, userId, [(await db.accountMedia.findUnique({ where: { id }, select: { groupKey: true } }))?.groupKey]); }
+  if (result.stream) { await recordLinkResult(item.id, { state: "ok" }).catch(() => undefined); await db.accountMedia.updateMany({ where: { id, userId, credentialFingerprint: item.credentialFingerprint }, data: { phase: "finished", progress: 100 } }); await refreshPrimaries(db, userId, [(await db.accountMedia.findUnique({ where: { id }, select: { groupKey: true } }))?.groupKey]); }
   return result;
 }

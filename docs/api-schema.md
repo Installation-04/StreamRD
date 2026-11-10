@@ -115,7 +115,7 @@ Server settings shape:
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/admin/health` | DB status, user/title counts, playback stats (per-provider plays, last-hour plays, 24h failures), in-process counters, provider enablement |
+| GET | `/api/admin/health` | DB status, user/library-title counts, `brokenLinks`, playback stats (per-provider plays, last-hour plays, 24h failures), in-process counters, provider enablement |
 | GET | `/api/admin/logs?limit=&type=&level=&provider=&userId=` | Recent structured events, newest first (max 500) |
 | GET | `/api/admin/export/config` | JSON export of server settings + provider settings (versionable); older exports that carry a `catalog` key still import, the key is ignored |
 | POST | `/api/admin/import/config` | Validated import of the same document (`version: 1`); titles upsert by id |
@@ -193,6 +193,15 @@ Metadata details include provider/id/type/name/year, synopsis, safe artwork URLs
 genres, cast, runtimeMinutes, rating/ratingSource, contentRating, imdbId/tmdbId,
 providerUrl and fetchedAt. Record views add status, revision, locks, attempts and
 sanitized error. Internal field-ownership bookkeeping is omitted.
+
+## Link health (administrators only, v0.19.0)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/account/library/health` | `{ ok, unknown, broken, items: [{ id, name, year, reason, checkedAt }] }` — counts of finished imports by health, and up to 50 broken ones. No provider references. |
+| POST | `/api/account/library/:id/check` | Checks one item now → `{ outcome: "ok" \| "unknown" \| "broken" \| "skipped", health }`; 404 for an item that is not yours. |
+
+Library item views carry `health` (`unknown`, `ok` or `broken`). A background job checks a few items a minute (`LINK_HEALTH=false` disables it); two definite "gone" answers in a row make an item `broken`, which is then never the primary version of its title while another works. Both routes answer 403 to non-administrators.
 
 ## Private account library and onboarding scan
 

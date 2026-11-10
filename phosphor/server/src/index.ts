@@ -2,6 +2,7 @@ import { startRequestWorker } from "./requests/worker";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
+import { startLinkHealthWorker } from "./link-health";
 import { ensureZileanIndexer } from "./indexers/zilean";
 import { createApp } from "./app";
 import { backfillRatings } from "./ratings";
@@ -25,6 +26,7 @@ async function main() {
     setAccountImportHook(queueImportedMetadata);
     startAccountLibraryWorker();
     startMetadataWorker();
+    startLinkHealthWorker();
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();

@@ -245,6 +245,10 @@ model AccountMedia {
   groupKey              String? // names the title: imdb:<id>, tmdb:<id> or a normalized name|year|type; versions of one title share it
   isPrimary             Boolean @default(true) // the version a library list shows for its group
   releaseName           String? // the original release name, to tell versions apart
+  health                String @default("unknown") // unknown | ok | broken: does the provider still serve this item
+  healthCheckedAt       DateTime?
+  healthFailures        Int @default(0) // consecutive failed checks; two make it broken
+  healthError           String?
   year                  Int?
   phase                 String
   progress              Int @default(0)
@@ -254,6 +258,7 @@ model AccountMedia {
   @@unique([userId, provider, providerRef])
   @@index([userId, createdAt, id])
   @@index([userId, groupKey])
+  @@index([health, healthCheckedAt])
 }
 
 // One recoverable read-only scan per account/provider. Cursor and identity are private.

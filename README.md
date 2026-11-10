@@ -197,7 +197,7 @@ flowchart LR
 
 StreamRD is **one library managed by the administrator**: one Library page, libraries visible to everyone or chosen people, one card per
 title with versions, a home page with a featured carousel, viewing limits for a kids account, invitation links that carry library access,
-and a full-page player. Members request what is missing; only the administrator imports. Next: health checks for links. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
+and a full-page player. Members request what is missing; only the administrator imports; links are checked in the background and replaced when they die. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
 
 ## 📚 Documentation
 

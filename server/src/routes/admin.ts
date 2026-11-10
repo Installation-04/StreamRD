@@ -201,10 +201,11 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
   } catch {
     dbStatus = "down";
   }
-  const [userCount, titleCount, stats, providerSettings, serverSettings] =
+  const [userCount, titleCount, brokenLinks, stats, providerSettings, serverSettings] =
     await Promise.all([
       db.user.count(),
       db.accountMedia.count({ where: { isPrimary: true, user: { role: "admin" } } }), // library titles (the retired catalogue is not counted)
+      db.accountMedia.count({ where: { phase: "finished", health: "broken", user: { role: "admin" } } }),
       playbackStats(),
       getProviderSettings(),
       getServerSettings(),
@@ -213,6 +214,7 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
     db: dbStatus,
     users: userCount,
     titles: titleCount,
+    brokenLinks,
     playback: stats,
     counters: snapshotCounters(),
     providers: PROVIDER_IDS.map((id) => ({
