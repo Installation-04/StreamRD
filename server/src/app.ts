@@ -20,6 +20,7 @@ import { authRouter } from "./routes/auth";
 import { debridRouter } from "./routes/debrid";
 import { healthRouter } from "./routes/health";
 import { retiredRouter } from "./routes/retired";
+import { mediaServersRouter } from "./media-servers";
 
 /** Builds the Express app; exported separately so tests can run it in-process. */
 export function createApp(): Express {
@@ -59,6 +60,7 @@ export function createApp(): Express {
   app.use("/api/shared-libraries", sharedLibrariesRouter);
   app.use("/api/home", homeRouter);
   app.use("/api/admin/shared-libraries", adminSharedLibrariesRouter);
+  app.use("/api/admin/media-servers", mediaServersRouter);
   app.use("/api/admin/metadata", metadataRouter);
   app.use("/api/admin/system", systemRouter);
   app.use("/api/admin/library", libraryRouter);

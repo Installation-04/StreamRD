@@ -43,6 +43,36 @@ same under `/library/phosphor` if you export from Phosphor), then scan. Jellyfin
 Their settings and caches live in `config/jellyfin` and `config/plex`, so backing up `config/` keeps them. Plex discovery on your LAN (DLNA, GDM)
 is limited by Docker's bridge network; set `network_mode: host` on the `plex` service in `docker-compose.plex.yml` if you need it (then remove its `ports`).
 
+## Start Plex or Jellyfin from StreamRD's Setup page
+
+Instead of choosing at install time, you can start them later from **Setup → Plex or Jellyfin** (Admin → Plex / Jellyfin). Enter the port and the
+tokens, press **Launch**, and the server starts next to StreamRD with the same mappings as above. Turn it on once:
+
+```bash
+bash install.sh --media-manager        # or choose option 5 in the installer's Advanced menu
+```
+
+What you enter on the page:
+
+| Field | Where it comes from | What it is used for |
+|---|---|---|
+| **Plex claim token** | plex.tv/claim (valid for 4 minutes) | Passed to the Plex container once at launch to link it to your Plex account. Never stored, logged or shown again. |
+| **Plex token** | Plex Web: open an item, Get Info, View XML; the `X-Plex-Token` in the address | Stored encrypted. Lets StreamRD ask Plex to rescan the libraries under `/library` (**Rescan libraries**) and test the connection. |
+| **Jellyfin API key** | Jellyfin: Dashboard, API Keys, add one | Stored encrypted. The same two things for Jellyfin. |
+| **Port** | You choose (defaults 8096 and 32400) | The port the server is published on. |
+
+**What the media manager is, and why it is separate.** Starting a container needs access to the Docker socket, which is the same as root on the
+machine. StreamRD never gets it. `--media-manager` adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
+three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`. It listens only on the internal Docker network (no published
+port), answers only requests carrying a secret generated into your `.env`, and the image, the folders mounted (your libraries and downloads, read-only, and
+each server's own settings under `config/`), the user and every other container setting are fixed in the helper, not chosen by the caller. It runs
+read-only with all capabilities dropped. Even so, anyone who can control the helper controls Docker on that machine, so it is off unless you ask for it:
+`bash install.sh --no-media-manager` removes it. Containers it started keep running (stop them from Setup first, or `docker rm -f streamrd-plex streamrd-jellyfin`);
+their settings stay in `config/jellyfin` and `config/plex`.
+
+Without the helper the page still saves your tokens, rescans and tests connections for a Plex or Jellyfin you started another way (set `PLEX_URL` or
+`JELLYFIN_URL` on the StreamRD container if it is not reachable as `plex` or `jellyfin`).
+
 ## Optional Docker mounts
 
 Use a different export directory for each product. The source mount can be shared.

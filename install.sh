@@ -30,7 +30,7 @@ DIR="${STREAMRD_DIR:-$HOME/streamrd}"
 REF=""; BUILD=false; START=true; UNINSTALL=false; REFRESH_COMPOSE=false
 PORT=""; PHOSPHOR_PORT=""; TORRENT_PORT=""; ADMIN_EMAIL=""; IMPORT_DB=""; JWT_SECRET=""
 PHOSPHOR=""; QBIT=""; ZILEAN=""; ZURG=""; RD_TOKEN="${RD_TOKEN:-}"
-MEDIA_SERVER=""; JELLYFIN_PORT=""; PLEX_PORT=""; PLEX_CLAIM="${PLEX_CLAIM:-}"; ASSUME_YES=false; ADVANCED=false
+MEDIA_MANAGER=""; MEDIA_SERVER=""; JELLYFIN_PORT=""; PLEX_PORT=""; PLEX_CLAIM="${PLEX_CLAIM:-}"; ASSUME_YES=false; ADVANCED=false
 
 log() { printf '[streamrd] %s\n' "$*"; }
 die() { printf '[streamrd] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -57,6 +57,10 @@ Usage: install.sh [options]
   --jellyfin-port N      Jellyfin web port (default 8096)
   --plex-port N          Plex web port (default 32400)
   --plex-claim TOKEN     Plex claim token from https://plex.tv/claim (valid 4 minutes; optional)
+  --media-manager        Let StreamRD start Plex and Jellyfin from its Setup page (paste the Plex claim token there). Adds a small helper
+                         container that holds the Docker socket: it can only start, stop and remove those two containers, but anyone who
+                         controls it controls Docker on this machine, so it is off unless you ask for it
+  --no-media-manager     Stop running the helper (containers it started are kept; stop them from Setup first)
   -y, --yes              Do not ask questions; use the defaults and the options given
   --advanced             Ask every question even though options were given
   --import-db FILE       Start from an existing StreamRD database backup (first install only)
@@ -83,6 +87,8 @@ while [ $# -gt 0 ]; do
     --no-zilean) ZILEAN=off; shift ;;
     --zurg) ZURG=on; shift ;;
     --no-zurg) ZURG=off; shift ;;
+    --media-manager) MEDIA_MANAGER=on; shift ;;
+    --no-media-manager) MEDIA_MANAGER=off; shift ;;
     --media-server) MEDIA_SERVER="${2:?--media-server needs jellyfin, plex, both or none}"; shift 2 ;;
     --jellyfin-port) JELLYFIN_PORT="${2:?--jellyfin-port needs a number}"; shift 2 ;;
     --plex-port) PLEX_PORT="${2:?--plex-port needs a number}"; shift 2 ;;
@@ -276,10 +282,10 @@ wizard() {
   if [ -z "$MEDIA_SERVER" ]; then
     say ""
     say "  Media server: Jellyfin or Plex can be installed already pointed at your libraries."
-    say "  1) None   2) Jellyfin   3) Plex   4) Both"
+    say "  1) None   2) Jellyfin   3) Plex   4) Both   5) Decide later: start them from StreamRD's Setup page (adds a helper container with Docker access)"
     while true; do
       ask "Choose" "1"
-      case "$REPLY" in 1) MEDIA_SERVER=none ;; 2) MEDIA_SERVER=jellyfin ;; 3) MEDIA_SERVER=plex ;; 4) MEDIA_SERVER=both ;; *) say "  Enter 1, 2, 3 or 4."; continue ;; esac
+      case "$REPLY" in 1) MEDIA_SERVER=none ;; 2) MEDIA_SERVER=jellyfin ;; 3) MEDIA_SERVER=plex ;; 4) MEDIA_SERVER=both ;; 5) MEDIA_SERVER=none; MEDIA_MANAGER=on ;; *) say "  Enter 1, 2, 3, 4 or 5."; continue ;; esac
       break
     done
   fi
@@ -313,6 +319,44 @@ wizard() {
   say "    Zilean / Zurg ${ZILEAN:-off} / ${ZURG:-off}"
   say ""
   confirm "Install with these settings?" y || { say "  Cancelled. Nothing was changed."; exit 0; }
+}
+
+# The media manager: a small helper container that holds the Docker socket and can only start, stop and remove Jellyfin and Plex, so
+# StreamRD's Setup page can launch them. StreamRD itself never touches Docker; it asks the helper over the internal network.
+write_manager() {
+  cat > "$DIR/docker-compose.manager.yml" <<EOF
+# Lets the Setup page start Plex and Jellyfin. Only this helper holds the Docker socket; see docs/plex-jellyfin.md before enabling it.
+services:
+  streamrd:
+    environment:
+      MEDIA_MANAGER_URL: http://media-manager:8099
+      MEDIA_MANAGER_TOKEN: \${MEDIA_MANAGER_TOKEN:?run install.sh --media-manager}
+  media-manager:
+    image: \${STREAMRD_IMAGE:-ghcr.io/installation-04/streamrd}:\${STREAMRD_TAG:-latest}
+    container_name: streamrd-media-manager
+    restart: unless-stopped
+    command: ["node", "/opt/single-container/media-manager.cjs"]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MEDIA_MANAGER_TOKEN: \${MEDIA_MANAGER_TOKEN:?run install.sh --media-manager}
+      HOST_INSTALL_DIR: \${HOST_INSTALL_DIR:?run install.sh --media-manager}
+      DOCKER_NETWORK: streamrd_default
+      ZURG: "$1"
+      TZ: \${TZ:-UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8099/status',{headers:{Authorization:'Bearer '+process.env.MEDIA_MANAGER_TOKEN}}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+EOF
 }
 
 write_zilean() {
@@ -547,6 +591,13 @@ main() {
     *) env_value COMPOSE_FILE | grep -q jellyfin && use_jellyfin=true; env_value COMPOSE_FILE | grep -q plex && use_plex=true ;;
   esac
   local zurg_flag=none; [ "$use_zurg" = true ] && zurg_flag=zurg
+  local use_manager=false
+  case "$MEDIA_MANAGER" in on) use_manager=true ;; off) ;; *) env_value COMPOSE_FILE | grep -q manager && use_manager=true ;; esac
+  if [ "$use_manager" = true ]; then
+    write_manager "$([ "$use_zurg" = true ] && echo 1 || echo 0)"
+    [ -n "$(env_value MEDIA_MANAGER_TOKEN)" ] || set_env MEDIA_MANAGER_TOKEN "$( (openssl rand -hex 24 2>/dev/null) || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    set_env HOST_INSTALL_DIR "$DIR" yes
+  fi
   [ "$use_jellyfin" = false ] || write_jellyfin "$zurg_flag"
   [ "$use_plex" = false ] || write_plex "$zurg_flag"
   local files="docker-compose.yml"
@@ -554,6 +605,7 @@ main() {
   [ "$use_zurg" = true ] && files="$files:docker-compose.zurg.yml"
   [ "$use_jellyfin" = true ] && files="$files:docker-compose.jellyfin.yml"
   [ "$use_plex" = true ] && files="$files:docker-compose.plex.yml"
+  [ "$use_manager" = true ] && files="$files:docker-compose.manager.yml"
   # Always name the files explicitly: Compose otherwise prefers a stray compose.yaml over docker-compose.yml.
   set_env COMPOSE_FILE "$files" yes
   for stray in compose.yaml compose.yml docker-compose.yaml; do
@@ -585,6 +637,7 @@ main() {
   ensure_dirs "$image" streamrd/library phosphor/library
   [ "$use_jellyfin" = false ] || ensure_dirs "$image" jellyfin/config jellyfin/cache
   [ "$use_plex" = false ] || ensure_dirs "$image" plex/config plex/transcode
+  [ "$use_manager" = false ] || ensure_dirs "$image" jellyfin/config jellyfin/cache plex/config plex/transcode
   if [ -n "$IMPORT_DB" ]; then
     mkdir -p "$DIR/config/streamrd"; cp "$IMPORT_DB" "$DIR/config/streamrd/streamrd.db"; chmod 600 "$DIR/config/streamrd/streamrd.db"
     [ "$(id -u)" != 0 ] || chown -R 1000:1000 "$DIR/config"
@@ -606,7 +659,7 @@ main() {
     done
   fi
   [ "$mode" = build ] || compose pull
-  if [ "$ZILEAN" = off ] || [ "$ZURG" = off ] || [ "$MEDIA_SERVER" = none ]; then compose up -d --remove-orphans; else compose up -d; fi
+  if [ "$ZILEAN" = off ] || [ "$ZURG" = off ] || [ "$MEDIA_SERVER" = none ] || [ "$MEDIA_MANAGER" = off ]; then compose up -d --remove-orphans; else compose up -d; fi
 
   local web; web="$(env_value STREAMRD_PORT)"
   log "Waiting for StreamRD to become ready..."
@@ -636,6 +689,7 @@ EOF
 }
 addon_notes() {
   env_value COMPOSE_FILE | grep -q zilean && echo "  Zilean     internal only; it appears in Phosphor as the 'Zilean' indexer (its first import takes a while)"
+  env_value COMPOSE_FILE | grep -q manager && echo "  Media      start Plex and Jellyfin from StreamRD's Setup page (Admin -> Plex / Jellyfin); the helper holds the Docker socket, see docs/plex-jellyfin.md"
   env_value COMPOSE_FILE | grep -q jellyfin && echo "  Jellyfin   http://localhost:$(env_value JELLYFIN_PORT)   libraries: Movies /library/streamrd/Movies, Shows \"/library/streamrd/TV Shows\" (see docs/plex-jellyfin.md)"
   env_value COMPOSE_FILE | grep -q plex && echo "  Plex       http://localhost:$(env_value PLEX_PORT)/web   libraries: Movies /library/streamrd/Movies, TV Shows \"/library/streamrd/TV Shows\" (see docs/plex-jellyfin.md)"
   env_value COMPOSE_FILE | grep -q zurg && echo "  Zurg       your Real-Debrid movies and shows are mounted at $DIR/mnt/zurg (edit zurg/config.yml, then: docker compose restart zurg)"

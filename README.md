@@ -100,6 +100,7 @@ It does not install Docker, set up HTTPS or open firewall ports. Read [`install.
 <details>
 <summary><b>Optional add-ons</b>: Zilean, Zurg, Plex and Jellyfin</summary>
 
+- `install.sh --media-manager` lets the **Setup** page launch Plex or Jellyfin beside StreamRD: you paste the tokens (the Plex claim token is used once and never stored) and press Launch. A small opt-in helper holds the Docker socket, not StreamRD itself; see [what it can do](docs/plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page).
 - `install.sh --media-server jellyfin|plex|both` runs Jellyfin and/or Plex next to StreamRD with the library folders and your downloads already mapped (read-only); you only add the libraries in their setup. See [Plex and Jellyfin](docs/plex-jellyfin.md#built-in-jellyfin-and-plex).
 - `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
 - `install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).

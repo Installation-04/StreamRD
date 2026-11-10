@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { del, get, post } from "@/lib/api";
 import Link from "next/link";
+import MediaServersPanel from "@/components/MediaServersPanel";
 import MetadataPicker from "@/components/MetadataPicker";
 import { imdbLink, metadataSourceLink, type MetadataDetails } from "@/lib/metadata";
 import styles from "./library.module.css";
@@ -169,6 +170,7 @@ export default function LibraryPage() {
       <div><p className={styles.eyebrow}>Your media, every screen</p><h2>Plex &amp; Jellyfin library</h2><p className={styles.intro}>Choose mounted videos, review their names, and create a library your media server can scan.</p></div>
       <a className={styles.guideLink} href="https://github.com/Installation-04/StreamRD/wiki/Plex-and-Jellyfin" target="_blank" rel="noreferrer">Setup guide <span aria-hidden="true">↗</span></a>
     </header>
+    <MediaServersPanel />
     {error && <div className={styles.error} role="alert">{error}</div>}
     {message && <div className={styles.notice} role="status">{message}</div>}
     {metadataTarget && metadataMedia && <section className={styles.metadataPanel} ref={metadataPanel} tabIndex={-1} aria-label="Library metadata lookup">

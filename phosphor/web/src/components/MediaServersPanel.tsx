@@ -1,0 +1,85 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import styles from "./AccountScanPanel.module.css";
+
+type Name = "jellyfin" | "plex";
+type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "starting" | "failed";
+interface Server { port: number; state: State; error?: string; secretHint: string | null }
+interface View { manager: { available: boolean }; servers: Record<Name, Server> }
+
+const COPY: Record<Name, { label: string; secret: string; secretHelp: string; port: number; path: string }> = {
+  jellyfin: { label: "Jellyfin", secret: "Jellyfin API key", secretHelp: "Optional. Create one in Jellyfin under Dashboard, API Keys. It lets StreamRD ask Jellyfin to rescan your libraries.", port: 8096, path: "" },
+  plex: { label: "Plex", secret: "Plex token", secretHelp: "Optional. Your Plex token lets StreamRD ask Plex to rescan your libraries. It is stored encrypted and never shown again.", port: 32400, path: "/web" },
+};
+const WORDS: Record<State, string> = { unknown: "Helper not installed", absent: "Not started", stopped: "Stopped", running: "Running", pulling: "Downloading the image…", starting: "Starting…", failed: "Needs attention" };
+
+/** Onboarding for Plex and Jellyfin: where to put the tokens, and (with the media manager installed) a button that starts the container next to StreamRD. */
+export default function MediaServersPanel() {
+  const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState("");
+  const [ports, setPorts] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [secrets, setSecrets] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [claim, setClaim] = useState("");
+  const mounted = useRef(true), seeded = useRef(false);
+  const load = useCallback(async () => {
+    try {
+      const next = await api<View>("/api/admin/media-servers");
+      if (!mounted.current) return;
+      setView(next); setError("");
+      if (!seeded.current) { seeded.current = true; setPorts({ jellyfin: String(next.servers.jellyfin.port), plex: String(next.servers.plex.port) }); }
+    } catch { if (mounted.current) setError("The media server settings could not be loaded."); }
+  }, []);
+  useEffect(() => { mounted.current = true; void load(); return () => { mounted.current = false; }; }, [load]);
+  const working = view && Object.values(view.servers).some(server => server.state === "pulling" || server.state === "starting");
+  useEffect(() => { if (!working) return; const timer = setInterval(() => void load(), 3000); return () => clearInterval(timer); }, [working, load]);
+
+  async function run(key: string, action: () => Promise<string | void>) {
+    if (busy) return;
+    setBusy(key); setError(""); setNotice("");
+    try { const message = await action(); if (message && mounted.current) setNotice(message); await load(); }
+    catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : "That did not work. Try again."); }
+    finally { if (mounted.current) setBusy(""); }
+  }
+  const portOf = (name: Name) => { const value = Number(ports[name]); if (!Number.isInteger(value) || value < 1024 || value > 65535) throw new Error(`Choose a ${COPY[name].label} port between 1024 and 65535.`); return value; };
+  const save = (name: Name) => api("/api/admin/media-servers", { method: "PUT", body: JSON.stringify({ [name]: { port: portOf(name), ...(secrets[name].trim() ? { secret: secrets[name].trim() } : {}) } }) }).then(() => { setSecrets(current => ({ ...current, [name]: "" })); });
+  const launch = (name: Name) => run(`launch-${name}`, async () => {
+    await save(name);
+    await api(`/api/admin/media-servers/${name}/launch`, { method: "POST", body: JSON.stringify({ port: portOf(name), ...(name === "plex" && claim.trim() ? { claim: claim.trim() } : {}) }) });
+    if (name === "plex") setClaim("");
+    return `${COPY[name].label} is being started. The first start downloads the image, which can take a few minutes.`;
+  });
+
+  if (!view) return error ? <p role="alert">{error}</p> : null;
+  const url = (name: Name) => `http://${typeof window === "undefined" ? "localhost" : window.location.hostname}:${view.servers[name].port}${COPY[name].path}`;
+  return <section className={styles.panel} id="media-servers" aria-label="Media servers">
+    <header className={styles.header}><div><p>ONBOARDING · MEDIA SERVER</p><h2>Run Plex or Jellyfin next to StreamRD.</h2>
+      <p>Pick a server, enter its details and launch it. It starts beside StreamRD with your libraries and downloads already mapped (read-only); you only add the libraries inside Plex or Jellyfin.</p></div></header>
+    {!view.manager.available && <div role="note" style={{ margin: "12px 0", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(255,138,31,.45)", background: "rgba(255,138,31,.08)" }}>
+      <strong>Launching from here needs the media manager.</strong> It is a small helper container that can only start, stop and remove these two containers. Install it with <code>bash install.sh --media-manager</code>, or have the installer start Plex or Jellyfin directly with <code>--media-server plex</code> or <code>--media-server jellyfin</code>. You can still save your tokens below.
+    </div>}
+    {error && <div className={styles.error} role="alert"><p>{error}</p></div>}
+    {notice && <p className={styles.notice} role="status">{notice}</p>}
+    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", marginTop: 12 }}>
+      {(["jellyfin", "plex"] as Name[]).map(name => {
+        const server = view.servers[name], copy = COPY[name], live = server.state === "pulling" || server.state === "starting";
+        return <article key={name} aria-label={`${copy.label} media server`} style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, padding: 16, display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}><h3 style={{ margin: 0 }}>{copy.label}</h3><span role="status" aria-label={`${copy.label} status`}>{WORDS[server.state]}</span></div>
+          {server.state === "failed" && server.error && <p role="alert" style={{ margin: 0 }}>{server.error}</p>}
+          <label style={{ display: "grid", gap: 4 }}>{copy.label} port<input type="number" inputMode="numeric" min={1024} max={65535} value={ports[name]} onChange={event => setPorts(current => ({ ...current, [name]: event.target.value }))} /></label>
+          <label style={{ display: "grid", gap: 4 }}>{copy.secret}<input type="password" autoComplete="off" spellCheck={false} maxLength={500} value={secrets[name]} placeholder={server.secretHint ? `Saved (${server.secretHint})` : "Paste it here"} onChange={event => setSecrets(current => ({ ...current, [name]: event.target.value }))} /><small style={{ opacity: 0.75 }}>{copy.secretHelp}</small></label>
+          {name === "plex" && <label style={{ display: "grid", gap: 4 }}>Plex claim token<input type="text" autoComplete="off" spellCheck={false} maxLength={120} value={claim} placeholder="claim-…" onChange={event => setClaim(event.target.value)} /><small style={{ opacity: 0.75 }}>Optional. Get it at plex.tv/claim; it is valid for 4 minutes, used once to link the server to your Plex account, and not stored.</small></label>}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" className="btn" disabled={Boolean(busy) || live || !view.manager.available} onClick={() => void launch(name)}>{busy === `launch-${name}` ? "Starting…" : server.state === "running" ? `Relaunch ${copy.label}` : `Launch ${copy.label}`}</button>
+            <button type="button" className="btn btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`save-${name}`, async () => { await save(name); return `${copy.label} settings saved.`; })}>Save settings</button>
+            {server.state === "running" && <a className="btn btn-secondary" href={url(name)} target="_blank" rel="noreferrer">Open {copy.label}</a>}
+            {(server.state === "running" || server.state === "stopped" || server.state === "failed") && <button type="button" className="btn btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`stop-${name}`, async () => { await api(`/api/admin/media-servers/${name}/${server.state === "running" ? "stop" : ""}`.replace(/\/$/, ""), { method: server.state === "running" ? "POST" : "DELETE" }); return server.state === "running" ? `${copy.label} stopped.` : `${copy.label} removed. Its settings are kept.`; })}>{server.state === "running" ? "Stop" : "Remove"}</button>}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`test-${name}`, async () => { const result = await api<{ reachable: boolean; accepted: boolean | null }>(`/api/admin/media-servers/${name}/test`, { method: "POST", body: "{}" }); return !result.reachable ? `${copy.label} could not be reached. Is it running?` : result.accepted === false ? `${copy.label} is running but did not accept the saved ${copy.secret.toLowerCase()}.` : result.accepted ? `${copy.label} is running and accepted the saved ${copy.secret.toLowerCase()}.` : `${copy.label} is running. Save a ${copy.secret.toLowerCase()} to let StreamRD rescan its libraries.`; })}>Test connection</button>
+            {server.secretHint && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`refresh-${name}`, async () => { const result = await api<{ refreshed: number }>(`/api/admin/media-servers/${name}/refresh`, { method: "POST", body: "{}" }); return result.refreshed ? `${copy.label} was asked to rescan ${result.refreshed === 1 && name === "jellyfin" ? "all its libraries" : `${result.refreshed} ${result.refreshed === 1 ? "library" : "libraries"}`}.` : `${copy.label} has no library under /library yet. Add Movies (/library/streamrd/Movies) first.`; })}>Rescan libraries</button>}
+          </div>
+        </article>;
+      })}
+    </div>
+    <p style={{ opacity: 0.75, fontSize: 13 }}>In Plex or Jellyfin add Movies at <code>/library/streamrd/Movies</code> and TV Shows at <code>/library/streamrd/TV Shows</code>. Plex discovery on your network is limited by Docker&rsquo;s bridge network; the Plex and Jellyfin guide explains host networking.</p>
+  </section>;
+}
