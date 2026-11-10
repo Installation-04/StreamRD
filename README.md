@@ -31,7 +31,7 @@ This installs the all-in-one container (StreamRD on port 8080, Phosphor on 8081)
 `~/streamrd`, using the published image for a release or building from source when
 none is available. It generates no secrets for you to manage, never overwrites your
 `.env` or data volume, and re-running it updates in place. Options go after `bash -s --`,
-for example `--version v0.8.0 --port 9090 --admin-email you@example.com`; run it with
+for example `--version v0.8.1 --port 9090 --admin-email you@example.com`; run it with
 `--help` to see all of them and `--uninstall` to remove the container (data is kept).
 It does not install Docker, set up HTTPS or open firewall ports. Read the
 [script](get.sh) before piping any script to a shell.
