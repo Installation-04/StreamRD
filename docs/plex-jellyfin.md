@@ -61,6 +61,11 @@ What you enter on the page:
 | **Jellyfin API key** | Jellyfin: Dashboard, API Keys, add one | Stored encrypted. The same two things for Jellyfin. |
 | **Port** | You choose (defaults 8096 and 32400) | The port the server is published on. |
 
+**The deploy log.** Once the helper is installed, each server card has **Show deploy log**: a live log of what happened when you pressed Launch (the image
+download with its progress, the container being created and started, any error Docker gave) followed by the server's own output, refreshed every few
+seconds while it starts. **Copy log** puts it on the clipboard for a bug report. Plex claim tokens, Plex tokens and Jellyfin API keys are blanked in it
+before it leaves the helper.
+
 **What the media manager is, and why it is separate.** Starting a container needs access to the Docker socket, which is the same as root on the
 machine. StreamRD never gets it. `--media-manager` adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
 three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`. It listens only on the internal Docker network (no published

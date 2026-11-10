@@ -137,6 +137,12 @@ for (const [method, suffix, route] of [["post", "/:server/stop", "stop"], ["dele
     catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
   }));
 }
+mediaServersRouter.get("/:server/logs", rateLimit({ windowMs: 60_000, max: 120 }), asyncHandler(async (req, res) => {
+  const { tail } = parseBody(z.object({ tail: z.coerce.number().int().min(1).max(200).default(100) }).strict(), req.query, res) ?? {};
+  if (tail === undefined) return;
+  try { res.json(await manager<{ deploy: unknown[]; container: string[] }>("GET", `/servers/${req.params.server}/logs?tail=${tail}`)); }
+  catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
+}));
 mediaServersRouter.post("/:server/test", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandler(async (req, res) => { res.json(await testConnection(name.parse(req.params.server))); }));
 mediaServersRouter.post("/:server/refresh", rateLimit({ windowMs: 60_000, max: 12 }), asyncHandler(async (req, res) => {
   try { res.json(await refreshLibraries(name.parse(req.params.server))); }

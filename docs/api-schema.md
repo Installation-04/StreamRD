@@ -203,6 +203,7 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 | POST | `/api/admin/media-servers/:server/launch` | `{ port?, claim? }` → 202 `{ state }`. `claim` is a Plex claim token, passed to the launch and never stored. 409 when the media manager is not installed. |
 | POST | `/api/admin/media-servers/:server/stop` | Stops the container started from here. |
 | DELETE | `/api/admin/media-servers/:server` | Removes it (its settings under `config/` are kept). |
+| GET | `/api/admin/media-servers/:server/logs?tail=100` | `{ deploy: [{ time, message }], container: [line] }`: what the helper did to start the server, then the server's own output (tail 1-200). Tokens are blanked. 409 without the media manager. |
 | POST | `/api/admin/media-servers/:server/test` | `{ reachable, accepted }`: whether the server answers and accepted the saved token. |
 | POST | `/api/admin/media-servers/:server/refresh` | Asks the server to rescan the libraries under `/library` → `{ refreshed }`. |
 

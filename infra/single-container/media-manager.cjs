@@ -16,6 +16,12 @@ const SERVERS = {
   jellyfin: { image: 'jellyfin/jellyfin', tag: 'latest', port: 8096, internal: 8096 },
   plex: { image: 'plexinc/pms-docker', tag: 'latest', port: 32400, internal: 32400 },
 };
+// What the deploy log and a server's own output may show: tokens are blanked before anything leaves the manager.
+const redact = text => String(text)
+  .replace(/claim-[A-Za-z0-9_-]{4,}/g, 'claim-****')
+  .replace(/(X-Plex-Token|X-Emby-Token|api_key|ApiKey|PLEX_CLAIM)(["'=: ]+)[^\s&"']+/gi, '$1$2****')
+  .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+const LOG_LINES = 200;
 const CLAIM = /^claim-[A-Za-z0-9_-]{1,100}$/;
 const containerName = name => `streamrd-${name}`;
 const sha = value => crypto.createHash('sha256').update(String(value)).digest();
@@ -43,6 +49,8 @@ function specFor(name, options, config) {
 
 function createManager(config) {
   const jobs = {}; // in-flight launches: { state: 'pulling' | 'starting' | 'failed', error? }
+  const deploy = { jellyfin: [], plex: [] }; // what the manager did for each server, oldest first
+  const note = (name, message) => { const list = deploy[name]; list.push({ time: new Date().toISOString(), message: redact(message).slice(0, 300) }); if (list.length > LOG_LINES) list.splice(0, list.length - LOG_LINES); };
   function docker(method, route, body) {
     return new Promise((resolve, reject) => {
       const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
@@ -63,26 +71,62 @@ function createManager(config) {
     const bindings = response.json?.HostConfig?.PortBindings?.[`${SERVERS[name].internal}/tcp`];
     return { state: response.json?.State?.Running ? 'running' : 'stopped', port: Number(bindings?.[0]?.HostPort) || SERVERS[name].port };
   }
+  /** Pulls an image, reading Docker's progress as it arrives so the deploy log can say how far along it is. */
+  function pull(name, server) {
+    return new Promise((resolve, reject) => {
+      const layers = new Map(); let last = 0, buffer = '', failed = false;
+      const report = () => {
+        let current = 0, total = 0; for (const layer of layers.values()) { current += layer.current; total += layer.total; }
+        if (total > 0 && Date.now() - last > 3000) { last = Date.now(); note(name, `Downloading ${server.image}: ${Math.min(99, Math.floor(current / total * 100))}% of ${(total / 1048576).toFixed(0)} MB`); }
+      };
+      const line = text => {
+        if (!text.trim()) return; let event; try { event = JSON.parse(text); } catch { return; }
+        if (event.error) { failed = true; note(name, 'The image could not be downloaded'); return; }
+        const detail = event.progressDetail; if (event.id && detail && detail.total) layers.set(event.id, { current: detail.current || 0, total: detail.total });
+        report();
+      };
+      const request = http.request({ socketPath: config.socketPath, path: `/images/create?fromImage=${encodeURIComponent(server.image)}&tag=${encodeURIComponent(server.tag)}`, method: 'POST', headers: { Host: 'docker' } }, response => {
+        if (response.statusCode !== 200) { response.resume(); return reject(new Error('The image could not be downloaded')); }
+        response.setEncoding('utf8');
+        response.on('data', chunk => { buffer += chunk; const lines = buffer.split('\n'); buffer = lines.pop(); lines.forEach(line); });
+        response.on('end', () => { line(buffer); failed ? reject(new Error('The image could not be downloaded')) : resolve(); });
+      });
+      request.on('error', reject); request.end();
+    });
+  }
   async function ensureImage(name) {
     const server = SERVERS[name], reference = `${server.image}:${server.tag}`;
-    if ((await docker('GET', `/images/${encodeURIComponent(reference)}/json`)).status === 200) return;
-    const pulled = await docker('POST', `/images/create?fromImage=${encodeURIComponent(server.image)}&tag=${encodeURIComponent(server.tag)}`);
-    const failed = pulled.status !== 200 || pulled.text.split('\n').some(line => { try { return Boolean(JSON.parse(line).error); } catch { return false; } });
-    if (failed) throw new Error('The image could not be downloaded');
+    if ((await docker('GET', `/images/${encodeURIComponent(reference)}/json`)).status === 200) { note(name, `Image ${reference} is already on this machine`); return; }
+    note(name, `Downloading image ${reference}`); await pull(name, server); note(name, `Downloaded ${reference}`);
+  }
+  /** The container's own output, last lines first removed: Docker frames each line with an 8 byte header unless the container has a terminal. */
+  async function containerLog(name, tail) {
+    const response = await new Promise((resolve, reject) => {
+      const request = http.request({ socketPath: config.socketPath, path: `/containers/${containerName(name)}/logs?stdout=1&stderr=1&timestamps=1&tail=${tail}`, method: 'GET', headers: { Host: 'docker' } }, reply => {
+        const chunks = []; let size = 0; reply.on('data', chunk => { size += chunk.length; if (size <= 1048576) chunks.push(chunk); }); reply.on('end', () => resolve({ status: reply.statusCode, body: Buffer.concat(chunks) }));
+      });
+      request.on('error', reject); request.end();
+    });
+    if (response.status !== 200) return [];
+    const body = response.body, out = []; let offset = 0;
+    const framed = body.length >= 8 && body[0] <= 2 && body[1] === 0 && body[2] === 0 && body[3] === 0;
+    if (framed) { while (offset + 8 <= body.length) { const size = body.readUInt32BE(offset + 4); out.push(...body.subarray(offset + 8, offset + 8 + size).toString('utf8').split('\n')); offset += 8 + size; } }
+    else out.push(...body.toString('utf8').split('\n'));
+    return out.map(text => redact(text).slice(0, 400)).filter(text => text.trim()).slice(-tail);
   }
   async function launch(name, options) {
     if (jobs[name] && jobs[name].state !== 'failed') return jobs[name];
-    jobs[name] = { state: 'pulling' };
+    jobs[name] = { state: 'pulling' }; note(name, `Launch requested on port ${options.port}${options.claim ? ' with a claim token' : ''}`);
     (async () => {
       try {
-        await ensureImage(name); jobs[name] = { state: 'starting' };
+        await ensureImage(name); jobs[name] = { state: 'starting' }; note(name, 'Starting the container');
         await docker('DELETE', `/containers/${containerName(name)}?force=true`); // recreated each launch; the folders under config/ keep its settings
         const created = await docker('POST', `/containers/create?name=${containerName(name)}`, specFor(name, options, config));
         if (created.status !== 201) throw new Error(`The container could not be created (${created.status}${created.json?.message ? `: ${String(created.json.message).slice(0, 160)}` : ''})`);
         const started = await docker('POST', `/containers/${containerName(name)}/start`);
         if (![204, 304].includes(started.status)) throw new Error(`The container could not be started (${started.status}${started.json?.message ? `: ${String(started.json.message).slice(0, 160)}` : ''})`);
-        delete jobs[name];
-      } catch (error) { jobs[name] = { state: 'failed', error: error instanceof Error ? error.message : 'Launch failed' }; }
+        delete jobs[name]; note(name, `Started. It listens on port ${options.port}`);
+      } catch (error) { const message = error instanceof Error ? error.message : 'Launch failed'; jobs[name] = { state: 'failed', error: message }; note(name, `Failed: ${message}`); }
     })();
     return jobs[name];
   }
@@ -91,8 +135,8 @@ function createManager(config) {
     for (const name of Object.keys(SERVERS)) out[name] = jobs[name] ? { ...jobs[name] } : await inspect(name);
     return out;
   }
-  async function stop(name) { delete jobs[name]; const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
-  async function remove(name) { delete jobs[name]; const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
+  async function stop(name) { delete jobs[name]; note(name, 'Stop requested'); const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
+  async function remove(name) { delete jobs[name]; note(name, 'Remove requested'); const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
 
   function authorized(request) {
     const header = String(request.headers.authorization ?? ''), token = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -109,10 +153,14 @@ function createManager(config) {
     const send = (status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(body)); };
     try {
       if (!authorized(request)) return send(401, { error: 'Not authorized' });
-      const url = new URL(request.url ?? '/', 'http://manager'), match = /^\/servers\/([a-z]+)(?:\/(launch|stop))?$/.exec(url.pathname);
+      const url = new URL(request.url ?? '/', 'http://manager'), match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs))?$/.exec(url.pathname);
       if (request.method === 'GET' && url.pathname === '/status') return send(200, { servers: await status() });
       if (!match || !SERVERS[match[1]]) return send(404, { error: 'Unknown server' });
       const name = match[1];
+      if (request.method === 'GET' && match[2] === 'logs') {
+        const tail = Math.max(1, Math.min(Number(url.searchParams.get('tail')) || 100, LOG_LINES));
+        return send(200, { deploy: deploy[name].slice(-tail), container: await containerLog(name, tail) });
+      }
       if (request.method === 'POST' && match[2] === 'launch') {
         const body = await readBody(request), port = body.port === undefined ? SERVERS[name].port : body.port;
         if (!Number.isInteger(port) || port < 1024 || port > 65535) return send(400, { error: 'Choose a port between 1024 and 65535' });

@@ -7,6 +7,7 @@ import styles from "./AccountScanPanel.module.css";
 type Name = "jellyfin" | "plex";
 type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "starting" | "failed";
 interface Server { port: number; state: State; error?: string; secretHint: string | null }
+interface Logs { deploy: Array<{ time: string; message: string }>; container: string[] }
 interface View { manager: { available: boolean }; servers: Record<Name, Server> }
 
 const COPY: Record<Name, { label: string; secret: string; secretHelp: string; port: number; path: string }> = {
@@ -19,7 +20,8 @@ const WORDS: Record<State, string> = { unknown: "Helper not installed", absent: 
 export default function MediaServersPanel() {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState("");
   const [ports, setPorts] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [secrets, setSecrets] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [claim, setClaim] = useState("");
-  const mounted = useRef(true), seeded = useRef(false);
+  const [open, setOpen] = useState<Record<Name, boolean>>({ jellyfin: false, plex: false }), [logs, setLogs] = useState<Record<Name, Logs | null>>({ jellyfin: null, plex: null }), [logError, setLogError] = useState<Record<Name, string>>({ jellyfin: "", plex: "" });
+  const mounted = useRef(true), seeded = useRef(false), panes = useRef<Record<Name, HTMLPreElement | null>>({ jellyfin: null, plex: null });
   const load = useCallback(async () => {
     try {
       const next = await api<View>("/api/admin/media-servers");
@@ -31,6 +33,19 @@ export default function MediaServersPanel() {
   useEffect(() => { mounted.current = true; void load(); return () => { mounted.current = false; }; }, [load]);
   const working = view && Object.values(view.servers).some(server => server.state === "pulling" || server.state === "starting");
   useEffect(() => { if (!working) return; const timer = setInterval(() => void load(), 3000); return () => clearInterval(timer); }, [working, load]);
+  // The deploy log: what was done to start the server (image download, container start) and the server's own output, live while it is open.
+  const loadLogs = useCallback(async (name: Name) => {
+    try { const next = await api<Logs>(`/api/admin/media-servers/${name}/logs?tail=150`); if (!mounted.current) return; setLogs(current => ({ ...current, [name]: next })); setLogError(current => ({ ...current, [name]: "" })); }
+    catch (reason) { if (mounted.current) setLogError(current => ({ ...current, [name]: reason instanceof Error ? reason.message : "The log could not be loaded." })); }
+  }, []);
+  const available = view?.manager.available ?? false;
+  useEffect(() => {
+    if (!available) return;
+    const names = (["jellyfin", "plex"] as Name[]).filter(name => open[name]); if (!names.length) return;
+    const tick = () => names.forEach(name => void loadLogs(name)); tick();
+    const timer = setInterval(tick, working ? 2000 : 6000); return () => clearInterval(timer);
+  }, [open, available, working, loadLogs]);
+  useEffect(() => { for (const name of ["jellyfin", "plex"] as Name[]) { const pane = panes.current[name]; if (pane) pane.scrollTop = pane.scrollHeight; } }, [logs]);
 
   async function run(key: string, action: () => Promise<string | void>) {
     if (busy) return;
@@ -45,6 +60,7 @@ export default function MediaServersPanel() {
     await save(name);
     await api(`/api/admin/media-servers/${name}/launch`, { method: "POST", body: JSON.stringify({ port: portOf(name), ...(name === "plex" && claim.trim() ? { claim: claim.trim() } : {}) }) });
     if (name === "plex") setClaim("");
+    setOpen(current => ({ ...current, [name]: true })); // show the deploy log as soon as it starts
     return `${COPY[name].label} is being started. The first start downloads the image, which can take a few minutes.`;
   });
 
@@ -77,6 +93,18 @@ export default function MediaServersPanel() {
             <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`test-${name}`, async () => { const result = await api<{ reachable: boolean; accepted: boolean | null }>(`/api/admin/media-servers/${name}/test`, { method: "POST", body: "{}" }); return !result.reachable ? `${copy.label} could not be reached. Is it running?` : result.accepted === false ? `${copy.label} is running but did not accept the saved ${copy.secret.toLowerCase()}.` : result.accepted ? `${copy.label} is running and accepted the saved ${copy.secret.toLowerCase()}.` : `${copy.label} is running. Save a ${copy.secret.toLowerCase()} to let StreamRD rescan its libraries.`; })}>Test connection</button>
             {server.secretHint && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`refresh-${name}`, async () => { const result = await api<{ refreshed: number }>(`/api/admin/media-servers/${name}/refresh`, { method: "POST", body: "{}" }); return result.refreshed ? `${copy.label} was asked to rescan ${result.refreshed === 1 && name === "jellyfin" ? "all its libraries" : `${result.refreshed} ${result.refreshed === 1 ? "library" : "libraries"}`}.` : `${copy.label} has no library under /library yet. Add Movies (/library/streamrd/Movies) first.`; })}>Rescan libraries</button>}
           </div>
+          {view.manager.available && <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button type="button" className="btn btn-sm btn-secondary" aria-expanded={open[name]} onClick={() => setOpen(current => ({ ...current, [name]: !current[name] }))}>{open[name] ? "Hide deploy log" : "Show deploy log"}</button>
+              {open[name] && <button type="button" className="btn btn-sm btn-secondary" onClick={() => { const text = [...(logs[name]?.deploy ?? []).map(entry => `${entry.time.slice(11, 19)}  ${entry.message}`), ...(logs[name]?.container ?? [])].join("\n"); void navigator.clipboard?.writeText(text).then(() => setNotice("Log copied.")).catch(() => setError("The log could not be copied.")); }}>Copy log</button>}
+            </div>
+            {open[name] && <>
+              {logError[name] && <p role="alert" style={{ margin: 0 }}>{logError[name]}</p>}
+              <pre ref={element => { panes.current[name] = element; }} role="log" aria-live="polite" aria-label={`${copy.label} deploy log`} tabIndex={0} style={{ margin: 0, padding: 12, maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "ui-monospace, monospace", fontSize: 12, lineHeight: 1.5, borderRadius: 10, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.12)" }}>
+                {logs[name] === null ? "Loading…" : (logs[name]!.deploy.length || logs[name]!.container.length) ? <>{logs[name]!.deploy.map((entry, index) => <span key={`d${index}`}><span style={{ opacity: 0.6 }}>{entry.time.slice(11, 19)}</span>{"  "}{entry.message}{"\n"}</span>)}{logs[name]!.container.length > 0 && <span style={{ opacity: 0.6 }}>{"\n— output from the container —\n"}</span>}{logs[name]!.container.map((line, index) => <span key={`c${index}`}>{line}{"\n"}</span>)}</> : "Nothing yet. Press Launch and the steps appear here."}
+              </pre>
+            </>}
+          </div>}
         </article>;
       })}
     </div>

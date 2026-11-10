@@ -24,7 +24,7 @@ const get = () => request(app).get("/api/admin/media-servers").set(auth(admin.to
 
 it("is for the administrator only", async () => {
   expect((await request(app).get("/api/admin/media-servers")).status).toBe(401);
-  for (const [method, path] of [["get", ""], ["put", ""], ["post", "/plex/launch"], ["post", "/plex/stop"], ["delete", "/plex"], ["post", "/plex/test"], ["post", "/plex/refresh"]] as const) expect((await request(app)[method](`/api/admin/media-servers${path}`).set(auth(member.token)).send({})).status, `${method} ${path}`).toBe(403);
+  for (const [method, path] of [["get", ""], ["put", ""], ["post", "/plex/launch"], ["get", "/plex/logs"], ["post", "/plex/stop"], ["delete", "/plex"], ["post", "/plex/test"], ["post", "/plex/refresh"]] as const) expect((await request(app)[method](`/api/admin/media-servers${path}`).set(auth(member.token)).send({})).status, `${method} ${path}`).toBe(403);
   expect((await request(app).post("/api/admin/media-servers/portainer/launch").set(auth(admin.token)).send({})).status).toBe(404);
 });
 
@@ -114,4 +114,15 @@ it("tests a connection: reachable or not, and whether the saved token was accept
   await request(app).put("/api/admin/media-servers").set(auth(admin.token)).send({ jellyfin: { secret: "good-key" } });
   expect((await request(app).post("/api/admin/media-servers/jellyfin/test").set(auth(admin.token))).body).toEqual({ reachable: true, accepted: true });
   expect((await request(app).post("/api/admin/media-servers/plex/test").set(auth(admin.token))).body).toEqual({ reachable: false, accepted: null });
+});
+
+it("passes a server's deploy log through from the manager, and explains when there is no manager", async () => {
+  const none = await request(app).get("/api/admin/media-servers/plex/logs").set(auth(admin.token)); expect(none.status).toBe(409); expect(none.body.error).toMatch(/media manager/i);
+  const fake = await keep(serve(entry => ({ json: { deploy: [{ time: "2026-11-10T12:00:00.000Z", message: "Started. It listens on port 32400" }], container: ["Starting Plex"], url: entry.url } })));
+  process.env.MEDIA_MANAGER_URL = fake.url; process.env.MEDIA_MANAGER_TOKEN = TOKEN;
+  const logs = await request(app).get("/api/admin/media-servers/plex/logs?tail=50").set(auth(admin.token));
+  expect(logs.status).toBe(200); expect(logs.body.deploy[0].message).toBe("Started. It listens on port 32400"); expect(logs.body.container).toEqual(["Starting Plex"]);
+  expect(fake.seen[0]).toMatchObject({ method: "GET", url: "/servers/plex/logs?tail=50" }); expect(fake.seen[0].headers.authorization).toBe(`Bearer ${TOKEN}`);
+  for (const bad of ["0", "201", "x"]) expect((await request(app).get(`/api/admin/media-servers/plex/logs?tail=${bad}`).set(auth(admin.token))).status, bad).toBe(400);
+  expect((await request(app).get("/api/admin/media-servers/portainer/logs").set(auth(admin.token))).status).toBe(404);
 });

@@ -7,10 +7,10 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 const { createManager } = require("../../infra/single-container/media-manager.cjs") as { createManager: (config: Record<string, unknown>) => { server: http.Server } };
 
 const TOKEN = "t".repeat(40), HOST = "/srv/streamrd";
-interface Fake { calls: string[]; created: Record<string, Record<string, unknown>>; running: Set<string>; images: Set<string>; failPull: boolean; close: () => Promise<void>; socketPath: string }
+interface Fake { logLines: string[]; calls: string[]; created: Record<string, Record<string, unknown>>; running: Set<string>; images: Set<string>; failPull: boolean; close: () => Promise<void>; socketPath: string }
 async function fakeDocker(): Promise<Fake> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-docker-")), socketPath = path.join(dir, "docker.sock");
-  const fake = { calls: [] as string[], created: {} as Fake["created"], running: new Set<string>(), images: new Set<string>(), failPull: false } as Fake;
+  const fake = { logLines: [] as string[], calls: [] as string[], created: {} as Fake["created"], running: new Set<string>(), images: new Set<string>(), failPull: false } as Fake;
   const server = http.createServer((request, response) => {
     const chunks: Buffer[] = []; request.on("data", chunk => chunks.push(chunk));
     request.on("end", () => {
@@ -18,6 +18,10 @@ async function fakeDocker(): Promise<Fake> {
       const reply = (status: number, body?: unknown, raw?: string) => { response.writeHead(status, { "Content-Type": "application/json" }); response.end(raw ?? (body === undefined ? "" : JSON.stringify(body))); };
       const name = /^\/containers\/([^/]+)/.exec(url.pathname)?.[1];
       if (request.method === "GET" && url.pathname.startsWith("/images/")) return reply(fake.images.has(decodeURIComponent(url.pathname.slice(8, -5))) ? 200 : 404, {});
+      if (request.method === "GET" && url.pathname.endsWith("/logs") && name) {
+        const frames = fake.logLines.map(text => { const body = Buffer.from(text + "\n"), header = Buffer.alloc(8); header[0] = 1; header.writeUInt32BE(body.length, 4); return Buffer.concat([header, body]); });
+        response.writeHead(200, { "Content-Type": "application/vnd.docker.multiplexed-stream" }); return response.end(Buffer.concat(frames));
+      }
       if (request.method === "POST" && url.pathname === "/images/create") { if (fake.failPull) return reply(200, undefined, '{"status":"Pulling"}\n{"error":"pull access denied"}\n'); fake.images.add(`${url.searchParams.get("fromImage")}:${url.searchParams.get("tag")}`); return reply(200, undefined, '{"status":"Pulling"}\n{"status":"Download complete"}\n'); }
       if (request.method === "POST" && url.pathname === "/containers/create") { fake.created[url.searchParams.get("name")!] = JSON.parse(Buffer.concat(chunks).toString("utf8")); return reply(201, { Id: "abc" }); }
       if (request.method === "POST" && url.pathname.endsWith("/start")) { fake.running.add(name!); return reply(204); }
@@ -106,4 +110,42 @@ it("reports a failed download or an unreachable Docker plainly, without internal
   const missing = path.join(os.tmpdir(), "no-such-docker.sock");
   await new Promise<void>(done => manager.close(() => done())); await start({}, missing);
   const response = await call("GET", "/status"); expect(response.status).toBe(502); expect(await body(response)).toEqual({ error: "Docker could not be reached" });
+});
+
+it("keeps a deploy log of what it did, in order, without ever writing a claim token into it", async () => {
+  await call("POST", "/servers/plex/launch", { port: 32400, claim: "claim-supersecret99" }); await settled("plex");
+  const log = (await body(await call("GET", "/servers/plex/logs"))).deploy as Array<{ time: string; message: string }>;
+  expect(log.map(entry => entry.message)).toEqual(["Launch requested on port 32400 with a claim token", "Downloading image plexinc/pms-docker:latest", "Downloaded plexinc/pms-docker:latest", "Starting the container", "Started. It listens on port 32400"]);
+  expect(log.every(entry => /^\d{4}-\d\d-\d\dT/.test(entry.time))).toBe(true); expect(JSON.stringify(log)).not.toContain("supersecret");
+  await call("POST", "/servers/plex/stop"); await call("DELETE", "/servers/plex");
+  expect((await body(await call("GET", "/servers/plex/logs"))).deploy.slice(-2).map((entry: { message: string }) => entry.message)).toEqual(["Stop requested", "Remove requested"]);
+  expect((await body(await call("GET", "/servers/jellyfin/logs"))).deploy).toEqual([]); // each server has its own log
+});
+
+it("reports a failed launch and an image that was already there in the deploy log", async () => {
+  docker.images.add("jellyfin/jellyfin:latest"); await call("POST", "/servers/jellyfin/launch", {}); await settled("jellyfin");
+  expect((await body(await call("GET", "/servers/jellyfin/logs"))).deploy.map((entry: { message: string }) => entry.message)).toContain("Image jellyfin/jellyfin:latest is already on this machine");
+  docker.failPull = true; docker.images.clear(); await call("POST", "/servers/plex/launch", {}); await settled("plex");
+  const messages = (await body(await call("GET", "/servers/plex/logs"))).deploy.map((entry: { message: string }) => entry.message);
+  expect(messages).toContain("Failed: The image could not be downloaded");
+});
+
+it("shows the container's own output, unframed, trimmed to the tail, with tokens and colours removed", async () => {
+  docker.logLines = ["2026-11-10T12:00:00Z Starting Plex Media Server", "\u001b[32m2026-11-10T12:00:01Z listening\u001b[0m", "2026-11-10T12:00:02Z PLEX_CLAIM=claim-supersecret99 accepted", "2026-11-10T12:00:03Z GET /library/sections?X-Plex-Token=abcd1234efgh", "2026-11-10T12:00:04Z request api_key=jf-secret-key-5678 ok", "", ...Array.from({ length: 300 }, (_, index) => `line ${index}`)];
+  await call("POST", "/servers/plex/launch", {}); await settled("plex");
+  const all = (await body(await call("GET", "/servers/plex/logs?tail=200"))).container as string[];
+  expect(all).toHaveLength(200); expect(all.at(-1)).toBe("line 299");
+  const few = (await body(await call("GET", "/servers/plex/logs?tail=3"))).container as string[]; expect(few).toEqual(["line 297", "line 298", "line 299"]);
+  docker.logLines = docker.logLines.slice(0, 6);
+  const small = (await body(await call("GET", "/servers/plex/logs"))).container as string[]; const text = small.join("\n");
+  expect(small[0]).toContain("Starting Plex Media Server"); expect(text).toContain("listening"); expect(text).not.toMatch(/\u001b|supersecret|abcd1234efgh|jf-secret-key/);
+  expect(text).toContain("PLEX_CLAIM=****"); expect(text).toContain("X-Plex-Token=****"); expect(text).toContain("api_key=****");
+  expect(small.every(line => line.trim().length > 0)).toBe(true);
+});
+
+it("serves logs only to the caller with the secret, and only for the two servers", async () => {
+  expect((await call("GET", "/servers/plex/logs", undefined, null)).status).toBe(401);
+  expect((await call("GET", "/servers/portainer/logs")).status).toBe(404);
+  expect((await call("POST", "/servers/plex/logs")).status).toBe(405);
+  expect((await call("GET", "/servers/plex/logs?tail=-5")).status).toBe(200); // a bad tail is clamped, never an error
 });
