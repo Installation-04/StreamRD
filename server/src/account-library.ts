@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { AccountMedia, AccountScan, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { DEFAULT_SERVER_SETTINGS } from "./settings";
+import { classifyTitle } from "./media-filter";
 import { PROVIDER_IDS, ProviderCredentials, ProviderError, ProviderId } from "./providers/types";
 import { ExistingAccountItem, playAccountItem, scanAccountPage } from "./providers/account-library";
 
@@ -99,11 +100,12 @@ export async function queueAccountScans(userId: string, options: { provider?: Pr
 export const syncAccountLibraryConfiguration = (userId: string) => queueAccountScans(userId, { automatic: true });
 let importHook: ((items: AccountMedia[]) => Promise<void>) | null = null;
 export function setAccountImportHook(hook: ((items: AccountMedia[]) => Promise<void>) | null) { importHook = hook; }
-function mediaHint(item: ExistingAccountItem) {
+export function mediaHint(item: ExistingAccountItem) {
   if (typeof item.providerRef !== "string" || !item.providerRef || item.providerRef.length > 8192 || /[\x00-\x1f]/.test(item.providerRef)) return null;
   const original = typeof item.name === "string" ? item.name.replace(/[\x00-\x1f]/g, " ").trim() : "";
   if (!original || /^(?:https?:|magnet:)/i.test(original)) return null;
   if (/\.(?:nfo|txt|srt|ass|sub|ssa|vtt|pdf|jpe?g|png|webp|gif|mp3|flac|wav|ogg|aac|exe|dmg)$/i.test(original)) return null;
+  if (!classifyTitle(original).keep) return null; // games, software, music, books and unreadable names are not movies or shows
   const filename = original.split(/[\\/]/).at(-1)!.replace(/\.(?:mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg)$/i, "");
   const yearMatch = /(?:^|[ ._(\-])((?:18|19|20|21)\d{2}|2200)(?=$|[ ._)\-])/.exec(filename);
   const episode = /(?:^|[ ._\-])(?:s\d{1,3}(?:e\d{1,4})?|\d{1,3}x\d{1,4}|season[ ._\-]?\d+)(?=$|[ ._\-])/i.exec(filename);

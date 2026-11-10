@@ -74,3 +74,13 @@ describe("searchIndexer (Torznab)", () => {
     expect(results).toHaveLength(1);
   });
 });
+
+describe("hash-only Torznab items", () => {
+  it("builds a magnet link from the info-hash attribute", async () => {
+    const xml = `<?xml version="1.0"?><rss xmlns:torznab="http://torznab.com/schemas/2015/feed"><channel><item><title>Crank.2006.1080p.BluRay</title><torznab:attr name="infohash" value="0123456789ABCDEF0123456789ABCDEF01234567" /><torznab:attr name="size" value="4000000000" /></item><item><title>Bad hash</title><torznab:attr name="infohash" value="not-a-hash" /></item></channel></rss>`;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(xml, { status: 200 })));
+    const [good, bad] = await searchIndexer({ id: "z", name: "Zilean", baseUrl: "http://zilean:8181/torznab/api", apiKey: "zilean", enabled: true } as never, "crank");
+    expect(good).toMatchObject({ hasMagnet: true, link: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Crank.2006.1080p.BluRay", sizeBytes: 4000000000 });
+    expect(bad.hasMagnet).toBe(false);
+  });
+});

@@ -1,12 +1,13 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.8.1** follows v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
+`vMAJOR.MINOR.PATCH`. **v0.9.0** follows v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
 Native-client versions remain independent.
 
-- [v0.8.1 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.8.1) ·
-  [notes](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/releases/v0.8.1.md) ·
-  [screenshot provenance](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/screenshots/v0.8.1/README.md)
+- [v0.9.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.9.0.md) (tag it to release) ·
+  [v0.8.1 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.8.1)
+
+**v0.9.0** keeps settings and data in `config/` and `data/` like Radarr/Sonarr, so updating is `docker compose pull && docker compose up -d`; imports only movies and shows from your accounts (with a cleanup for what was imported before); and adds optional Zilean (indexer) and Zurg (Real-Debrid mount) Compose add-ons. See [the add-ons guide](https://github.com/Installation-04/StreamRD/blob/main/docs/zilean-zurg.md).
 
 **v0.8.1** fixes automatic matching for release-style file names (the title is searched without year, edition and
 quality tags, unambiguous exact or near-year matches are accepted, and the worker is much faster), adds match progress and

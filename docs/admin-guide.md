@@ -79,7 +79,7 @@ share exports carefully.
 **Updates.** *Check for updates* compares the installed version with the latest
 GitHub release (set `UPDATE_CHECK=false` to turn the lookup off, or
 `UPDATE_REPOSITORY=owner/name` to follow a fork). The server never replaces itself.
-**Update to vX.Y.Z** appears only when the operator configures `UPDATE_WEBHOOK_URL`
+On a Docker install the page shows the command to run (`docker compose pull && docker compose up -d`) with a Copy button; updates are never applied by the app itself. **Update to vX.Y.Z** appears only when the operator configures `UPDATE_WEBHOOK_URL`
 (and optionally `UPDATE_WEBHOOK_TOKEN`, sent as a bearer token): the server takes a
 verified `pre-update-*` backup, then POSTs `{product, from, to}` to that URL and
 reports success only if it accepts. The hook is yours to provide, for example a

@@ -7,7 +7,7 @@ import { db } from "../db";
 import { asyncHandler } from "../http";
 import { AccountLibraryError, cancelAccountScan, getAccountScanStatus, playImportedMedia, queueAccountScans } from "../account-library";
 import { PROVIDER_IDS } from "../providers/types";
-import { accountMetadataSummary, decorateAccountMedia, rematchAccountMetadata } from "../metadata/account";
+import { accountMetadataSummary, cleanupAccountLibrary, decorateAccountMedia, rematchAccountMetadata } from "../metadata/account";
 import { rateLimit } from "../util/rateLimit";
 
 export const accountLibraryRouter = Router();
@@ -57,6 +57,11 @@ accountLibraryRouter.post("/scan/cancel", action(async (req, res) => {
 }));
 accountLibraryRouter.get("/metadata/summary", action(async (req, res) => { res.json(await accountMetadataSummary(req.session!.sub)); }));
 accountLibraryRouter.post("/metadata/rematch", rateLimit({ windowMs: 60_000, max: 30 }), action(async (req, res) => { res.json(await rematchAccountMetadata(req.session!.sub)); }));
+accountLibraryRouter.post("/cleanup", rateLimit({ windowMs: 60_000, max: 20 }), action(async (req, res) => {
+  const body = z.object({ apply: z.boolean().optional() }).strict().safeParse(req.body ?? {});
+  if (!body.success) throw new AccountLibraryError("Invalid cleanup request.");
+  res.json(await cleanupAccountLibrary(req.session!.sub, body.data.apply === true));
+}));
 accountLibraryRouter.get("/:id", action(async (req, res) => {
   if (!idSchema.safeParse(req.params.id).success) throw new AccountLibraryError("Library item not found.", 404);
   const item = await db.accountMedia.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });

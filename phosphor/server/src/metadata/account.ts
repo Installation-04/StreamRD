@@ -2,6 +2,7 @@ import { AccountMedia } from "@prisma/client";
 import { db } from "../db";
 import { queueAutomaticTargets, queueTarget, storedMetadata } from "./automation";
 import { getMetadataSettings } from "./settings";
+import { classifyTitle } from "../media-filter";
 
 /** Only decorate rows already selected through the caller's account boundary. */
 export async function decorateAccountMedia<T extends { id: string; userId: string }>(items: T[]) {
@@ -53,4 +54,33 @@ export async function rematchAccountMetadata(userId: string, limit = 500) {
   for (const item of items) if (await queueTarget(targetOf(item), true, true, settings)) queued++;
   const after = await accountMetadataSummary(userId);
   return { queued, remaining: after.review + after.unmatched + after.error + after.notStarted, configured: true };
+}
+
+/**
+ * Find (and optionally remove) entries in the caller's own library that are not movies or shows: games, software,
+ * music, books and names with no readable title. Only the local library rows go; the provider's torrents and every
+ * other user's library are untouched, and a later scan skips these names too.
+ */
+export async function cleanupAccountLibrary(userId: string, apply: boolean) {
+  const counts: Record<string, number> = {}, samples: Array<{ name: string; reason: string }> = [], ids: string[] = [];
+  for (let cursor = ""; ;) {
+    const page = await db.accountMedia.findMany({ where: { userId, id: { gt: cursor } }, orderBy: { id: "asc" }, take: 500, select: { id: true, name: true } });
+    if (!page.length) break;
+    cursor = page[page.length - 1].id;
+    for (const item of page) {
+      const verdict = classifyTitle(item.name);
+      if (verdict.keep) continue;
+      counts[verdict.reason] = (counts[verdict.reason] ?? 0) + 1; ids.push(item.id);
+      if (samples.length < 40) samples.push({ name: item.name.slice(0, 120), reason: verdict.reason });
+    }
+  }
+  let removed = 0;
+  if (apply) {
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const batch = ids.slice(offset, offset + 200);
+      removed += (await db.accountMedia.deleteMany({ where: { id: { in: batch }, userId } })).count;
+      await db.metadataRecord.deleteMany({ where: { targetType: "account", targetId: { in: batch }, ownerId: userId } });
+    }
+  }
+  return { matched: ids.length, removed, applied: apply, counts, samples };
 }
