@@ -23,5 +23,5 @@ resumes shared titles where it stopped, and **Shared libraries** shows a Continu
 watching row (StreamRD; Phosphor does not yet record shared progress). Direct provider URLs already
 issued may work until the provider expires them.
 
-See the [full guide](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/server-sharing.md)
+See the [full guide](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/server-sharing.md)
 for the v0.6.0 implementation and API contract.
