@@ -1,6 +1,7 @@
 import { discoveryRouter, requestsRouter, adminRequestsRouter } from "./routes/requests";
 import { requestSettingsRouter } from "./requests/config";
 import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
+import { homeRouter } from "./routes/home";
 import { accountLibraryRouter } from "./routes/account-library";
 import { accountMetadataRouter } from "./routes/accountMetadata";
 import { metadataRouter } from "./routes/metadata";
@@ -52,6 +53,7 @@ export function createApp(): Express {
   app.use("/api/catalog", catalogRouter);
   app.use("/api/play", playRouter);
   app.use("/api/shared-libraries", sharedLibrariesRouter);
+  app.use("/api/home", homeRouter);
   app.use("/api/admin/shared-libraries", adminSharedLibrariesRouter);
   app.use("/api/admin/metadata", metadataRouter);
   app.use("/api/admin/system", systemRouter);

@@ -77,7 +77,7 @@ module.exports = async function maintenance({ product, page, url, api, admin, ca
   await noOverflow('desktop library match status'); await shot('library-match-status');
   if (product === 'streamrd') {
     await page.goto(`${url}/`, { waitUntil: 'networkidle' });
-    await page.getByRole('region', { name: 'From your library' }).waitFor();
+    await page.getByRole('region', { name: 'New in your libraries' }).waitFor();
     await noOverflow('desktop dashboard library row'); await shot('dashboard-library-row');
   }
   report.journeys.push(`${product}: library matching progress${product === 'streamrd' ? ' and dashboard library row' : ''}`);
