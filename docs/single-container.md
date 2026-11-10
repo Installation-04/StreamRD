@@ -163,6 +163,7 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
 | `STREAMRD_DATA_KEY`, `PHOSPHOR_DATA_KEY` | Optional explicit keys (at least 16 characters) for encrypting stored credentials; otherwise generated under `/config/secrets` |
+| `TMDB_DEFAULT_API_KEY` | Optional TMDB key (API key or read access token) shared by everyone on this server; used only until an administrator saves a key in Admin → Metadata |
 | `CORS_ORIGINS` | Empty (same-origin only); comma-separated origins if another web app calls the APIs |
 | `SQLITE_WAL` | `true`; set `false` only if the data folder is on a network file system |
 | `TRUST_PROXY` | `false`; enable only behind your own trusted HTTPS reverse proxy to honor its protocol header |

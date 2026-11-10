@@ -35,6 +35,8 @@ export interface MetadataSettings {
 export type PublicMetadataSettings = Omit<MetadataSettings, "tmdbApiKey" | "omdbApiKey"> & {
   /** The source actually used: the chosen provider when it has a key, otherwise the built-in one. */
   activeProvider: MetadataProvider;
+  /** True when the server was built or deployed with a shared TMDB key; the key itself is never exposed. */
+  projectTmdbKey: boolean;
   tmdbConfigured: boolean;
   omdbConfigured: boolean;
 };

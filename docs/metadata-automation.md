@@ -49,6 +49,14 @@ built-in source instead, and switches to your key the moment you save one. You c
 - **Best results:** add your own TMDB key (free for non-commercial use) for richer artwork and more reliable search.
 - **Attribution:** title pages state that metadata comes from Cinemeta (IMDb-linked data).
 
+### A shared TMDB key for a whole server
+
+An operator can give a server a TMDB key without anyone entering one in the interface: set `TMDB_DEFAULT_API_KEY` (a TMDB API key or
+read access token) in the container's environment. It is used only while no key is saved in **Admin → Metadata**, so the order is:
+the administrator's own key, then this shared key, then the built-in source. It is never stored in the database or shown in the
+interface (the TMDB card only says "Using this server's shared TMDB key"), and it is never used for OMDb or the built-in source.
+Titles that are looked up are then sent to TMDB. **The official container image does not contain any key.**
+
 ## First setup
 
 1. Upgrade the backend database using the [versioned upgrade guide](database-upgrades.md).

@@ -95,7 +95,7 @@ describe("falling back to the built-in source", () => {
     await saveMetadataSettings({ automatic: true });
     const settings = await getMetadataSettings();
     expect(settings).toMatchObject({ automatic: true, provider: "tmdb", tmdbApiKey: "", omdbApiKey: "" });
-    expect(publicMetadataSettings(settings)).toMatchObject({ provider: "tmdb", activeProvider: "free", automatic: true, tmdbConfigured: false, omdbConfigured: false });
+    expect(publicMetadataSettings(settings)).toMatchObject({ provider: "tmdb", activeProvider: "free", projectTmdbKey: false, automatic: true, tmdbConfigured: false, omdbConfigured: false });
     await saveMetadataSettings({ provider: "free" });
     expect((await getMetadataSettings()).provider).toBe("free");
   });
