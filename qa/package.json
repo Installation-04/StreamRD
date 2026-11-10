@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/browser-qa",
-  "version": "0.10.3",
+  "version": "0.11.0",
   "private": true,
   "description": "Disposable production-image browser journeys for both community apps",
   "scripts": {

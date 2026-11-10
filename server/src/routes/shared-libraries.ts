@@ -18,7 +18,7 @@ sharedLibrariesRouter.use(noStore, requireAuth);
 adminSharedLibrariesRouter.use(noStore, requireAuth, requireAdmin);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const mediaType = z.enum(["all", "movie", "series"]);
-const fields = z.object({ name: z.string().trim().min(1).max(80), mediaType: mediaType.default("all") }).strict();
+const fields = z.object({ name: z.string().trim().min(1).max(80), mediaType: mediaType.default("all"), everyone: z.boolean().default(false) }).strict();
 const list = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: z.string().max(512).optional(), q: z.string().trim().max(200).optional(), type: z.enum(["movie", "series"]).optional() }).strict();
 const cursorSchema = z.object({ v: z.literal(1), id, at: z.string().datetime(), scope: z.string().regex(/^[a-f0-9]{32}$/) }).strict();
 function action(run: (req: Request, res: Response) => Promise<unknown>) {
@@ -46,7 +46,7 @@ async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visib
 }
 async function adminView(library: Awaited<ReturnType<typeof ownedLibrary>>) {
   const grants = await db.sharedLibraryGrant.findMany({ where: { libraryId: library.id }, orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, email: true, displayName: true, active: true } } } });
-  return { ...await sharedLibraryView(library), enabled: library.enabled, createdAt: library.createdAt.toISOString(), updatedAt: library.updatedAt.toISOString(), users: grants.map(grant => grant.user) };
+  return { ...await sharedLibraryView(library), enabled: library.enabled, everyone: library.everyone, createdAt: library.createdAt.toISOString(), updatedAt: library.updatedAt.toISOString(), users: grants.map(grant => grant.user) };
 }
 async function audit(req: Request, message: string, libraryId: string, userId?: string) {
   await logEvent("info", "admin_action", message, { userId: req.session!.sub, meta: { libraryId, ...(userId ? { targetUserId: userId } : {}) } });
@@ -68,7 +68,7 @@ adminSharedLibrariesRouter.post("/", action(async (req, res) => {
 }));
 adminSharedLibrariesRouter.patch("/:id", action(async (req, res) => {
   const library = await ownedLibrary(req);
-  const body = parse(z.object({ name: fields.shape.name.optional(), mediaType: mediaType.optional(), enabled: z.boolean().optional() }).strict().refine(value => Object.keys(value).length > 0), req.body);
+  const body = parse(z.object({ name: fields.shape.name.optional(), mediaType: mediaType.optional(), enabled: z.boolean().optional(), everyone: z.boolean().optional() }).strict().refine(value => Object.keys(value).length > 0), req.body);
   const updated = await db.sharedLibrary.update({ where: { id: library.id }, data: body });
   await audit(req, "Updated a shared library", library.id);
   res.json({ library: await adminView(updated) });

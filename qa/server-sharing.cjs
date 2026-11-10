@@ -90,7 +90,7 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     await page.getByLabel('Library name', { exact: true }).fill(libraryName);
     await page.getByRole('combobox', { name: 'Content type', exact: true }).selectOption('movie');
     const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/shared-libraries') && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Create shared library', exact: true }).click();
+    await page.getByRole('button', { name: 'Create library', exact: true }).click();
     const created = await (await createdResponse).json(); libraryId = created.library?.id; assert.ok(libraryId);
     const library = page.getByRole('region', { name: libraryName, exact: true });
     await library.getByRole('combobox', { name: `Add a user to ${libraryName}`, exact: true }).selectOption(viewerUser.id);

@@ -296,6 +296,7 @@ model SharedLibrary {
   sourceUser User @relation(fields: [sourceUserId], references: [id], onDelete: Cascade)
   mediaType String @default("all")
   enabled Boolean @default(true)
+  everyone Boolean @default(false)
   grants SharedLibraryGrant[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

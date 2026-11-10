@@ -189,3 +189,27 @@ it.each(["list-key", "detail-key", "list-provider", "detail-provider"])("withhol
   expect(response.status).toBe(409); expect(response.body.item).toBeUndefined(); expect(response.body.items).toBeUndefined();
   expect(JSON.stringify(response.body)).not.toMatch(/Server Movie|private-film-ref|private-key|rotated-during/);
 });
+
+it("lets an administrator make a library visible to every active user without a per-user grant", async () => {
+  const owner = await user("admin"), member = await user(), other = await user(), [film] = await imports(owner);
+  const shared = await library(owner, "Movies", "movie");
+  expect((await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries).toEqual([]);
+  const open = await request(app).patch(`/api/admin/shared-libraries/${shared.id}`).set(auth(owner.token)).send({ everyone: true });
+  expect(open.status).toBe(200); expect(open.body.library).toMatchObject({ everyone: true, users: [] });
+  for (const viewer of [member, other]) {
+    const seen = await request(app).get("/api/shared-libraries").set(auth(viewer.token));
+    expect(seen.body.libraries.map((entry: { id: string }) => entry.id)).toEqual([shared.id]);
+    const items = await request(app).get(`/api/shared-libraries/${shared.id}/items`).set(auth(viewer.token));
+    expect(items.status).toBe(200); expect(items.body.items.map((entry: { id: string }) => entry.id)).toEqual([film.id]);
+  }
+  // Pausing the library hides it from everyone; closing it again returns to explicit grants only.
+  await request(app).patch(`/api/admin/shared-libraries/${shared.id}`).set(auth(owner.token)).send({ enabled: false });
+  expect((await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries).toEqual([]);
+  await request(app).patch(`/api/admin/shared-libraries/${shared.id}`).set(auth(owner.token)).send({ enabled: true, everyone: false });
+  expect((await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries).toEqual([]);
+  await grant(owner, shared.id, member);
+  expect((await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries).toHaveLength(1);
+  expect((await request(app).get("/api/shared-libraries").set(auth(other.token))).body.libraries).toEqual([]);
+  const created = await request(app).post("/api/admin/shared-libraries").set(auth(owner.token)).send({ name: "TV Shows", mediaType: "series", everyone: true });
+  expect(created.status).toBe(201); expect(created.body.library.everyone).toBe(true);
+});

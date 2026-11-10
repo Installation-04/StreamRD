@@ -232,10 +232,45 @@ it("upgrades a populated v0.6 server without creating or starting media requests
  }
  const db=client();await seed(db,true);
  await db.accountMedia.create({data:{id:"existing-import",userId:"user",provider:"realdebrid",providerRef:"private-existing-ref",credentialFingerprint:"existing-binding",name:"Existing media",phase:"finished",progress:100}});
- await db.sharedLibrary.create({data:{id:"existing-library",name:"Movie night",sourceUserId:"user"}});
+ // Inserted with SQL: the generated client already knows columns that later migrations add to this older database.
+ await db.$executeRawUnsafe(`INSERT INTO "SharedLibrary" ("id","name","sourceUserId","mediaType","enabled","createdAt","updatedAt") VALUES ('existing-library','Movie night','user','all',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`);
  const before=await snapshot(db);const result=await migrateDatabase({root,url});
  expect(result.backup).toBeTruthy();await preserved(db,before);
  expect(await db.mediaRequest.count()).toBe(0);expect(await db.requestFollower.count()).toBe(0);expect(await db.requestEvent.count()).toBe(0);
  expect(await db.setting.count()).toBe(before.Setting.length);
  expect(result.state).toMatchObject({state:"current",applied:names.length});
 },60000);
+
+// Every release must upgrade from every earlier supported checkpoint without losing a row. This runs the real upgrade
+// from each point in the committed chain after the community baseline, so a new migration is covered automatically.
+it("upgrades from every earlier checkpoint with a backup and every existing row unchanged", async () => {
+ expect(communityApplied).toBeGreaterThan(0);
+ for(let applied=communityApplied;applied<names.length;applied++){
+  for(const suffix of ["","-wal","-shm"])fs.rmSync(file+suffix,{force:true});
+  fs.writeFileSync(file,"");
+  for(const name of names.slice(0,applied)){
+   command(["db","execute","--url",url,"--file",path.join(root,"prisma/migrations",name,"migration.sql")]);
+   command(["migrate","resolve","--applied",name]);
+  }
+  const db=client();await seed(db,false);
+  const before=await snapshot(db);
+  const result=await migrateDatabase({root,url});
+  expect(result.backup,`backup before upgrading from ${names[applied-1]}`).toBeTruthy();
+  await preserved(db,before);
+  expect(result.state,`state after upgrading from ${names[applied-1]}`).toMatchObject({state:"current",applied:names.length});
+  await db.$disconnect();clients.splice(clients.indexOf(db),1);
+ }
+},180000);
+
+// Updates must never cost anyone data. A migration may only add to the schema; anything that drops, renames, deletes or
+// truncates needs a reviewed `-- destructive-ok: <reason>` line, which makes the exception visible in review and in the release notes.
+it("keeps every migration additive unless it carries a reviewed destructive-ok reason", () => {
+ const destructive=/\b(DROP\s+(TABLE|COLUMN|INDEX|VIEW|TRIGGER)|DELETE\s+FROM|TRUNCATE|RENAME\s+(COLUMN|TO))\b/i;
+ const offenders:string[]=[];
+ for(const name of names){
+  const sql=fs.readFileSync(path.join(root,"prisma/migrations",name,"migration.sql"),"utf8");
+  const code=sql.split("\n").filter(line=>!line.trim().startsWith("--")).join("\n");
+  if(destructive.test(code)&&!/^--\s*destructive-ok:\s*\S+/im.test(sql))offenders.push(name);
+ }
+ expect(offenders,"These migrations remove or rename data without a `-- destructive-ok: reason` line").toEqual([]);
+});

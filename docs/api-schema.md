@@ -505,6 +505,7 @@ All routes require an active session and current access to the library.
   `{accepted:false, reason:"out-of-order"}`. Unknown/superseded sessions and
   inaccessible items return 404; positions past the duration are rejected (400).
   95% watched marks the file complete and resets the resume position.
+- Administrators can set `everyone: true` when creating or updating a library (`/api/admin/shared-libraries`) to make it visible to every active user without per-user grants.
 - `GET /api/shared-libraries/continue?limit=12` → `{items:[{libraryId,item,positionSeconds,durationSeconds,updatedAt}]}`
   for incomplete, currently accessible items, newest first, one per item.
 

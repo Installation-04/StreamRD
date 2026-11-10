@@ -5,6 +5,12 @@ schema/history validation. Production startup no longer runs `prisma db push`.
 Each app has its own database and migration chain. PostgreSQL is not supported by
 this release; changing the Prisma provider alone is insufficient.
 
+## Guarantees for every release
+
+Each release is checked so that updating never costs data: migrations only add (anything else needs a reviewed `-- destructive-ok:`
+reason), every earlier checkpoint in the migration chain is upgraded with real data in CI and must keep every row, and a verified
+backup is written before any change. See [RELEASING.md](../RELEASING.md#updates-must-never-cost-anyone-data).
+
 ## Supported starting points
 
 | Database | Preparation behavior |

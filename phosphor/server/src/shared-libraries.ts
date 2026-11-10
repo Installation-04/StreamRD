@@ -8,7 +8,7 @@ export function visibleSharedLibraryWhere(userId: string): Prisma.SharedLibraryW
   return {
     enabled: true,
     sourceUser: { active: true, role: "admin" },
-    OR: [{ sourceUserId: userId }, { grants: { some: { userId } } }],
+    OR: [{ sourceUserId: userId }, { everyone: true }, { grants: { some: { userId } } }],
   };
 }
 export function libraryMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | "mediaType">): Prisma.AccountMediaWhereInput {
