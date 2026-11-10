@@ -3,6 +3,7 @@ import { PRODUCT } from "./product";
 import { sharedMediaWhere, visibleSharedLibraryWhere } from "./shared-libraries";
 import { accountMediaViews } from "./routes/account-library";
 import { currentAccountMediaFilter } from "./account-library";
+import { favoriteIds, favoriteItems } from "./favorites";
 
 /**
  * The rows on the home page. Library rows (recently added, popular on this server) come from the libraries the viewer may
@@ -96,7 +97,7 @@ export async function externalSections() {
 export async function librarySections(userId: string, role: string, limit: number | null = null) {
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
   const own = role === "admin" ? [{ AND: [{ userId }, await currentAccountMediaFilter(userId)] }] : [];
-  if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], libraryFeatured: [] as Slide[] };
+  if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], myList: [] as Array<{ libraryId: string; item: Awaited<ReturnType<typeof accountMediaViews>>[number] & { favorite: boolean } }>, libraryFeatured: [] as Slide[] };
   const where = { phase: "finished", OR: [...await Promise.all(libraries.map(library => sharedMediaWhere(library, limit))), ...own] };
   const libraryOf = (item: { userId: string; type: string }) => libraries.find(library => library.sourceUserId === item.userId && (library.mediaType === "all" || library.mediaType === item.type))?.id ?? null;
   const recent = await db.accountMedia.findMany({ where: { AND: [where, { isPrimary: true }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: ROW });
@@ -105,7 +106,10 @@ export async function librarySections(userId: string, role: string, limit: numbe
   const found = groups.length ? await db.accountMedia.findMany({ where: { AND: [where, { id: { in: groups.map(group => group.itemId) } }] } }) : [];
   const rank = new Map(groups.map((group, index) => [group.itemId, index])), popular = found.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!).filter((item, index, all) => !item.groupKey || all.findIndex(other => other.userId === item.userId && other.groupKey === item.groupKey) === index).slice(0, 12);
   const [recentViews, popularViews] = await Promise.all([accountMediaViews(recent), accountMediaViews(popular)]);
-  const recentlyAdded = recent.map((item, index) => ({ libraryId: libraryOf(item), item: recentViews[index] }));
+  const marks = await favoriteIds(userId, [...recent, ...popular]);
+  const recentlyAdded = recent.map((item, index) => ({ libraryId: libraryOf(item), item: { ...recentViews[index], favorite: marks.has(item.id) } }));
+  const listed = await favoriteItems(userId, limit, ROW), listedViews = await accountMediaViews(listed.map(row => row.item));
+  const myList = listed.map((row, index) => ({ libraryId: row.libraryId, item: { ...listedViews[index], favorite: true } }));
   // Titles of the viewer's own libraries that have a backdrop and a synopsis lead the banner.
   const featured = recentlyAdded.flatMap(({ libraryId, item }): Slide[] => {
     const details = item.metadata, backdrop = details?.backdropUrl;
@@ -113,5 +117,5 @@ export async function librarySections(userId: string, role: string, limit: numbe
     return [{ kind: "library", id: item.id, href: libraryId ? `/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}` : `/library/${encodeURIComponent(item.id)}`, title: details.name || item.name, year: details.year ?? item.year,
       rating: details.rating ?? null, genres: (details.genres ?? []).slice(0, 3), description: details.description.slice(0, 280), backdropUrl: backdrop, trailer: null, label: "NEW IN YOUR LIBRARIES" }];
   }).slice(0, 2);
-  return { recentlyAdded, popularHere: popular.map((item, index) => ({ libraryId: libraryOf(item), item: popularViews[index] })), libraryFeatured: featured };
+  return { recentlyAdded, myList, popularHere: popular.map((item, index) => ({ libraryId: libraryOf(item), item: { ...popularViews[index], favorite: marks.has(item.id) } })), libraryFeatured: featured };
 }

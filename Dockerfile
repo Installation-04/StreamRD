@@ -54,7 +54,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 DATA_DIR=/data
 WORKDIR /opt
 RUN mkdir -p /config /data && chown node:node /config /data
 COPY --from=bundle --chown=node:node /opt /opt
-COPY --chown=node:node infra/single-container/start.cjs infra/single-container/health.cjs /opt/single-container/
+COPY --chown=node:node infra/single-container/start.cjs infra/single-container/health.cjs infra/single-container/media-manager.cjs /opt/single-container/
 USER node
 VOLUME ["/config", "/data"]
 EXPOSE 8080 8081 6881/tcp 6881/udp

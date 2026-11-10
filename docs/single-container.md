@@ -70,6 +70,8 @@ a newer release exists and shows the command. For automatic updates run
 
 ## Optional add-ons
 
+`install.sh --media-manager` adds a small helper so **Setup → Plex or Jellyfin** can start them later, with a place for the Plex claim token, the Plex token and the Jellyfin API key; see [Start Plex or Jellyfin from StreamRD's Setup page](plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page) for what the helper can and cannot do (it holds the Docker socket, so it is opt-in).
+
 `install.sh --media-server jellyfin|plex|both` runs [Jellyfin and/or Plex](plex-jellyfin.md#built-in-jellyfin-and-plex) in the same Compose project, already mapped to the
 libraries StreamRD and Phosphor export and to your downloads, with their own settings kept under `config/jellyfin` and `config/plex`. Choose their ports with
 `--jellyfin-port` and `--plex-port` (defaults 8096 and 32400).
