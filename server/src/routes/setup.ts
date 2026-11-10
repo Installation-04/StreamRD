@@ -1,3 +1,4 @@
+import { mediaServerTokenSaved } from "../media-servers";
 import { getSharedSetupState } from "../shared-libraries";
 import { countReadyAccountMedia, getAccountScanStatus } from "../account-library";
 import { Router } from "express";
@@ -61,6 +62,12 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
       : "Your administrator needs to share a library with you before you can start watching.",
     href: contentReady ? "/library" : admin ? "/library" : null,
     actionLabel: contentReady ? "Open Imports" : admin ? "Import from your account" : "Ask your administrator",
+  });
+  if (admin) checks.push({
+    id: "media-server", title: "Plex or Jellyfin (optional)", required: false,
+    status: await mediaServerTokenSaved() ? "complete" : "optional",
+    description: "Optional: run Plex or Jellyfin next to StreamRD. Enter their tokens, press Launch, and your libraries are already mapped.",
+    href: "/admin/library#media-servers", actionLabel: "Set up a media server",
   });
   if (admin) checks.push({
     id: "library", title: "Plex / Jellyfin library", required: false,
