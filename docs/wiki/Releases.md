@@ -1,15 +1,25 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.7.0 Shared Watch Progress** follows v0.6.0 Server Sharing.
+`vMAJOR.MINOR.PATCH`. **v0.8.1** follows v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
 Native-client versions remain independent.
 
-- [v0.7.0 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.7.0)
-- [Release notes](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/releases/v0.7.0.md)
-- [Users and sharing guide](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/server-sharing.md)
-- [Screenshot provenance](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/screenshots/v0.7.0/README.md)
+- [v0.8.1 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.8.1) ·
+  [notes](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/releases/v0.8.1.md) ·
+  [screenshot provenance](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/screenshots/v0.8.1/README.md)
 
-Shared Watch Progress lets each viewer of a StreamRD shared library resume where they stopped and adds a Continue watching row. It adds one additive migration and stores no provider links or credentials. Validation covers 644 backend tests, four production builds, both upgrade/restore smoke checks and 27 browser journeys with 52 screenshots. Phosphor is unchanged.
+**v0.8.1** fixes automatic matching for release-style file names (the title is searched without year, edition and
+quality tags, unambiguous exact or near-year matches are accepted, and the worker is much faster), adds match progress and
+**Retry matching** to My library, shows your imported library on StreamRD's Discover page, and extends
+Admin → Logs with search, date filters, paging, copy and downloads. No migration. 778 backend tests, 41 browser journeys, 81 screenshots.
+
+**v0.8.0** adds media discovery and requests (TMDB/OMDb search, deduplicated requests, admin approval to a cloud provider or local
+qBittorrent), the all-in-one container, and Admin → System update checks, verified backups and restore. The tag also publishes
+the all-in-one image to the repository's container registry (amd64). One additive migration per product.
+[Notes](https://github.com/Installation-04/StreamRD/blob/v0.8.0/docs/releases/v0.8.0.md).
+
+**v0.7.0** lets each viewer of a StreamRD shared library resume where they stopped and adds a Continue watching row; one additive
+migration, no provider links or credentials stored. [Notes](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/releases/v0.7.0.md).
 
 ## Previous: v0.6.0 Server Sharing
 

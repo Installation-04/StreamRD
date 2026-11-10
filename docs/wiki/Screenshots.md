@@ -1,105 +1,105 @@
-# Shared watch progress screenshots — v0.7.0
+# Screenshots — v0.8.1
 
-Fifty-two captures from actual production images, with twenty-seven passing browser journeys
+Eighty-one captures from actual production images, with forty-one passing browser journeys
 and no page errors. All accounts/data are disposable fixtures. Read the
-[provenance and validation](https://github.com/Installation-04/StreamRD/blob/v0.7.0/docs/screenshots/v0.7.0/README.md)
+[provenance and validation](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/screenshots/v0.8.1/README.md)
 for what is real and what is synthetic.
 
 ## StreamRD discovery
 
 A real curated catalog, original poster fallbacks, and a saved favorite.
 
-![StreamRD discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-discover.png)
+![StreamRD discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-discover.png)
 
 ## StreamRD light theme
 
 The same catalog with the actual light-theme control.
 
-![StreamRD light theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-discover-light.png)
+![StreamRD light theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-discover-light.png)
 
 ## StreamRD on mobile
 
 390px viewport with responsive navigation and discovery.
 
-![StreamRD on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-discover-mobile.png)
+![StreamRD on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-discover-mobile.png)
 
 ## Guided setup
 
 Local configuration progress, explicit next actions, and optional external libraries.
 
-![Guided setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-setup.png)
+![Guided setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-setup.png)
 
 ## Setup on mobile
 
 The same checklist in a mobile viewport.
 
-![Setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-setup-mobile.png)
+![Setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-setup-mobile.png)
 
 ## Reviewed mounted-library exports
 
 Real mounted-file selection and movie/episode batch exports, followed by link repair.
 
-![Reviewed mounted-library exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-library.png)
+![Reviewed mounted-library exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-library.png)
 
 ## Library on mobile
 
 Mobile browsing before any demo files are exported.
 
-![Library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-library-mobile.png)
+![Library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-library-mobile.png)
 
 ## Phosphor discovery
 
 Local Torznab results, inline saved-search naming, and the green theme.
 
-![Phosphor discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-discover.png)
+![Phosphor discovery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-discover.png)
 
 ## Phosphor amber theme
 
 Theme control preserves the active search.
 
-![Phosphor amber theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-discover-amber.png)
+![Phosphor amber theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-discover-amber.png)
 
 ## Phosphor white theme
 
 A third legible phosphor palette.
 
-![Phosphor white theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-discover-white.png)
+![Phosphor white theme](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-discover-white.png)
 
 ## Phosphor on mobile
 
 Responsive search and filter controls at 390px.
 
-![Phosphor on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-discover-mobile.png)
+![Phosphor on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-discover-mobile.png)
 
 ## Phosphor setup
 
 Role-aware connection checklist; configured is explicitly unverified.
 
-![Phosphor setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-setup.png)
+![Phosphor setup](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-setup.png)
 
 ## Phosphor setup on mobile
 
 Mobile setup guidance for a fresh demo installation.
 
-![Phosphor setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-setup-mobile.png)
+![Phosphor setup on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-setup-mobile.png)
 
 ## Phosphor mounted library
 
 The same reviewed movie/episode workflow in the terminal theme.
 
-![Phosphor mounted library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-library.png)
+![Phosphor mounted library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-library.png)
 
 ## Phosphor library on mobile
 
 Responsive folder browsing and review panels.
 
-![Phosphor library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-library-mobile.png)
+![Phosphor library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-library-mobile.png)
 
 ## Phosphor queue
 
 The real empty state; outage recovery is tested separately.
 
-![Phosphor queue](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-queue.png)
+![Phosphor queue](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-queue.png)
 
 
 ## StreamRD System & upgrades
@@ -107,15 +107,15 @@ The real empty state; outage recovery is tested separately.
 Read-only release, runtime and independently verified migration readiness. Snapshot
 policy is shown separately from evidence that a backup exists.
 
-![StreamRD System](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-system.png)
+![StreamRD System](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-system.png)
 
-![StreamRD System on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-system-mobile.png)
+![StreamRD System on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-system-mobile.png)
 
 ## Phosphor System & upgrades
 
-![Phosphor System](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-system.png)
+![Phosphor System](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-system.png)
 
-![Phosphor System on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-system-mobile.png)
+![Phosphor System on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-system-mobile.png)
 
 ## Metadata and automatic libraries
 
@@ -124,100 +124,110 @@ posters were used. Ratings and cast in these images are synthetic demo data.
 
 ### StreamRD: Metadata settings and matching activity
 
-![StreamRD Metadata settings and matching activity](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-metadata.png)
+![StreamRD Metadata settings and matching activity](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-metadata.png)
 
 ### StreamRD: Metadata on mobile
 
-![StreamRD Metadata on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-metadata-mobile.png)
+![StreamRD Metadata on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-metadata-mobile.png)
 
 ### StreamRD: Enriched mounted exports
 
-![StreamRD Enriched mounted exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-library-metadata.png)
+![StreamRD Enriched mounted exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-library-metadata.png)
 
 ### StreamRD: Onboarding account scan
 
-![StreamRD Onboarding account scan](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-setup-scan.png)
+![StreamRD Onboarding account scan](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-setup-scan.png)
 
 ### StreamRD: Private account library
 
-![StreamRD Private account library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-account-library.png)
+![StreamRD Private account library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-account-library.png)
 
 ### StreamRD: Private library on mobile
 
-![StreamRD Private library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-account-library-mobile.png)
+![StreamRD Private library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-account-library-mobile.png)
 
 ### StreamRD: Private title details
 
-![StreamRD Private title details](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-account-title.png)
+![StreamRD Private title details](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-account-title.png)
 
 ### Phosphor: Metadata settings and matching activity
 
-![Phosphor Metadata settings and matching activity](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-metadata.png)
+![Phosphor Metadata settings and matching activity](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-metadata.png)
 
 ### Phosphor: Metadata on mobile
 
-![Phosphor Metadata on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-metadata-mobile.png)
+![Phosphor Metadata on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-metadata-mobile.png)
 
 ### Phosphor: Enriched mounted exports
 
-![Phosphor Enriched mounted exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-library-metadata.png)
+![Phosphor Enriched mounted exports](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-library-metadata.png)
 
 ### Phosphor: Onboarding account scan
 
-![Phosphor Onboarding account scan](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-setup-scan.png)
+![Phosphor Onboarding account scan](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-setup-scan.png)
 
 ### Phosphor: Private account library
 
-![Phosphor Private account library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-account-library.png)
+![Phosphor Private account library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-account-library.png)
 
 ### Phosphor: Private library on mobile
 
-![Phosphor Private library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-account-library-mobile.png)
+![Phosphor Private library on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-account-library-mobile.png)
 
 ### Phosphor: Private title details
 
-![Phosphor Private title details](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-account-title.png)
+![Phosphor Private title details](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-account-title.png)
 
 ### StreamRD: Enriched catalog title
 
-![Enriched catalog title](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-title-metadata.png)
+![Enriched catalog title](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-title-metadata.png)
 
 ### StreamRD: Catalog details on mobile
 
-![Catalog details on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-title-metadata-mobile.png)
+![Catalog details on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-title-metadata-mobile.png)
+
+## Admin maintenance, logs and library matching
+
+![StreamRD Updates and Backups & restore](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/system-maintenance.png)
+
+![StreamRD admin logs with search, copy and download](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/logs.png)
+
+![StreamRD My library matching progress](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/library-match-status.png)
+
+![StreamRD dashboard with From your library](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/dashboard-library-row.png)
 
 ## People and server access
 
 Invite-only signup policy, one-use invitations and member controls.
 
-![StreamRD people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-server-access.png)
+![StreamRD people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-server-access.png)
 
-![StreamRD mobile people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-server-access-mobile.png)
+![StreamRD mobile people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-server-access-mobile.png)
 
-![StreamRD named libraries and grants](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-library-admin.png)
+![StreamRD named libraries and grants](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-library-admin.png)
 
-![StreamRD mobile library administration](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-library-admin-mobile.png)
+![StreamRD mobile library administration](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-library-admin-mobile.png)
 
-![StreamRD viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-library.png)
+![StreamRD viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-library.png)
 
-![StreamRD mobile viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-library-mobile.png)
+![StreamRD mobile viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-library-mobile.png)
 
-![StreamRD Continue watching row](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-continue-watching.png)
+![StreamRD Continue watching row](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-continue-watching.png)
 
-![StreamRD Continue watching on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-continue-watching-mobile.png)
+![StreamRD Continue watching on mobile](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-continue-watching-mobile.png)
 
-![StreamRD shared title and playback controls](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/streamrd-shared-title.png)
+![StreamRD shared title and playback controls](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/streamrd-shared-title.png)
 
-![Phosphor people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-server-access.png)
+![Phosphor people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-server-access.png)
 
-![Phosphor mobile people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-server-access-mobile.png)
+![Phosphor mobile people and access](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-server-access-mobile.png)
 
-![Phosphor named libraries and grants](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-shared-library-admin.png)
+![Phosphor named libraries and grants](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-shared-library-admin.png)
 
-![Phosphor mobile library administration](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-shared-library-admin-mobile.png)
+![Phosphor mobile library administration](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-shared-library-admin-mobile.png)
 
-![Phosphor viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-shared-library.png)
+![Phosphor viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-shared-library.png)
 
-![Phosphor mobile viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-shared-library-mobile.png)
+![Phosphor mobile viewer gallery](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-shared-library-mobile.png)
 
-![Phosphor shared title and playback controls](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.7.0/docs/screenshots/v0.7.0/phosphor-shared-title.png)
+![Phosphor shared title and playback controls](https://raw.githubusercontent.com/Installation-04/StreamRD/v0.8.1/docs/screenshots/v0.8.1/phosphor-shared-title.png)

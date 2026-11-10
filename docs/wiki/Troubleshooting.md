@@ -11,7 +11,9 @@
 | Demo titles cannot play | Configure a usable debrid key; even link sources pass through the provider layer. A seeded catalog supplies metadata, not a provider subscription. |
 | StreamRD keeps showing pending work | Provider processing may still be running. Retries reuse stored source references, with bounded polling; inspect provider status and credentials. |
 | Torrent pack asks for a file | Select the episode/video. Progress is stored for that file and profile. |
-| URL resolves but video will not play | Check codec/container/browser support. Neither app transcodes. |
+| URL resolves but video will not play, or "No video with supported format and MIME type found" | Browsers cannot open MKV/AVI and cannot decode DTS/TrueHD/AC3 audio; HEVC often fails too. The player explains which applies. Play the stream in VLC or mpv (Copy stream link), or pick an MP4 with H.264 video and AAC audio. Neither app transcodes. |
+| Library titles show no artwork or details | Open **My library**: the match panel shows progress, review and failed counts. Check that a provider key is saved and automatic matching is on in Admin → Metadata, then press **Retry matching**. Hash-only names cannot be matched. |
+| Need more log history | Admin → Logs: search, filter by date, load more, copy, or download up to 50,000 matching entries. |
 | Phosphor search is empty or partially fails | Test the enabled Torznab endpoint from the backend network, verify its key and filters. Partial successes remain visible. |
 | Queue progress slows in background | Refresh pauses in hidden tabs and backs off after repeated work. Return to the tab or use manual refresh. |
 | Backup fails on a reused destination | Use a new path. The helper refuses overwrites; only trust a snapshot reported as verified. |
