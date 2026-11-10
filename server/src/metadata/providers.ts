@@ -4,7 +4,7 @@ import { activeProvider, getMetadataSettings, providerCredential } from "./setti
 import { MediaType, MetadataCandidate, MetadataDetails, MetadataError, MetadataProvider, MetadataSettings } from "./types";
 export { MetadataError } from "./types";
 
-const TMDB = "https://api.themoviedb.org/3", OMDB = "https://www.omdbapi.com/", FREE = "https://v3-cinemeta.strem.io";
+const TMDB = "https://api.themoviedb.org/3", OMDB = "https://www.omdbapi.com/", FREE = "https://v3-cinemeta.strem.io", WIKIDATA = "https://www.wikidata.org/w/api.php";
 /** Posters of the built-in source are served from this host only. */
 const FREE_IMAGE_HOST = "images.metahub.space";
 const MAX_BYTES = 1024 * 1024, FREE_MAX_BYTES = 4 * 1024 * 1024 /* a long series lists every episode */, MAX_CACHE = 200, TIMEOUT_MS = 8000;
@@ -158,6 +158,39 @@ function freeCandidate(data: Record<string, unknown>, type: MediaType): Metadata
   const released = typeof data.year === "number" ? String(data.year) : data.year ?? data.releaseInfo;
   return { provider: "free", id, type, name, year: year(released), posterUrl: freeImage(data.poster), description: text(data.description) };
 }
+/**
+ * The built-in catalogue search misses some titles (short films, for example). Wikidata, a free public database, knows most of them
+ * with their IMDb ID, so when no catalogue result is named as typed the title is looked up there and each IMDb ID it returns is read from the
+ * catalogue like any other. Only the title text is sent; any failure simply means no extra results.
+ */
+async function wikidataImdbIds(query: string): Promise<string[]> {
+  const get = async (parameters: Record<string, string>): Promise<Record<string, unknown>> => {
+    const url = new URL(WIKIDATA); for (const [key, value] of Object.entries({ format: "json", ...parameters })) url.searchParams.set(key, value);
+    await acquire();
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), TIMEOUT_MS); timer.unref();
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": `${PRODUCT.id}-metadata` }, signal: controller.signal, redirect: "error" });
+      if (!response.ok) { await response.body?.cancel().catch(() => {}); throw failure(); }
+      const declared = Number(response.headers.get("content-length")); if (declared > FREE_MAX_BYTES) { await response.body?.cancel().catch(() => {}); throw failure(); }
+      const bytes = Buffer.from(await response.arrayBuffer()); if (bytes.byteLength > FREE_MAX_BYTES) throw failure();
+      return object(JSON.parse(bytes.toString("utf8")));
+    } finally { clearTimeout(timer); release(); }
+  };
+  try {
+    const found = await get({ action: "wbsearchentities", search: query, language: "en", uselang: "en", type: "item", limit: "8" });
+    const ids = (Array.isArray(found.search) ? found.search : []).map(item => object(item).id).filter((id): id is string => typeof id === "string" && /^Q\d{1,12}$/.test(id)).slice(0, 8);
+    if (!ids.length) return [];
+    const entities = object(object(await get({ action: "wbgetentities", ids: ids.join("|"), props: "claims" })).entities), result: string[] = [];
+    for (const id of ids) {
+      const claims = object(object(entities[id]).claims).P345;
+      for (const claim of Array.isArray(claims) ? claims : []) {
+        const value = object(object(object(claim).mainsnak).datavalue).value, found = imdbId(value);
+        if (found && !result.includes(found)) result.push(found);
+      }
+    }
+    return result.slice(0, 5);
+  } catch { return []; }
+}
 export interface MetadataSearchInput { query: string; type: MediaType; year?: number; provider?: MetadataProvider; refresh?: boolean }
 export async function searchMetadata(input: MetadataSearchInput, settings?: MetadataSettings): Promise<MetadataCandidate[]> {
   settings ??= await getMetadataSettings();
@@ -174,7 +207,18 @@ export async function searchMetadata(input: MetadataSearchInput, settings?: Meta
         }
         const data = await request("free", `/catalog/${input.type}/top/search=${encodeURIComponent(query)}.json`, {}, settings);
         if (!Array.isArray(data.metas)) throw failure("metadata-invalid-response", 502);
-        return data.metas.slice(0, 20).map(value => freeCandidate(object(value), input.type)).filter((value): value is MetadataCandidate => value !== null);
+        const listed = data.metas.slice(0, 20).map(value => freeCandidate(object(value), input.type)).filter((value): value is MetadataCandidate => value !== null);
+        const plain = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, ""), wanted = plain(query);
+        // The catalogue's search is fuzzy: it can answer with loosely related titles instead of nothing, so ask Wikidata unless a result is named exactly as typed.
+        if (!wanted || listed.some(item => plain(item.name) === wanted)) return listed;
+        const extra: MetadataCandidate[] = [];
+        for (const found of await wikidataImdbIds(query)) {
+          try {
+            const meta = await request("free", `/meta/${input.type}/${found}.json`, {}, settings), item = freeCandidate(object(meta.meta), input.type);
+            if (item && item.id === found) extra.push(item);
+          } catch (error) { if (error instanceof MetadataError && error.code === "metadata-rate-limited") break; }
+        }
+        return [...extra, ...listed.filter(item => !extra.some(other => other.id === item.id))].slice(0, 20);
       } catch (error) { if (error instanceof MetadataError && error.code === "metadata-not-found") return []; throw error; }
     }
     if (provider === "tmdb") {

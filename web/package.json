@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/web",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "private": true,
   "description": "StreamRD web client: Netflix-style user UI and admin dashboard.",
   "scripts": {
