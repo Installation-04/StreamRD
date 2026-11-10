@@ -2,7 +2,7 @@
 
 You need Docker with Compose, a persistent data volume, and your own supported
 debrid account. Phosphor additionally needs a Jackett/Prowlarr Torznab endpoint.
-The production containers use Node 22; direct development uses the committed npm
+The production containers use Node 24; direct development uses the committed npm
 lockfiles in each server/web directory.
 
 ## Quick install

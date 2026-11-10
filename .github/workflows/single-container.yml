@@ -8,12 +8,12 @@ jobs:
     name: Build and exercise the complete container
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build all-in-one image
         run: docker build -t streamrd-all-in-one:local .
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
       - run: npm ci --prefix qa
       - name: Install Chromium
         run: cd qa && npx playwright install --with-deps chromium
@@ -22,7 +22,7 @@ jobs:
           QA_SINGLE_BROWSER: "1"
           QA_ARTIFACT_DIR: ${{ runner.temp }}/single-container-qa
         run: bash infra/smoke-single-container.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: single-container-browser-qa

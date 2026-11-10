@@ -15,13 +15,13 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Shared files are identical in StreamRD and Phosphor
         working-directory: .
         run: node scripts/sync-shared.cjs --check
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
@@ -38,10 +38,10 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -54,16 +54,16 @@ jobs:
     needs: [server, web]
     # Build and validate images without publishing them.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build backend image
         run: docker build -t streamrd-server ./server
       - name: Build web image
         run: docker build -t streamrd-web ./web
       - name: Validate production containers and database restoration
         run: bash infra/smoke-images.sh streamrd
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
       - name: Install browser test tooling
         run: npm ci --prefix qa
       - name: Install Chromium
@@ -74,7 +74,7 @@ jobs:
         run: bash infra/run-browser-qa.sh streamrd
       - name: Upload browser screenshots and validation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: streamrd-browser-qa
           path: ${{ runner.temp }}/browser-qa

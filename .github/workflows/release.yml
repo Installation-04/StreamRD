@@ -14,11 +14,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Verify versions and package documentation
         env:
@@ -26,7 +26,7 @@ jobs:
         run: bash infra/package-release.sh "$RUNNER_TEMP/release-assets" "$RELEASE_TAG"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: StreamRD and Phosphor ${{ github.ref_name }}
           body_path: docs/releases/${{ github.ref_name }}.md
