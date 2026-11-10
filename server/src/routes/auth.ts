@@ -6,6 +6,7 @@ import { z } from "zod";
 import { config } from "../config";
 import { db } from "../db";
 import { signSession } from "../auth/jwt";
+import { clearSessionCookie, issueSession } from "../auth/cookie";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { logEvent } from "../logger";
 import { rateLimit } from "../util/rateLimit";
@@ -70,7 +71,7 @@ authRouter.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
   await logEvent("info", "signup", `New account ${email} (${user.role})`, { userId: user.id });
   const token = signSession({ sub: user.id, email: user.email, role: user.role === "admin" ? "admin" : "user",
     version: user.sessionVersion });
-  res.status(201).json({ token, user: publicUser(user) });
+  res.status(201).json({ ...issueSession(req, res, token), user: publicUser(user) });
 }));
 
 const loginSchema = z.object({
@@ -97,7 +98,7 @@ authRouter.post("/login", authRateLimit, asyncHandler(async (req, res) => {
     role: user.role === "admin" ? "admin" : "user",
     version: user.sessionVersion,
   });
-  res.json({ token, user: publicUser(user) });
+  res.json({ ...issueSession(req, res, token), user: publicUser(user) });
 }));
 
 authRouter.post("/logout", asyncHandler(async (req, res) => {
@@ -110,5 +111,6 @@ authRouter.post("/logout", asyncHandler(async (req, res) => {
     }
     await logEvent("info", "logout", "Session signed out", { userId: req.session.sub });
   }
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 }));

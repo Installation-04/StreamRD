@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE, api, getToken } from "@/lib/api";
+import { api, authFetch } from "@/lib/api";
 import { LogEntry, PROVIDER_IDS } from "@/lib/types";
 
 const TYPES = ["", "signup", "login", "logout", "playback", "provider_error", "admin_action", "system"];
@@ -55,8 +55,7 @@ export default function AdminLogsPage() {
   async function download(format: string) {
     setNotice("");
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/admin/logs/export?${query({ format, max: "50000" })}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const response = await authFetch(`/api/admin/logs/export?${query({ format, max: "50000" })}`);
       if (!response.ok) throw new Error("export");
       const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `streamrd-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.${format === "txt" ? "log" : format}`;
       const url = URL.createObjectURL(await response.blob()), a = document.createElement("a");

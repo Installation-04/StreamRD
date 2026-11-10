@@ -6,7 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
  * backend enforces the real RBAC on every API call.
  */
 export function middleware(req: NextRequest) {
-  const token = req.cookies.get("ph_token")?.value;
+  // ph_role is set by the page script at sign-in; ph_token is HttpOnly for cookie sessions and may be on another origin in split installs.
+  const token = req.cookies.get("ph_token")?.value || req.cookies.get("ph_role")?.value;
   const role = req.cookies.get("ph_role")?.value;
   const { pathname } = req.nextUrl;
 

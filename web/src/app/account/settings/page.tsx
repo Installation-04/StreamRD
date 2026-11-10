@@ -16,7 +16,7 @@ export default function SettingsPage() {
     setMsg(null);
     setError(null);
     try {
-      const session = await post<{ token: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
+      const session = await post<{ token?: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
       storeSession(session.token, session.role);
       setMsg("Password changed.");
       setCurrentPassword("");

@@ -12,25 +12,58 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhos
 const TOKEN_COOKIE = "ph_token";
 const ROLE_COOKIE = "ph_role";
 
-export function getToken(): string | null {
+/**
+ * Cookie sessions: when the API shares the page's origin (the single container), the server keeps the
+ * session in an HttpOnly cookie that scripts cannot read, and this client never holds the token.
+ * Split installs on another origin keep the previous behaviour (token in a script-readable cookie, Bearer header).
+ */
+export function cookieSessions(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return new URL(API_BASE || "/", window.location.href).origin === window.location.origin; } catch { return false; }
+}
+function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie
     .split(";")
     .map((c) => c.trim())
-    .find((c) => c.startsWith(`${TOKEN_COOKIE}=`));
+    .find((c) => c.startsWith(`${name}=`));
   return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : null;
 }
 
-export function storeSession(token: string, role: string): void {
+export function getToken(): string | null {
+  return cookieSessions() ? null : readCookie(TOKEN_COOKIE);
+}
+
+/** Whether this browser believes it is signed in (the server still decides on every request). */
+export function hasSession(): boolean {
+  return cookieSessions() ? readCookie(ROLE_COOKIE) !== null : getToken() !== null;
+}
+
+/** token is absent for cookie sessions: the server set the HttpOnly cookie itself. */
+export function storeSession(token: string | undefined, role: string): void {
   const maxAge = 60 * 60 * 24 * 7;
   const secure = window.location.protocol === "https:" ? "; secure" : "";
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
+  if (token && !cookieSessions()) document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
+  // Role cookie is only a UX hint for middleware redirects; the API
+  // enforces the real RBAC on every request.
   document.cookie = `${ROLE_COOKIE}=${role}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
 }
 
 export function clearSession(): void {
   document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0`;
   document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0`;
+}
+
+/** Headers that authenticate a request: a Bearer token for split installs, the cookie-session marker otherwise. */
+function authHeaders(): Record<string, string> {
+  if (cookieSessions()) return { "X-Session": "cookie" };
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** fetch with the session attached, for downloads and other non-JSON calls. */
+export function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${API_BASE}${path}`, { ...init, headers: { ...authHeaders(), ...(init.headers ?? {}) } });
 }
 
 export class ApiError extends Error {
@@ -40,12 +73,11 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders(),
       ...(init.headers ?? {}),
     },
   });

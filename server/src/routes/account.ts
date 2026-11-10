@@ -1,5 +1,6 @@
 import { syncAccountLibraryConfiguration } from "../account-library";
 import { signSession } from "../auth/jwt";
+import { issueSession } from "../auth/cookie";
 import { asyncHandler } from "../http";
 import { accountListsRouter, historyPage } from "./accountLists";
 import { Router } from "express";
@@ -59,7 +60,7 @@ accountRouter.post("/change-password", asyncHandler(async (req, res) => {
   const changed = await db.user.updateMany({ where: { id: user.id, hashedPassword: user.hashedPassword, sessionVersion: user.sessionVersion }, data: { hashedPassword, sessionVersion: { increment: 1 } } });
   if (!changed.count) { res.status(409).json({ error: "Account changed; sign in and try again" }); return; }
   const token = signSession({ sub: user.id, email: user.email, role: user.role === "admin" ? "admin" : "user", version: user.sessionVersion + 1 });
-  res.json({ ok: true, token, role: user.role === "admin" ? "admin" : "user" });
+  res.json({ ok: true, ...issueSession(req, res, token), role: user.role === "admin" ? "admin" : "user" });
 }));
 
 const MAX_PROFILES_PER_USER = 5;

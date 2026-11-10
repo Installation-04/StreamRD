@@ -17,6 +17,10 @@ const {chromium}=require('playwright');
   await page.waitForURL(url=>url.pathname==='/login');assert.equal(new URL(page.url()).origin,base);
   await page.getByLabel('Email',{exact:true}).fill('single-container@example.invalid');await page.getByLabel('Password',{exact:true}).fill('single-container-fixture123');
   await page.getByRole('button',{name:product==='streamrd'?/sign in/i:/connect/i}).click();await page.waitForURL(url=>!url.pathname.endsWith('/login'));
+  const sessionCookie=(await context.cookies()).find(cookie=>cookie.name===(product==='streamrd'?'sr_token':'ph_token'));
+  assert.ok(sessionCookie&&sessionCookie.httpOnly&&sessionCookie.sameSite==='Lax','The session must live in an HttpOnly, SameSite=Lax cookie');
+  assert.ok(!(await page.evaluate(()=>document.cookie)).includes('_token='),'Page scripts must not be able to read the session token');
+  assert.ok(!(await page.evaluate(()=>JSON.stringify([localStorage,sessionStorage]))).includes(sessionCookie.value),'The token must not be in web storage');
   await page.goto(base+'/admin/request-settings',{waitUntil:'networkidle'});
   await page.getByRole('heading',{name:'Download settings.',exact:true}).waitFor();
   await page.getByRole('button',{name:'Test saved qBittorrent connection',exact:true}).click();
@@ -27,7 +31,11 @@ const {chromium}=require('playwright');
    const file=`${product}-single-container${mobile?'-mobile':''}.png`;await page.screenshot({path:path.join(directory,file),fullPage:!mobile,animations:'disabled'});report.screenshots.push(file);
   }
   assert.ok(requests.length>2);assert.ok(requests.every(url=>new URL(url).origin===base),'Browser APIs must use the same origin without extra API ports');
-  report.journeys.push(`${product}: actual bundled UI login, same-origin API requests, real bundled qBittorrent connection and responsive settings`);
+  await page.setViewportSize({width:1440,height:1050});
+  await page.goto(base+'/account/'+(product==='streamrd'?'settings':'profile'),{waitUntil:'networkidle'});
+  await page.getByRole('button',{name:/sign out|log out|disconnect/i}).first().click();await page.waitForURL(url=>url.pathname==='/login'||url.pathname==='/');
+  assert.equal(((await context.cookies()).find(cookie=>cookie.name===(product==='streamrd'?'sr_token':'ph_token'))||{}).value||'', '', 'Signing out must clear the HttpOnly cookie');
+  report.journeys.push(`${product}: actual bundled UI login with an HttpOnly cookie session and sign-out, same-origin API requests, real bundled qBittorrent connection and responsive settings`);
   await context.close();
  }
  assert.deepEqual(report.pageErrors,[]);fs.writeFileSync(path.join(directory,'validation.json'),JSON.stringify(report,null,2)+'\n');

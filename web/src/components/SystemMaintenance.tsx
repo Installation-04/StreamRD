@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE, ApiError, api, getToken } from "@/lib/api";
+import { ApiError, api, authFetch } from "@/lib/api";
 import styles from "./SystemMaintenance.module.css";
 
 interface Backup { name: string; kind: "manual" | "pre-update" | "pre-restore" | "pre-upgrade" | "other"; sizeBytes: number; createdAt: string }
@@ -38,8 +38,7 @@ export default function SystemMaintenance() {
   const verify = (name: string) => run("verify:" + name, async () => { const result = await api<{ ok: boolean; reason?: string }>(`/api/admin/system/backups/${encodeURIComponent(name)}/verify`, { method: "POST" }); setNotice(result.ok ? `${name} passed its integrity check and can be restored.` : `${name} cannot be restored (${result.reason ?? "unrecognized"}).`); }, "The backup could not be verified.");
   const remove = (name: string) => run("delete:" + name, async () => { if (!window.confirm(`Delete backup ${name}? This cannot be undone.`)) return; await api(`/api/admin/system/backups/${encodeURIComponent(name)}`, { method: "DELETE" }); setNotice("Backup deleted."); await loadMaintenance(); }, "The backup could not be deleted.");
   const download = (name: string) => run("download:" + name, async () => {
-    const token = getToken();
-    const response = await fetch(`${API_BASE}/api/admin/system/backups/${encodeURIComponent(name)}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const response = await authFetch(`/api/admin/system/backups/${encodeURIComponent(name)}/download`);
     if (!response.ok) throw new Error("download");
     const url = URL.createObjectURL(await response.blob()), link = document.createElement("a");
     link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
