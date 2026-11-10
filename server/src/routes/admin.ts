@@ -32,7 +32,7 @@ adminRouter.use(accessRouter);
 /* ------------------------------ users ------------------------------ */
 
 adminRouter.get("/users", asyncHandler(async (_req, res) => {
-  const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
+  const users = await db.user.findMany({ orderBy: { createdAt: "asc" }, take: 5000 });
   res.json({ users: users.map(publicUser) });
 }));
 
@@ -101,7 +101,7 @@ adminRouter.patch("/users/:id", asyncHandler(async (req, res) => {
 /* ----------------------------- catalog ----------------------------- */
 
 adminRouter.get("/catalog", asyncHandler(async (_req, res) => {
-  const titles = await db.title.findMany({ orderBy: { createdAt: "desc" } });
+  const titles = await db.title.findMany({ orderBy: { createdAt: "desc" }, take: 5000 });
   res.json({ titles: titles.map((t) => publicTitle(t, { includeSources: true })) });
 }));
 

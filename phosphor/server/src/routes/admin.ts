@@ -25,7 +25,7 @@ adminRouter.use(accessRouter);
 /* ------------------------------ users ------------------------------ */
 
 adminRouter.get("/users", asyncHandler(async (_req, res) => {
-  const users = await db.user.findMany({ orderBy: { createdAt: "asc" } });
+  const users = await db.user.findMany({ orderBy: { createdAt: "asc" }, take: 5000 });
   res.json({ users: users.map(publicUser) });
 }));
 

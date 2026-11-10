@@ -5,6 +5,13 @@ import { Prisma } from "@prisma/client";
 export const asyncHandler = (handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { void Promise.resolve().then(() => handler(req, res, next)).catch(next); };
 
+/** Conservative response headers for the API; the web apps and gateway add their own. */
+export const securityHeaders: RequestHandler = (_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+};
 export const requestId: RequestHandler = (_req, res, next) => {
   res.locals.requestId = randomUUID(); res.setHeader("X-Request-Id", res.locals.requestId); next();
 };

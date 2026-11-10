@@ -5,10 +5,11 @@ import { startMetadataWorker } from "./metadata/automation";
 import { ensureZileanIndexer } from "./indexers/zilean";
 import { createApp } from "./app";
 import { config } from "./config";
-import { db } from "./db";
+import { db, enableWal } from "./db";
 import { logEvent } from "./logger";
 
 async function main() {
+  await enableWal();
   if (config.adminEmail) {
     await db.user.updateMany({
       where: { email: config.adminEmail.toLowerCase(), role: "user" },

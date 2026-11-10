@@ -155,6 +155,8 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `QBIT_PASSWORD` | Optional explicit password of at least 16 characters; otherwise generated and persisted |
 | `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
+| `CORS_ORIGINS` | Empty (same-origin only); comma-separated origins if another web app calls the APIs |
+| `SQLITE_WAL` | `true`; set `false` only if the data folder is on a network file system |
 | `TRUST_PROXY` | `false`; enable only behind your own trusted HTTPS reverse proxy to honor its protocol header |
 
 Use your usual HTTPS reverse proxy in front of the published UI ports when exposing

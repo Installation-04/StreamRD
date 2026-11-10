@@ -87,7 +87,7 @@ function proxy(port, webPort, apiPort) {
     }
     const target = req.url === '/api' || req.url.startsWith('/api/') ? apiPort : webPort;
     const upstream = http.request({ host: '127.0.0.1', port: target, path: req.url, method: req.method, headers: { ...req.headers, host: req.headers.host || `127.0.0.1:${target}`, 'x-forwarded-host': req.headers.host || '', 'x-forwarded-proto': process.env.TRUST_PROXY === 'true' && /^(https|http)$/.test(req.headers['x-forwarded-proto'] || '') ? req.headers['x-forwarded-proto'] : req.socket.encrypted ? 'https' : 'http' } }, response => {
-      res.writeHead(response.statusCode, response.headers); response.pipe(res);
+      res.writeHead(response.statusCode, { 'x-content-type-options': 'nosniff', 'x-frame-options': 'SAMEORIGIN', 'referrer-policy': 'same-origin', ...response.headers }); response.pipe(res);
       response.on('error', () => res.destroy());
     });
     upstream.setTimeout(30000, () => upstream.destroy());
@@ -109,7 +109,7 @@ async function main() {
   const environments = {};
   for (const product of products) {
     const directory = path.join(configRoot, product); fs.mkdirSync(directory, { recursive: true });
-    environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '' };
+    environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '', CORS_ORIGINS: process.env.CORS_ORIGINS || '' };
     await migrate('/opt/' + product + '/server', environments[product]);
   }
   if (qbitEnabled) launch('qbittorrent', 'qbittorrent-nox', prepareQbit(), configRoot);

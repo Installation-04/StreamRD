@@ -1,10 +1,11 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.9.0** follows v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
+`vMAJOR.MINOR.PATCH`. **v0.9.1** follows v0.9.0, v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
 Native-client versions remain independent.
 
-- [v0.9.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.9.0.md) (tag it to release) ·
+- [v0.9.1 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.9.1.md) (hardening: WAL mode, stricter CORS, security headers) ·
+  [v0.9.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.9.0.md) (tag it to release) ·
   [v0.8.1 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.8.1)
 
 **v0.9.0** keeps settings and data in `config/` and `data/` like Radarr/Sonarr, so updating is `docker compose pull && docker compose up -d`; imports only movies and shows from your accounts (with a cleanup for what was imported before); and adds optional Zilean (indexer) and Zurg (Real-Debrid mount) Compose add-ons. See [the add-ons guide](https://github.com/Installation-04/StreamRD/blob/main/docs/zilean-zurg.md).
