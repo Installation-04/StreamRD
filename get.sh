@@ -25,7 +25,7 @@ REGISTRY_IMAGE="${STREAMRD_REGISTRY_IMAGE:-ghcr.io/$(printf '%s' "$REPO" | tr '[
 DIR="${STREAMRD_DIR:-$HOME/streamrd}"
 REF=""; BUILD=false; START=true; UNINSTALL=false; REFRESH_COMPOSE=false
 PORT=""; PHOSPHOR_PORT=""; TORRENT_PORT=""; ADMIN_EMAIL=""; IMPORT_DB=""; JWT_SECRET=""
-PHOSPHOR=""; QBIT=""
+PHOSPHOR=""; QBIT=""; ZILEAN=""; ZURG=""; RD_TOKEN="${RD_TOKEN:-}"
 
 log() { printf '[streamrd] %s\n' "$*"; }
 die() { printf '[streamrd] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -42,6 +42,11 @@ Usage: get.sh [options]
   --admin-email EMAIL    Reserve the first administrator account for this address
   --no-phosphor          Do not run Phosphor (the search/queue companion)
   --no-qbittorrent       Do not run the bundled qBittorrent client
+  --zilean               Also run Zilean (a Debrid Media Manager torrent index) and add it to Phosphor as an indexer
+  --no-zilean            Stop running Zilean (its data volumes are kept)
+  --zurg                 Also run Zurg + rclone, mounting your Real-Debrid movies and shows at ./mnt/zurg (Linux only)
+  --rd-token TOKEN       Real-Debrid API token for Zurg (or set RD_TOKEN); stored only in zurg/config.yml
+  --no-zurg              Stop running Zurg (its config is kept)
   --import-db FILE       Start from an existing StreamRD database backup (first install only)
   --jwt-secret VALUE     Keep your old signing key so existing logins stay valid (with --import-db)
   --build                Build the image from source instead of pulling the published one
@@ -62,6 +67,11 @@ while [ $# -gt 0 ]; do
     --admin-email) ADMIN_EMAIL="${2:?--admin-email needs an address}"; shift 2 ;;
     --no-phosphor) PHOSPHOR=false; shift ;;
     --no-qbittorrent) QBIT=false; shift ;;
+    --zilean) ZILEAN=on; shift ;;
+    --no-zilean) ZILEAN=off; shift ;;
+    --zurg) ZURG=on; shift ;;
+    --no-zurg) ZURG=off; shift ;;
+    --rd-token) RD_TOKEN="${2:?--rd-token needs a value}"; shift 2 ;;
     --import-db) IMPORT_DB="${2:?--import-db needs a file}"; shift 2 ;;
     --jwt-secret) JWT_SECRET="${2:?--jwt-secret needs a value}"; shift 2 ;;
     --build) BUILD=true; shift ;;
@@ -86,8 +96,10 @@ set_env() {
     printf '%s=%s\n' "$key" "$value" >> "$file"
   fi
 }
+drop_env() { local tmp; tmp="$(mktemp)"; { grep -v "^$1=" "$DIR/.env" || true; } > "$tmp"; cat "$tmp" > "$DIR/.env"; rm -f "$tmp"; }
 env_value() { grep "^$1=" "$DIR/.env" 2>/dev/null | tail -n1 | cut -d= -f2- || true; }
-compose() { docker compose --project-directory "$DIR" -p streamrd "$@"; }
+# Run from the install folder: COMPOSE_FILE in .env holds paths relative to it.
+compose() { (cd "$DIR" && docker compose -p streamrd "$@"); }
 
 write_compose() {
   cat > "$DIR/docker-compose.yml" <<'EOF'
@@ -122,6 +134,152 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
 EOF
 }
+
+write_zilean() {
+  cat > "$DIR/docker-compose.zilean.yml" <<'EOF'
+# Zilean: a self-hosted index of Debrid Media Manager's cached torrents, exposed as a Torznab feed.
+# Phosphor registers it automatically (ZILEAN_URL). The first import can take a while and uses CPU and disk.
+services:
+  streamrd:
+    environment:
+      ZILEAN_URL: http://zilean:8181
+  zilean:
+    image: ipromknight/zilean:latest
+    container_name: zilean
+    restart: unless-stopped
+    tty: true
+    environment:
+      # Zilean's default connection string does not pick up the password, so it is set explicitly.
+      Zilean__Database__ConnectionString: "Host=zilean-db;Database=zilean;Username=postgres;Password=${ZILEAN_DB_PASSWORD:?run get.sh --zilean};Timeout=30;CommandTimeout=3600"
+    volumes:
+      - zilean_data:/app/data
+      - zilean_tmp:/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/healthchecks/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    depends_on:
+      zilean-db:
+        condition: service_healthy
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+  zilean-db:
+    image: postgres:17.2-alpine
+    container_name: zilean-db
+    restart: unless-stopped
+    shm_size: 2g
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ZILEAN_DB_PASSWORD:?run get.sh --zilean}
+      POSTGRES_DB: zilean
+    volumes:
+      - zilean_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zilean"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  zilean_data:
+  zilean_tmp:
+  zilean_db:
+EOF
+}
+
+write_zurg() {
+  mkdir -p "$DIR/zurg" "$DIR/mnt/zurg"
+  cat > "$DIR/docker-compose.zurg.yml" <<'EOF'
+# Zurg exposes your Real-Debrid library as WebDAV (movies and shows only, see zurg/config.yml) and rclone mounts it
+# at ./mnt/zurg. StreamRD sees it at /mnt/zurg and uses it as its media source for Plex/Jellyfin exports.
+# Needs a Linux host with FUSE; the mount folder must be a shared mount (get.sh sets that up when run as root).
+services:
+  streamrd:
+    environment:
+      MEDIA_SOURCE_ROOT: /mnt/zurg
+    volumes:
+      - ./mnt/zurg:/mnt/zurg:rslave
+  zurg:
+    image: ghcr.io/debridmediamanager/zurg-public:latest
+    container_name: zurg
+    restart: unless-stopped
+    volumes:
+      - ./zurg/config.yml:/app/config.yml
+      - zurg_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/http/version.txt"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+  zurg-rclone:
+    image: rclone/rclone:latest
+    container_name: zurg-rclone
+    restart: unless-stopped
+    volumes:
+      - ./mnt/zurg:/data:rshared
+      - ./zurg/rclone.conf:/config/rclone/rclone.conf:ro
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    depends_on:
+      zurg:
+        condition: service_healthy
+    command: ["mount", "zurg:", "/data", "--allow-other", "--allow-non-empty", "--uid", "1000", "--gid", "1000", "--dir-cache-time", "10s", "--vfs-cache-mode", "full"]
+volumes:
+  zurg_data:
+EOF
+  [ -f "$DIR/zurg/rclone.conf" ] || printf '[zurg]\ntype = webdav\nurl = http://zurg:9999/dav/\nvendor = other\npacer_min_sleep = 0\n' > "$DIR/zurg/rclone.conf"
+  if [ ! -f "$DIR/zurg/config.yml" ]; then
+    [ -n "$RD_TOKEN" ] || die "--zurg needs your Real-Debrid API token: --rd-token TOKEN (https://real-debrid.com/apitoken)"
+    ( umask 077; cat > "$DIR/zurg/config.yml" <<EOF
+zurg: v1
+token: $RD_TOKEN
+check_for_changes_every_secs: 10
+enable_repair: false
+# Movies and shows only: a torrent must contain a video file, and obvious games, software, music and
+# courses are excluded. Edit freely; apply with: docker compose restart zurg
+directories:
+  shows:
+    group_order: 10
+    group: media
+    filters:
+      - and:
+          - has_episodes: true
+          - any_file_inside_regex: /\.(mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg|wmv)\$/i
+          - not_regex: /(fitgirl|repack.*(game|iso)|xbox|ps[2345]\b|playstation|nintendo|\bnsw\b|keygen|crack(ed)?\b|discography|udemy|coursera|ebook)/i
+  movies:
+    group_order: 20
+    group: media
+    only_show_the_biggest_file: true
+    filters:
+      - and:
+          - any_file_inside_regex: /\.(mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg|wmv)\$/i
+          - not_regex: /(fitgirl|repack.*(game|iso)|xbox|ps[2345]\b|playstation|nintendo|\bnsw\b|keygen|crack(ed)?\b|discography|udemy|coursera|ebook)/i
+EOF
+    )
+  fi
+}
+
+# Zurg's mount folder must be a shared mount so rclone's FUSE mount is visible inside the StreamRD container.
+prepare_zurg_mount() {
+  local target="$DIR/mnt/zurg"
+  [ "$(uname -s)" = Linux ] || die "Zurg needs a Linux host (FUSE mount propagation); Docker Desktop is not supported."
+  [ -e /dev/fuse ] || die "/dev/fuse is missing; install FUSE on the host (for example: apt install fuse3)."
+  if findmnt -n --mountpoint "$target" -o PROPAGATION 2>/dev/null | grep -q shared; then return 0; fi
+  if [ "$(id -u)" = 0 ]; then
+    mountpoint -q "$target" || mount --bind "$target" "$target"
+    mount --make-rshared "$target"
+  else
+    die "Run these once as root, then re-run get.sh:  sudo mount --bind $target $target && sudo mount --make-rshared $target"
+  fi
+}
+
 
 # The container runs as UID 1000; make sure it can write the two folders.
 own_folders() {
@@ -175,6 +333,22 @@ main() {
   [ -z "$QBIT" ] || set_env ENABLE_QBITTORRENT "$QBIT" yes
   [ -z "$JWT_SECRET" ] || set_env STREAMRD_JWT_SECRET "$JWT_SECRET" yes
 
+  # Optional add-ons: each is an overlay file named in COMPOSE_FILE, so a plain `docker compose pull && up -d` keeps them.
+  local use_zilean=false use_zurg=false
+  [ "$ZILEAN" = on ] && use_zilean=true
+  [ -z "$ZILEAN" ] && env_value COMPOSE_FILE | grep -q zilean && use_zilean=true
+  [ "$ZURG" = on ] && use_zurg=true
+  [ -z "$ZURG" ] && env_value COMPOSE_FILE | grep -q zurg && use_zurg=true
+  if [ "$use_zilean" = true ]; then
+    write_zilean
+    [ -n "$(env_value ZILEAN_DB_PASSWORD)" ] || set_env ZILEAN_DB_PASSWORD "$( (openssl rand -hex 16 2>/dev/null) || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  fi
+  if [ "$use_zurg" = true ]; then write_zurg; prepare_zurg_mount; fi
+  local files="docker-compose.yml"
+  [ "$use_zilean" = true ] && files="$files:docker-compose.zilean.yml"
+  [ "$use_zurg" = true ] && files="$files:docker-compose.zurg.yml"
+  if [ "$files" = "docker-compose.yml" ]; then drop_env COMPOSE_FILE; else set_env COMPOSE_FILE "$files" yes; fi
+
   # Image: a published release (pull), or built from source (--build / --ref / no published image).
   local mode=pull TAG; resolve_tag
   if [ "$BUILD" = true ]; then mode=build; fi
@@ -215,7 +389,7 @@ main() {
     done
   fi
   [ "$mode" = build ] || compose pull
-  compose up -d
+  if [ "$ZILEAN" = off ] || [ "$ZURG" = off ]; then compose up -d --remove-orphans; else compose up -d; fi
 
   local web; web="$(env_value STREAMRD_PORT)"
   log "Waiting for StreamRD to become ready..."
@@ -240,7 +414,13 @@ Put a reverse proxy with HTTPS in front before exposing it to the internet.
   Update     cd $DIR && docker compose pull && docker compose up -d     (or re-run get.sh)
   Logs       cd $DIR && docker compose logs -f
   Remove     bash get.sh --uninstall --dir $DIR   (config/ and data/ are kept)
+$(addon_notes)
 EOF
+}
+addon_notes() {
+  env_value COMPOSE_FILE | grep -q zilean && echo "  Zilean     internal only; it appears in Phosphor as the 'Zilean' indexer (its first import takes a while)"
+  env_value COMPOSE_FILE | grep -q zurg && echo "  Zurg       your Real-Debrid movies and shows are mounted at $DIR/mnt/zurg (edit zurg/config.yml, then: docker compose restart zurg)"
+  return 0
 }
 # Everything runs through one function so a truncated download cannot execute half a script.
 main "$@"

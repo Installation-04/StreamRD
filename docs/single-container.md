@@ -64,6 +64,13 @@ a newer release exists and shows the command. For automatic updates run
 `UPDATE_WEBHOOK_URL` and `UPDATE_WEBHOOK_TOKEN` at it and Admin → System shows a one-click **Update** button
 (it takes a verified backup first).
 
+## Optional add-ons
+
+`get.sh --zilean` runs [Zilean](zilean-zurg.md#zilean-an-indexer-of-debrid-media-managers-cached-torrents) as a Torznab indexer for Phosphor, and
+`get.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows. Both are optional Compose overlays kept in your install folder; see
+[Movies and shows only, plus Zilean and Zurg](zilean-zurg.md) for what they do and what is and is not verified. Account scans also skip games,
+software and other non-movie items.
+
 ## Prebuilt image
 
 Each version tag publishes the image to this repository's GitHub Container Registry (`publish-image.yml`),

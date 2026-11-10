@@ -2,6 +2,7 @@ import { startRequestWorker } from "./requests/worker";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
+import { ensureZileanIndexer } from "./indexers/zilean";
 import { createApp } from "./app";
 import { config } from "./config";
 import { db } from "./db";
@@ -20,6 +21,7 @@ async function main() {
     startAccountLibraryWorker();
     startMetadataWorker();
     startRequestWorker();
+    void ensureZileanIndexer().catch(() => undefined);
     void logEvent("info", "system", `Phosphor server listening on :${config.port}`);
   });
 }

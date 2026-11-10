@@ -30,7 +30,10 @@ function attrMap(item: TorznabItem): Record<string, string> {
 
 function toResult(item: TorznabItem, indexer: IndexerConfigInput): IndexerSearchResult {
   const attrs = attrMap(item);
-  const magnet = attrs.magneturl ?? (item.link?.startsWith("magnet:") ? item.link : undefined);
+  // Hash-only indexers (for example Zilean's DMM data) publish an info-hash instead of a magnet link.
+  const hash = /^[a-f0-9]{40}$/i.test(attrs.infohash ?? "") ? attrs.infohash : undefined;
+  const magnet = attrs.magneturl ?? (item.link?.startsWith("magnet:") ? item.link : undefined)
+    ?? (hash ? `magnet:?xt=urn:btih:${hash.toLowerCase()}&dn=${encodeURIComponent(item.title ?? "")}` : undefined);
   const link = magnet ?? item.enclosure?.["@_url"] ?? item.link ?? "";
   const sizeBytes = parseInt(attrs.size ?? item.enclosure?.["@_length"] ?? item.size ?? "0", 10) || 0;
   return {

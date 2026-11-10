@@ -71,6 +71,9 @@ module.exports = async function maintenance({ product, page, url, api, admin, ca
   // The signed-in user's library: matching progress panel (and, for StreamRD, the dashboard row).
   await page.goto(`${url}/library`, { waitUntil: 'networkidle' });
   await page.getByRole('region', { name: 'Metadata matching progress' }).waitFor();
+  await page.getByRole('button', { name: 'Check my library for non-movie titles' }).click();
+  await page.getByText('Nothing to remove: every title looks like a movie or show.').waitFor();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await noOverflow('desktop library match status'); await shot('library-match-status');
   if (product === 'streamrd') {
     await page.goto(`${url}/`, { waitUntil: 'networkidle' });

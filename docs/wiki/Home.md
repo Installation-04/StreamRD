@@ -21,7 +21,7 @@ For upgrades, read [System and upgrades](https://github.com/Installation-04/Stre
 
 The version-controlled source of this wiki is
 [docs/wiki](https://github.com/Installation-04/StreamRD/tree/main/docs/wiki).
-The documented server/web release is **v0.8.1**. Native clients remain separate
+The documented server/web release is **v0.9.0**. Native clients remain separate
 projects; this release does not provide newly built device binaries.
 
 - [Discover and request media](https://github.com/Installation-04/StreamRD/wiki/Media-requests): search TMDB/OMDb, request titles and track them.

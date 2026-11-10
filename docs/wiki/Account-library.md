@@ -18,6 +18,9 @@ Browser compatibility depends on the media codecs/container; there is no transco
 StreamRD's **Discover** page also shows a **From your library** row (titles with artwork first) with a
 link to all of them. The match panel at the top of My library tracks artwork matching and offers **Retry matching**.
 
+Only movies and shows are imported: games, software, music, books and names with no readable title are skipped, and the
+**Check my library for non-movie titles** button lists and removes what was imported earlier (nothing is removed from your debrid account).
+
 With [metadata matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching)
 configured, imports can gain artwork, plot, cast, ratings and IMDb references.
 Owners can preview and correct their own matches. Credential changes invalidate
