@@ -2,7 +2,7 @@
 
 Both web apps can search TMDB or OMDb for titles outside your library. Open **Find media**,
 search by title or IMDb ID and open the media page. It checks what you can already watch (your
-private imports, libraries shared with you and the curated catalog) and otherwise offers **Request**.
+private imports and libraries shared with you) and otherwise offers **Request**.
 Requests are deduplicated, several people can follow one request privately, and **My requests**
 shows only the ones you follow. An administrator must configure a metadata provider under
 **Admin → Metadata** first; viewers never supply API keys.

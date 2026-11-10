@@ -36,7 +36,7 @@ export interface AdminMediaRequest extends MediaRequest {
 export interface DiscoveryDetail {
     media: MetadataDetails;
     availability: {
-        kind: "private" | "shared" | "catalog";
+        kind: "private" | "shared";
         name: string;
         href: string;
     }[];

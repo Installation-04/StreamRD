@@ -168,22 +168,6 @@ export async function setMetadataLocks(type: TargetType, id: string, fields: str
   if (!changed.count) throw new MetadataOperationError("Metadata changed; refresh and try again", 409);
   return (await recordFor(type, id))!;
 }
-/** A manual catalog identity edit invalidates stale provider identity; no source edits are inferred. */
-export async function protectCatalogEdits(id: string, fields: string[], identityChanged: boolean, transaction?: Prisma.TransactionClient) {
-  const connection = transaction ?? db;
-  const changedFields = fields.filter(field => LOCK_FIELDS.includes(field as typeof LOCK_FIELDS[number]));
-  if (!changedFields.length && !identityChanged) return;
-  let record = await connection.metadataRecord.findUnique({ where: { targetType_targetId: { targetType: "catalog", targetId: id } } });
-  if (!record) {
-    const title = await connection.title.findUnique({ where: { id } });
-    const target = title ? { targetType: "catalog" as const, targetId: id, name: title.name, mediaType: title.type === "series" ? "series" as const : "movie" as const, year: title.year } : null;
-    if (!target) return;
-    record = await connection.metadataRecord.upsert({ where: { targetType_targetId: { targetType: "catalog", targetId: id } }, create: { ...target, status: "queued", requestedBy: "automatic", lockedFields: JSON.stringify(changedFields) }, update: {} });
-  }
-  const locks = [...new Set([...lockedFields(record.lockedFields), ...changedFields])];
-  await connection.metadataRecord.updateMany({ where: { id: record.id, revision: record.revision }, data: { lockedFields: JSON.stringify(locks), revision: { increment: 1 },
-    ...(identityChanged ? { status: "review", data: "{}", leaseUntil: null, error: "The title identity changed. Review its metadata match." } : record.status === "processing" ? { status: "queued", leaseUntil: null } : {}) } });
-}
 /** One leased, revision-guarded job per tick; callers can use this directly for deterministic tests. */
 export async function runMetadataJob(now = new Date()) {
   const settings = await getMetadataSettings();

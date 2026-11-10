@@ -63,11 +63,6 @@ Services:
 
 The backend applies the schema on boot by default, without accepting data loss.
 Set `APPLY_SCHEMA_ON_START=false` for a controlled, backed-up upgrade workflow
-described in the production guide. Seed demo titles with:
-
-```bash
-docker compose exec backend node dist/prisma/seed.js   # or: npm run db:seed in dev
-```
 
 ## 2. LAN mode
 

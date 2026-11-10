@@ -38,7 +38,7 @@ when the server starts. Grouping never crosses accounts.
   libraries are what everyone sees. Members' earlier personal imports stay stored and hidden (no deletion), and manual import endpoints
   answer "forbidden" for non-administrators.
 
-Release order: v0.17.0 (versions, in review) → v0.18.0 (retire the catalogue and member imports) → v0.19.0 (link health checks).
+Release order: v0.17.0 (versions, released) → v0.18.0 (retire the catalogue and member imports, built) → v0.19.0 (link health checks).
 
 ## What is left, and what each step needs from you
 

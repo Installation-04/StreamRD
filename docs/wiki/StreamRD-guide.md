@@ -1,46 +1,35 @@
 # StreamRD guide
 
-StreamRD is a curated catalog. An administrator adds titles, descriptions, genres,
-and link/magnet sources. Each user supplies their own Real-Debrid, AllDebrid, or
-Premiumize credentials; provider order and fallback are configurable.
+StreamRD turns your debrid account into libraries for the people you choose. The administrator connects the debrid account,
+imports what is finished into libraries, and decides who sees each library. Everyone else signs in, watches, and **requests**
+what is missing. Members do not need debrid keys of their own.
 
-## Browse and save
+## Browse
 
-Home shows Continue watching, New in your libraries, Popular on this server, Trending now, Popular movies and Popular TV shows (the last three are public lists), then My List and catalog rows. The web
-client loads compact, bounded pages and offers load-more controls. Use Search
-for a title, open its details, and use the heart button to add/remove My List.
-Favorites belong to the account and are shared across its viewing profiles.
+The home page shows a featured carousel (trailers are optional and per viewer), then Continue watching, New in your libraries,
+Popular on this server, Trending now, Popular movies and Popular TV shows (the last three are public lists). **Library** lists the
+libraries you can see; a title shown once may offer several **versions** (for example 1080p and 4K). **Find media** searches TMDB and
+lets you request a title; **Requests** follows each request.
 
 ## Watch and resume
 
-On a title in a library, **Play from server** opens a full-page player: a fading title bar, resume, a chooser for packs, **Up next** for the following episode, and keyboard shortcuts (Space, J/L, arrows, M, F, N, Esc).
+On a title, **Play from server** opens a full-page player: a fading title bar, resume, a chooser for packs, **Up next** for the
+following episode, and keyboard shortcuts (Space, J/L, arrows, M, F, N, Esc). When a pack holds several videos, choose the file;
+samples and non-video files are never chosen automatically. Progress is saved per person and per file, older player sessions and
+out-of-order saves cannot overwrite the active one, and at least 95% completion removes an entry from Continue watching.
 
-Choose a viewing profile using **Watching as**, then open a title and press Play.
-StreamRD resolves the selected source through your configured providers and hands
-the resulting URL to the player. Pending torrent work is polled with bounded
-retries, reusing a saved reference rather than repeatedly adding the torrent.
-
-When a torrent contains several videos, choose the desired file. Samples and
-non-video files are excluded from automatic single-video choice. Change files
-using the player's file selector where offered. Pack progress belongs to the
-selected file; select that episode again to resume it.
-
-The web player periodically saves position and saves on playback events. Resume
-is isolated by account/profile/title/file. Older player sessions and out-of-order
-saves cannot overwrite the active session. At least 95% completion removes that
-entry from the new Continue Watching row. Last page-exit delivery is best effort.
+Resolution success does not guarantee browser codec support. StreamRD does not transcode video. Playback runs in your browser or in
+any player you hand the stream link to.
 
 ## Administration
 
-Admin pages manage users, catalog entries, provider settings/order, request
-timeouts, connectivity, logs, and configuration export/import. Export files and
-database backups contain private information. Store them outside public source
-control. Deactivating an account revokes its older sessions; password changes
-revoke other sessions while retaining the initiating web session.
+Admin pages manage people and invitations (libraries and a viewing limit travel with an invitation), libraries, requests, metadata,
+provider settings and order, connectivity, logs, and configuration export/import. Export files and database backups contain private
+information; store them outside public source control. Deactivating an account revokes its older sessions; password changes revoke
+other sessions while retaining the initiating web session.
 
-Resolution success does not guarantee browser codec support. StreamRD does not
-transcode video. Playback runs in your browser or in any player you hand the stream
-link to; the repository no longer ships native apps.
+Only the administrator imports from a debrid account. The curated catalogue (hand-added links, its search, favourites, My List and
+viewing profiles) was retired in v0.18.0; nothing was deleted and its endpoints answer "gone".
 
 See [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots) and the
 [API schema](https://github.com/Installation-04/StreamRD/blob/main/docs/api-schema.md).

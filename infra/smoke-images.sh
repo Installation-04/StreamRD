@@ -49,7 +49,7 @@ fixture() {
  const session=process.env.SMOKE_MODE==="create"?await call("/api/auth/signup",{...credentials,displayName:"Container fixture"}):await call("/api/auth/login",credentials);
  if(session.user.role!=="admin")throw Error("Admin role was not preserved");
  const streamrd=process.env.SMOKE_PRODUCT==="streamrd";
- if(process.env.SMOKE_MODE==="create")await call(streamrd?"/api/admin/catalog/create":"/api/admin/indexers",streamrd?{name:"Container fixture"}:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-key"},session.token);
+ if(process.env.SMOKE_MODE==="create")await call(streamrd?"/api/admin/invitations":"/api/admin/indexers",streamrd?{email:"container-fixture@example.invalid"}:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-key"},session.token);
  if(process.env.SMOKE_MODE==="create"){
    fs.mkdirSync("/app/data/mounted",{recursive:true});fs.writeFileSync("/app/data/mounted/movie.mkv","container-media-fixture");
    await call("/api/admin/library/entries",{name:"Container media fixture",year:2024,type:"movie",sourcePath:"movie.mkv"},session.token);
@@ -61,13 +61,12 @@ fixture() {
    if(fs.readFileSync("/app/data/scanner-library/Movies/Container media fixture (2024)/Container media fixture (2024).mkv","utf8")!=="container-media-fixture")throw Error("Exported symlink target cannot be read");
  }
  const users=await call("/api/admin/users",undefined,session.token);if(users.users.length!==1)throw Error("User count changed");
- const catalog=await call(streamrd?"/api/admin/catalog":"/api/admin/indexers",undefined,session.token);if(!(catalog.titles??catalog.indexers).some(item=>item.name==="Container fixture"))throw Error("Application data missing");
+ const stored=await call(streamrd?"/api/admin/invitations":"/api/admin/indexers",undefined,session.token);if(!(streamrd?stored.invitations.some(item=>item.email==="container-fixture@example.invalid"):stored.indexers.some(item=>item.name==="Container fixture")))throw Error("Application data missing");
 })().catch(error=>{console.error(error.message);process.exitCode=1});
 NODE
 }
 fixture "$backend_id" create
 docker restart "$backend_id" >/dev/null; wait_backend "$backend_id"; fixture "$backend_id" login
-if [ "$product" = streamrd ]; then docker exec "$backend_id" node dist/prisma/seed.js >/dev/null; fi
 docker exec "$backend_id" node scripts/backup-db.cjs /app/data/smoke-backup.db
 docker exec "$backend_id" node -e 'if((require("node:fs").statSync("/app/data/smoke-backup.db").mode & 0o777)!==0o600)throw Error("Backup permissions too broad")'
 if docker exec "$backend_id" node scripts/backup-db.cjs /app/data/smoke-backup.db >/dev/null 2>&1; then echo "Backup overwrote an existing file" >&2; exit 1; fi

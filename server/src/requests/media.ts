@@ -71,15 +71,6 @@ export async function mediaAvailability(userId: string, media: MetadataDetails):
     }
     if (availability.length >= 5) break;
   }
-  const catalogMetadata = await matchingMetadata(media, "catalog");
-  const catalogIds = catalogMetadata.filter(row => { const metadata = storedMetadata(row.data); return metadata && sameIdentity(media, metadata); }).map(row => row.targetId);
-  const titles = await db.title.findMany({ where: { type: media.type, OR: [{ id: { in: catalogIds } }, ...(media.year === null ? [] : [{ name: { contains: media.name }, year: media.year }])] }, take: 20 });
-  const titleRecords = titles.length ? await db.metadataRecord.findMany({ where: { targetType: "catalog", targetId: { in: titles.map(title => title.id) } } }) : [];
-  for (const title of titles) {
-    const record = titleRecords.find(row => row.targetId === title.id), metadata = record ? storedMetadata(record.data) : null;
-    let hasSource = false; try { hasSource = JSON.parse(title.sources).some((source: { kind?: string; url?: unknown }) => ["link", "magnet"].includes(source.kind ?? "") && typeof source.url === "string" && source.url.trim()); } catch {}
-    if (hasSource && (metadata ? sameIdentity(media, metadata) : sameLegacy(media, title))) availability.push({ kind: "catalog", name: title.name, href: `/title/${encodeURIComponent(title.id)}` });
-  }
   return availability.slice(0, 5);
 }
 /** An approved source binding can identify an import even before metadata matching. */

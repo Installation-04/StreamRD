@@ -12,7 +12,7 @@ const movie = { id: 123, title: "Sintel", release_date: "2010-09-30", overview: 
   genres: [{ name: "Fantasy" }], runtime: 15, vote_average: 7.4, vote_count: 50, credits: { cast: [{ name: "Fixture Actor" }] }, external_ids: { imdb_id: "tt1727587" } };
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
 beforeEach(async () => {
-  await resetDb(); ({ admin, user } = await adminAndUser());
+  await resetDb(); ({ admin, user } = await adminAndUser()); await db.user.update({ where: { id: user.id }, data: { role: "admin" } }); // only administrators import (v0.18.0)
   item = await db.accountMedia.create({ data: { userId: user.id, provider: "realdebrid", providerRef: "private-existing-reference", credentialFingerprint: "f".repeat(64), name: "Sintel", type: "movie", year: 2010, phase: "finished", progress: 100 } });
   await saveMetadataSettings({ tmdbApiKey: `private-metadata-${randomUUID()}` });
   fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async input => json(String(input).includes("/search/") ? { results: [movie] } : movie));

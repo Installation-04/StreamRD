@@ -79,7 +79,7 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     await viewer.waitForURL(/\/shared-libraries$/);
     await viewer.getByRole('heading', { name: 'No libraries shared yet.', exact: true }).waitFor();
     assert.ok((await viewerContext.cookies()).some(cookie => cookie.name === cookieName && cookie.value === viewerToken));
-    assert.equal((await call(api, '/api/account/library', null, viewerToken)).total, 0);
+    assert.equal(await responseStatus('/api/account/library', viewerToken), 403, 'Only the administrator imports');
     const ownSetup = await call(api, '/api/account/setup', null, viewerToken);
     assert.ok(ownSetup.providers.every(provider => !provider.configured), 'Invited viewer must not require personal provider credentials');
     assert.equal(await responseStatus('/api/auth/invitation', null, 'POST', { inviteToken: invitationToken }), 400);
@@ -105,7 +105,7 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     assert.equal(await responseStatus(`/api/shared-libraries/${libraryId}/items`, member.token), 404);
     const source = await call(api, '/api/account/library', null, admin.token);
     const sintel = source.items.find(item => item.name === 'Sintel'); assert.ok(sintel);
-    assert.equal(await responseStatus(`/api/account/library/${sintel.id}`, viewerToken), 404, 'Publishing does not expose the source private API');
+    assert.equal(await responseStatus(`/api/account/library/${sintel.id}`, viewerToken), 403, 'Publishing does not expose the source private API');
     const readySetup = await call(api, '/api/account/setup', null, viewerToken);
     assert.equal(readySetup.configurationReady, true, 'A ready granted server library should satisfy onboarding without viewer keys');
 

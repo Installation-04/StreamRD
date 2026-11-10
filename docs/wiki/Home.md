@@ -7,7 +7,7 @@ separate servers, databases, accounts and deployments. Neither transcodes video.
 
 | Choose | Purpose | API / web ports |
 |---|---|---|
-| StreamRD | Browse an administrator-curated catalog, save favorites, and resume viewing by profile | 47821 / 3000 |
+| StreamRD | Libraries managed by the administrator, requests, kids accounts and per-viewer resume | 47821 / 3000 |
 | Phosphor | Search your Torznab indexers, add results to debrid, and manage a download queue | 61337 / 3100 |
 
 Start with [Getting started](https://github.com/Installation-04/StreamRD/wiki/Getting-started), then follow the

@@ -12,7 +12,7 @@ artwork where supplied, source-labeled ratings and provider attribution.
 ## Requesting a title
 
 The media page checks the viewer's current private imports, granted shared
-libraries and StreamRD's existing curated catalog. If accessible media is found,
+libraries. If accessible media is found,
 it shows the appropriate library link. It does not expose another user's private
 collection. Metadata identity is preferred; legacy matching requires an exact
 name/type and known matching year, without overriding conflicting metadata IDs.

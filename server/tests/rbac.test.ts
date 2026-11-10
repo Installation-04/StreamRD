@@ -13,7 +13,6 @@ describe("RBAC on /api/admin/*", () => {
 
   const adminEndpoints = [
     ["get", "/api/admin/users"],
-    ["get", "/api/admin/catalog"],
     ["get", "/api/admin/server"],
     ["get", "/api/admin/providers"],
     ["get", "/api/admin/health"],

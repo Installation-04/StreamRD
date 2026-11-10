@@ -40,7 +40,7 @@ export function Nav() {
   const limited = Boolean(user && user.role !== "admin" && user.maxAge != null);
   const pathname = usePathname(), router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
-  if (pathname.startsWith("/watch/") || pathname.startsWith("/play/")) return null;
+  if (pathname.startsWith("/play/")) return null;
   const link = (href: string, label: string, icon: IconName) => {
     const active = href === "/" ? pathname === "/" : pathname.startsWith(href.split("/").slice(0, 2).join("/"));
     return <Link href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon name={icon} size={17} /><span>{label}</span></Link>;
@@ -52,7 +52,6 @@ export function Nav() {
         <Link href="/" className="nav-logo" aria-label="StreamRD home"><BrandMark />stream<span>rd</span></Link>
         <div className="nav-links">
           {link("/", "Discover", "home")}
-          {!limited && link("/search", t("nav.search"), "search")}
           {user && !limited && link("/discover", "Find media", "search")}
           {user && !limited && link("/requests", "Requests", "film")}
           {user && link("/shared-libraries", "Library", "film")}

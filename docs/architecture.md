@@ -36,7 +36,7 @@ Layers, bottom-up:
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| Data | `prisma/schema.prisma`, `src/db.ts` | Users, DebridConfig, Profiles, Titles, PlaybackLog, LogEvent, Settings |
+| Data | `prisma/schema.prisma`, `src/db.ts` | Users, DebridConfig, libraries and imports, requests, LogEvent, Settings (the retired catalogue's tables are kept, unused) |
 | Settings | `src/settings.ts` | Mutable server/provider settings persisted as JSON in a key/value table |
 | Providers | `src/providers/*` | `DebridProvider` interface, three implementations, registry, `DebridManager` |
 | Auth | `src/auth/*` | bcrypt password hashing, JWT sessions carrying `role`, Express middleware (`attachSession`, `requireAuth`, `requireAdmin`) |

@@ -6,7 +6,6 @@ import MetadataPicker from "@/components/MetadataPicker";
 import { imdbLink, METADATA_FIELDS, METADATA_LABELS, MetadataProvider, MetadataRecord, MetadataSettings, MetadataSummary, PROVIDER_LABELS } from "@/lib/metadata";
 import styles from "./metadata.module.css";
 
-const CATALOG = true;
 const INITIAL_SUMMARY: MetadataSummary = { queued: 0, processing: 0, matched: 0, review: 0, unmatched: 0, error: 0 };
 const STATES: Record<MetadataRecord["status"], string> = { queued: "Queued", processing: "Matching", matched: "Matched", review: "Review match", unmatched: "No confident match", error: "Retry needed" };
 function messageFor(reason: unknown, fallback: string) { return reason instanceof ApiError ? reason.message : fallback; }
@@ -107,7 +106,7 @@ export default function MetadataPage() {
       setNotice(`${PROVIDER_LABELS[provider]} responded successfully to an explicit connection test.`);
     });
   }
-  async function scan(targetType: "catalog" | "library") {
+  async function scan(targetType: "library") {
     if (scanning || actionBusy.current) return;
     scanCancel.current = false; setScanning(true); setScanProgress(0); setError(""); setNotice("");
     let cursor: string | undefined, queued = 0;
@@ -171,7 +170,7 @@ export default function MetadataPage() {
       <aside className={styles.guidePanel}>
         <p className={styles.eyebrow}>02 / AUTOMATE WITH CONFIDENCE</p><h3>A richer library.<br />Your choices stay yours.</h3>
         <ol><li><span>01</span><div><strong>Connect once</strong><p>Keep credentials on your server. Test a saved provider when you are ready.</p></div></li><li><span>02</span><div><strong>Let clear matches through</strong><p>Automation is opt-in. Ambiguous names and years need your review.</p></div></li><li><span>03</span><div><strong>Protect the details you love</strong><p>Manual edits and locked fields survive refreshes. Choose a different match at any time.</p></div></li></ol>
-        <div className={styles.scanPanel}><h4>Enrich existing media</h4><p>Queue existing items in batches of up to 100. Matching runs on the server, and stopping a scan keeps work already queued.</p><div className={styles.scanButtons}>{CATALOG && <button type="button" className="btn btn-secondary" disabled={scanning || Boolean(busy) || !configured || dirty} onClick={() => void scan("catalog")}>Scan catalog</button>}<button type="button" className="btn btn-secondary" disabled={scanning || Boolean(busy) || !configured || dirty} onClick={() => void scan("library")}>Scan mounted library</button></div>{scanning && <div className={styles.scanProgress} role="status"><span>{scanProgress} items queued…</span><button type="button" onClick={stopScan}>Stop scan</button></div>}</div>
+        <div className={styles.scanPanel}><h4>Enrich existing media</h4><p>Queue existing items in batches of up to 100. Matching runs on the server, and stopping a scan keeps work already queued.</p><div className={styles.scanButtons}><button type="button" className="btn btn-secondary" disabled={scanning || Boolean(busy) || !configured || dirty} onClick={() => void scan("library")}>Scan mounted library</button></div>{scanning && <div className={styles.scanProgress} role="status"><span>{scanProgress} items queued…</span><button type="button" onClick={stopScan}>Stop scan</button></div>}</div>
         <p className={styles.footnote}>Metadata services receive title searches and identifiers when you look up or automate a match. Existing exports and original media are never renamed automatically.</p>
       </aside>
     </div>}

@@ -1,8 +1,6 @@
 import { AccessError } from "../auth/access";
 import { accessRouter } from "./access";
-import { protectCatalogEdits } from "../metadata/automation";
 import { getMetadataSettings, providerConfigured } from "../metadata/settings";
-import { metadataSelectionSchema } from "./metadata";
 import { asyncHandler } from "../http";
 import { Prisma } from "@prisma/client";
 import { Request, Router } from "express";
@@ -22,7 +20,7 @@ import {
   saveServerSettings,
 } from "../settings";
 import { LIMIT_AGES } from "../ratings";
-import { parseBody, publicTitle, publicUser } from "./helpers";
+import { parseBody, publicUser } from "./helpers";
 
 export const adminRouter = Router();
 // Every /api/admin/* route requires an authenticated admin. RBAC tests
@@ -99,103 +97,6 @@ adminRouter.patch("/users/:id", asyncHandler(async (req, res) => {
     meta: body,
   });
   res.json({ user: publicUser(user) });
-}));
-
-/* ----------------------------- catalog ----------------------------- */
-
-adminRouter.get("/catalog", asyncHandler(async (_req, res) => {
-  const titles = await db.title.findMany({ orderBy: { createdAt: "desc" }, take: 5000 });
-  res.json({ titles: titles.map((t) => publicTitle(t, { includeSources: true })) });
-}));
-
-const sourceSchema = z.object({
-  kind: z.enum(["link", "magnet"]),
-  url: z.string().min(1),
-  quality: z.string().optional(),
-  label: z.string().optional(),
-});
-
-const titleSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().default(""),
-  type: z.enum(["movie", "series"]).default("movie"),
-  genres: z.array(z.string()).default([]),
-  year: z.number().int().nullable().optional(),
-  posterUrl: z.string().url().nullable().optional(),
-  backdropUrl: z.string().url().nullable().optional(),
-  sources: z.array(sourceSchema).default([]),
-});
-
-function titleData(body: z.infer<typeof titleSchema>) {
-  return {
-    name: body.name,
-    description: body.description,
-    type: body.type,
-    genres: JSON.stringify(body.genres),
-    year: body.year ?? null,
-    posterUrl: body.posterUrl ?? null,
-    backdropUrl: body.backdropUrl ?? null,
-    sources: JSON.stringify(body.sources),
-  };
-}
-
-adminRouter.post("/catalog/create", asyncHandler(async (req, res) => {
-  const body = parseBody(titleSchema.extend({ metadataMatch: metadataSelectionSchema.optional() }), req.body, res);
-  if (!body) return;
-  const preferences = await getMetadataSettings();
-  if (body.metadataMatch && (body.metadataMatch.type !== body.type || !providerConfigured(preferences, body.metadataMatch.provider))) {
-    res.status(400).json({ error: "Configure the chosen metadata provider and use the same movie/series type before saving a match" }); return;
-  }
-  const metadataQueued = Boolean(body.metadataMatch || preferences.automatic);
-  const title = await db.$transaction(async tx => {
-    const created = await tx.title.create({ data: titleData(body) });
-    if (metadataQueued) await tx.metadataRecord.create({ data: { targetType: "catalog", targetId: created.id, name: created.name, mediaType: created.type, year: created.year,
-      requestedBy: body.metadataMatch ? "manual" : "automatic", ...(body.metadataMatch ? { data: JSON.stringify({ selection: body.metadataMatch }) } : {}) } });
-    return created;
-  });
-  await logEvent("info", "admin_action", `Created title "${title.name}"`, {
-    userId: req.session!.sub,
-  });
-  res.status(201).json({ title: publicTitle(title, { includeSources: true }), metadataQueued });
-}));
-
-adminRouter.patch("/catalog/:id/update", asyncHandler(async (req, res) => {
-  const body = parseBody(titleSchema.partial(), req.body, res);
-  if (!body) return;
-  const existing = await db.title.findUnique({ where: { id: req.params.id } });
-  if (!existing) {
-    res.status(404).json({ error: "Title not found" });
-    return;
-  }
-  const data: Record<string, unknown> = {};
-  if (body.name !== undefined) data.name = body.name;
-  if (body.description !== undefined) data.description = body.description;
-  if (body.type !== undefined) data.type = body.type;
-  if (body.genres !== undefined) data.genres = JSON.stringify(body.genres);
-  if (body.year !== undefined) data.year = body.year;
-  if (body.posterUrl !== undefined) data.posterUrl = body.posterUrl;
-  if (body.backdropUrl !== undefined) data.backdropUrl = body.backdropUrl;
-  if (body.sources !== undefined) data.sources = JSON.stringify(body.sources);
-  const title = await db.$transaction(async tx => {
-    const fields = Object.keys(data).filter(field => data[field] !== existing[field as keyof typeof existing]);
-    const identityChanged = ["name", "type", "year"].some(field => fields.includes(field));
-    await protectCatalogEdits(existing.id, fields, identityChanged, tx);
-    return tx.title.update({ where: { id: req.params.id }, data });
-  });
-  res.json({ title: publicTitle(title, { includeSources: true }) });
-}));
-
-adminRouter.delete("/catalog/:id/delete", asyncHandler(async (req, res) => {
-  const existing = await db.title.findUnique({ where: { id: req.params.id } });
-  if (!existing) {
-    res.status(404).json({ error: "Title not found" });
-    return;
-  }
-  await db.$transaction([db.metadataRecord.deleteMany({ where: { targetType: "catalog", targetId: req.params.id } }), db.title.delete({ where: { id: req.params.id } })]);
-  await logEvent("info", "admin_action", `Deleted title "${existing.name}"`, {
-    userId: req.session!.sub,
-  });
-  res.json({ ok: true });
 }));
 
 /* -------------------------- server settings ------------------------ */
@@ -303,7 +204,7 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
   const [userCount, titleCount, stats, providerSettings, serverSettings] =
     await Promise.all([
       db.user.count(),
-      db.title.count(),
+      db.accountMedia.count({ where: { isPrimary: true, user: { role: "admin" } } }), // library titles (the retired catalogue is not counted)
       playbackStats(),
       getProviderSettings(),
       getServerSettings(),
@@ -407,18 +308,13 @@ adminRouter.get("/logs/export", rateLimit({ windowMs: 60_000, max: 10 }), asyncH
 /* --------------------------- export/import ------------------------- */
 
 adminRouter.get("/export/config", asyncHandler(async (_req, res) => {
-  const [server, providerSettings, titles] = await Promise.all([
-    getServerSettings(),
-    getProviderSettings(),
-    db.title.findMany({ orderBy: { createdAt: "asc" } }),
-  ]);
+  const [server, providerSettings] = await Promise.all([getServerSettings(), getProviderSettings()]);
   res.setHeader("Content-Disposition", "attachment; filename=streamrd-config.json");
   res.json({
     exportedAt: new Date().toISOString(),
     version: 1,
     server,
     providers: providerSettings,
-    catalog: titles.map((t) => publicTitle(t, { includeSources: true })),
   });
 }));
 
@@ -428,7 +324,7 @@ const importSchema = z.object({
   providers: z
     .record(z.object({ enabled: z.boolean(), baseUrl: z.string().optional() }))
     .optional(),
-  catalog: z.array(titleSchema.extend({ id: z.string().optional() })).optional(),
+  catalog: z.unknown().optional(), // accepted from older exports and ignored: the curated catalogue was retired in v0.18.0
 });
 
 adminRouter.post("/import/config", asyncHandler(async (req, res) => {
@@ -445,21 +341,8 @@ adminRouter.post("/import/config", asyncHandler(async (req, res) => {
     }
     await saveProviderSettings(current);
   }
-  let imported = 0;
-  if (body.catalog) {
-    for (const entry of body.catalog) {
-      const { id, ...rest } = entry;
-      const data = titleData(rest);
-      if (id) {
-        await db.title.upsert({ where: { id }, create: { id, ...data }, update: data });
-      } else {
-        await db.title.create({ data });
-      }
-      imported++;
-    }
-  }
-  await logEvent("info", "admin_action", `Imported configuration (${imported} titles)`, {
+  await logEvent("info", "admin_action", "Imported configuration", {
     userId: req.session!.sub,
   });
-  res.json({ ok: true, importedTitles: imported });
+  res.json({ ok: true });
 }));

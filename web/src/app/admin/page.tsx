@@ -39,7 +39,7 @@ export default function AdminOverviewPage() {
         </div>
         <div className="stat">
           <div className="stat-value">{health.titles}</div>
-          <div className="stat-label">Titles</div>
+          <div className="stat-label">Library titles</div>
         </div>
         <div className="stat">
           <div className="stat-value">{health.playback.totalPlays}</div>

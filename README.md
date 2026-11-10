@@ -134,11 +134,11 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 ## ✨ Features
 
 **Watch**
-- A streaming-style web UI in black and orange (dark, light or system theme), responsive, with up to five viewing profiles per account.
+- A streaming-style web UI in black and orange (dark, light or system theme), responsive on phones and tablets.
 - One card per title: copies of the same film (1080p, 4K) or show share a card, with the versions on its page.
 - A full-page player with resume, Up next, keyboard shortcuts and a VLC/mpv hand-off for files a browser cannot play.
 - A home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
-- My List and per-viewer resume across all libraries.
+- Per-viewer resume across all libraries.
 - Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
 - Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.
 
@@ -195,9 +195,9 @@ flowchart LR
 
 ## 🗺 Where it is going
 
-StreamRD is becoming **one library managed by the administrator**. Done so far: one Library page, libraries visible to
-everyone or chosen people, a home page with a featured carousel, viewing limits for a kids account, invitation links that carry library
-access, and a full-page player. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
+StreamRD is **one library managed by the administrator**: one Library page, libraries visible to everyone or chosen people, one card per
+title with versions, a home page with a featured carousel, viewing limits for a kids account, invitation links that carry library access,
+and a full-page player. Members request what is missing; only the administrator imports. Next: health checks for links. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
 
 ## 📚 Documentation
 
