@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "datamodelChecksum": "8f49228725eaec26e5db114e2b72aecf8374adcf714645d44290bc8cdbe20556",
+  "datamodelChecksum": "b46ab4219ea040e079ebbfdaf6e9d630b03ac0b50991b3c38df0cff034482128",
   "fixtures": {
     "legacy": {
       "file": "legacy-v0.1.prisma",
@@ -15250,6 +15250,3508 @@
               "type": "BOOLEAN",
               "notnull": 1,
               "dflt_value": "true",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "mediaType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'all'",
+              "pk": 0
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "sourceUserId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "sourceUserId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "SharedLibrary_sourceUserId_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "sourceUserId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_SharedLibrary_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "SharedLibraryGrant",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "libraryId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 2
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "SharedLibrary",
+              "from": "libraryId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "SharedLibraryGrant_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_SharedLibraryGrant_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "libraryId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "SharedLibraryProgress",
+          "columns": [
+            {
+              "name": "activeSessionId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "completed",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "false",
+              "pk": 0
+            },
+            {
+              "name": "durationSeconds",
+              "type": "REAL",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "itemId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "lastSequence",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "-1",
+              "pk": 0
+            },
+            {
+              "name": "mediaKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "positionSeconds",
+              "type": "REAL",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "AccountMedia",
+              "from": "itemId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "SharedLibraryProgress_itemId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "itemId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "SharedLibraryProgress_userId_completed_updatedAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "completed",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "updatedAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 4,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "SharedLibraryProgress_userId_itemId_mediaKey_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "itemId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "mediaKey",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_SharedLibraryProgress_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Title",
+          "columns": [
+            {
+              "name": "backdropUrl",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "description",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "''",
+              "pk": 0
+            },
+            {
+              "name": "genres",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'[]'",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "posterUrl",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "sources",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'[]'",
+              "pk": 0
+            },
+            {
+              "name": "type",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'movie'",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "year",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [],
+          "indices": [
+            {
+              "name": "Title_createdAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "Title_type_createdAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "type",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_Title_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "User",
+          "columns": [
+            {
+              "name": "active",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "true",
+              "pk": 0
+            },
+            {
+              "name": "avatarUrl",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "displayName",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "email",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "hashedPassword",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "role",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'user'",
+              "pk": 0
+            },
+            {
+              "name": "sessionVersion",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [],
+          "indices": [
+            {
+              "name": "User_email_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "email",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_User_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20261110000000_library_visible_to_everyone",
+      "checksum": "b0435edbaf9620255541bc411412b2497a95a9c161a58d8a2f312fcf79e3c053",
+      "schema": [
+        {
+          "name": "AccountMedia",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "credentialFingerprint",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "phase",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "progress",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "providerRef",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "type",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'movie'",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "year",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "AccountMedia_userId_createdAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "AccountMedia_userId_provider_providerRef_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "provider",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "providerRef",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_AccountMedia_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "AccountScan",
+          "columns": [
+            {
+              "name": "automatic",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "true",
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "credentialFingerprint",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "cursor",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "error",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "failures",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "imported",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "leaseUntil",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "nextAttemptAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "pages",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "revision",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "scanned",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "skipped",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'queued'",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "AccountScan_status_nextAttemptAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "status",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "nextAttemptAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "AccountScan_userId_provider_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "provider",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_AccountScan_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "DebridConfig",
+          "columns": [
+            {
+              "name": "allDebridApiKey",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "autoImportLibrary",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "true",
+              "pk": 0
+            },
+            {
+              "name": "fallbackOrder",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'[]'",
+              "pk": 0
+            },
+            {
+              "name": "premiumizeApiKey",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "primaryProvider",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'realdebrid'",
+              "pk": 0
+            },
+            {
+              "name": "realDebridToken",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "sqlite_autoindex_DebridConfig_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Favorite",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "titleId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "Title",
+              "from": "titleId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "Favorite_userId_createdAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "Favorite_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "Favorite_userId_titleId_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "titleId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_Favorite_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Invitation",
+          "columns": [
+            {
+              "name": "acceptedAt",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "createdById",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "email",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "expiresAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "revokedAt",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "tokenHash",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [],
+          "indices": [
+            {
+              "name": "Invitation_email_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "email",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "Invitation_expiresAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "expiresAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "Invitation_tokenHash_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "tokenHash",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_Invitation_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "LogEvent",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "level",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'info'",
+              "pk": 0
+            },
+            {
+              "name": "message",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "meta",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "type",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [],
+          "indices": [
+            {
+              "name": "LogEvent_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "LogEvent_level_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "level",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "LogEvent_type_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "type",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_LogEvent_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "MediaRequest",
+          "columns": [
+            {
+              "name": "attempts",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "availableAt",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "canonicalKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "destination",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "downloadState",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "downloadedAt",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "error",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "externalId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "leaseUntil",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "mediaType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "metadata",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "nextPollAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "progress",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "providerId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "providerRef",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "revision",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "sharedLibraryId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "sourceFingerprint",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "sourceUrl",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "sourceUserId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "startedAt",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'requested'",
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "year",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "SharedLibrary",
+              "from": "sharedLibraryId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "SET NULL",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "sourceUserId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "SET NULL",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "MediaRequest_canonicalKey_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "canonicalKey",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "MediaRequest_sharedLibraryId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "sharedLibraryId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "MediaRequest_sourceUserId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "sourceUserId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "MediaRequest_status_nextPollAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "status",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "nextPollAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_MediaRequest_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "MetadataRecord",
+          "columns": [
+            {
+              "name": "attempts",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "data",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'{}'",
+              "pk": 0
+            },
+            {
+              "name": "error",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "leaseUntil",
+              "type": "DATETIME",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "lockedFields",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'[]'",
+              "pk": 0
+            },
+            {
+              "name": "mediaType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "nextAttemptAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "ownerId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "requestedBy",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'automatic'",
+              "pk": 0
+            },
+            {
+              "name": "revision",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'queued'",
+              "pk": 0
+            },
+            {
+              "name": "targetId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "targetType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "year",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "ownerId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "MetadataRecord_ownerId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "ownerId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "MetadataRecord_status_nextAttemptAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "status",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "nextAttemptAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "MetadataRecord_targetType_targetId_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "targetType",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "targetId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_MetadataRecord_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PlaybackLog",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "durationMs",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "error",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "providerUsed",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "success",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "titleId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "Title",
+              "from": "titleId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "PlaybackLog_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackLog_titleId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "titleId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackLog_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackLog_userId_success_titleId_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "success",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "titleId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 4,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_PlaybackLog_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PlaybackProgress",
+          "columns": [
+            {
+              "name": "activeSessionId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "completed",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "false",
+              "pk": 0
+            },
+            {
+              "name": "durationSeconds",
+              "type": "REAL",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "mediaKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "positionSeconds",
+              "type": "REAL",
+              "notnull": 1,
+              "dflt_value": "0",
+              "pk": 0
+            },
+            {
+              "name": "profileId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "scope",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "''",
+              "pk": 0
+            },
+            {
+              "name": "titleId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "updatedAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "Profile",
+              "from": "profileId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "Title",
+              "from": "titleId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "PlaybackProgress_userId_scope_completed_updatedAt_id_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "scope",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "completed",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": "updatedAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 4,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 5,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackProgress_userId_scope_titleId_mediaKey_key",
+              "unique": 1,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "scope",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": "titleId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 3,
+                  "name": "mediaKey",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 4,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_PlaybackProgress_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PlaybackSession",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "expiresAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "lastSequence",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": "-1",
+              "pk": 0
+            },
+            {
+              "name": "mediaKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "profileId",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "scope",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "''",
+              "pk": 0
+            },
+            {
+              "name": "titleId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "Profile",
+              "from": "profileId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "Title",
+              "from": "titleId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "PlaybackSession_expiresAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "expiresAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackSession_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_PlaybackSession_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PlaybackSourceJob",
+          "columns": [
+            {
+              "name": "expiresAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "key",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "leaseUntil",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "provider",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "providerRef",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "PlaybackSourceJob_expiresAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "expiresAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "PlaybackSourceJob_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_PlaybackSourceJob_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "key",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Profile",
+          "columns": [
+            {
+              "name": "avatarUrl",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "name",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "preferences",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": "'{}'",
+              "pk": 0
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "Profile_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_Profile_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "RequestEvent",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "message",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "progress",
+              "type": "INTEGER",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "requestId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "status",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "MediaRequest",
+              "from": "requestId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "RequestEvent_requestId_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "requestId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_RequestEvent_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "RequestFollower",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "requestId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 2
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "MediaRequest",
+              "from": "requestId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            },
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "RequestFollower_userId_createdAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "createdAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_RequestFollower_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "requestId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 2,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "RevokedSession",
+          "columns": [
+            {
+              "name": "expiresAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [
+            {
+              "seq": 0,
+              "table": "User",
+              "from": "userId",
+              "to": "id",
+              "on_update": "CASCADE",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ],
+          "indices": [
+            {
+              "name": "RevokedSession_expiresAt_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "expiresAt",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "name": "sqlite_autoindex_RevokedSession_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Setting",
+          "columns": [
+            {
+              "name": "key",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "name": "value",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "foreignKeys": [],
+          "indices": [
+            {
+              "name": "sqlite_autoindex_Setting_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0,
+              "columns": [
+                {
+                  "seqno": 0,
+                  "name": "key",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "SharedLibrary",
+          "columns": [
+            {
+              "name": "createdAt",
+              "type": "DATETIME",
+              "notnull": 1,
+              "dflt_value": "CURRENT_TIMESTAMP",
+              "pk": 0
+            },
+            {
+              "name": "enabled",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "true",
+              "pk": 0
+            },
+            {
+              "name": "everyone",
+              "type": "BOOLEAN",
+              "notnull": 1,
+              "dflt_value": "false",
               "pk": 0
             },
             {

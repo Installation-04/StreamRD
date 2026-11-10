@@ -34,7 +34,7 @@ export function Nav() {
     <nav className="nav" aria-label="Main navigation">
       <Link href="/" className="nav-logo"><span className="brand-symbol" aria-hidden="true">p<span>_</span></span><span>PHOSPHOR<span className="brand-caption">YOUR MEDIA. YOUR SIGNAL.</span></span></Link>
       <div className="nav-links">
-        {user && link("/discover", "Find media")}{user && link("/requests", "Requests")}{user && link("/shared-libraries", "Shared libraries")}{user && link("/library", "My library")}{user && link("/setup", "Setup")}{user && link("/search", "Discover")}{user && link("/downloads", "Queue")}{user && link("/account/debrid", "Connections")}{user && link("/account/profile", "Account")}{user?.role === "admin" && link("/admin", "Admin")}
+        {user && link("/discover", "Find media")}{user && link("/requests", "Requests")}{user && link("/shared-libraries", "Library")}{user?.role === "admin" && link("/library", "Imports")}{user && link("/setup", "Setup")}{user && link("/search", "Discover")}{user && link("/downloads", "Queue")}{user && link("/account/debrid", "Connections")}{user && link("/account/profile", "Account")}{user?.role === "admin" && link("/admin", "Admin")}
       </div>
       <div className="nav-account"><ColorToggle />{user ? <>
         <span className="nav-avatar" title={user.displayName} aria-label={user.displayName}>{user.displayName.slice(0, 1).toUpperCase()}</span>

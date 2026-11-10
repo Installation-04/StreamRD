@@ -232,7 +232,8 @@ it("upgrades a populated v0.6 server without creating or starting media requests
  }
  const db=client();await seed(db,true);
  await db.accountMedia.create({data:{id:"existing-import",userId:"user",provider:"realdebrid",providerRef:"private-existing-ref",credentialFingerprint:"existing-binding",name:"Existing media",phase:"finished",progress:100}});
- await db.sharedLibrary.create({data:{id:"existing-library",name:"Movie night",sourceUserId:"user"}});
+ // Inserted with SQL: the generated client already knows columns that later migrations add to this older database.
+ await db.$executeRawUnsafe(`INSERT INTO "SharedLibrary" ("id","name","sourceUserId","mediaType","enabled","createdAt","updatedAt") VALUES ('existing-library','Movie night','user','all',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`);
  const before=await snapshot(db);const result=await migrateDatabase({root,url});
  expect(result.backup).toBeTruthy();await preserved(db,before);
  expect(await db.mediaRequest.count()).toBe(0);expect(await db.requestFollower.count()).toBe(0);expect(await db.requestEvent.count()).toBe(0);

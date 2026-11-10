@@ -6,6 +6,21 @@ grants selected users access. Viewers sign in to this server and can watch witho
 supplying debrid credentials. This is a local server account system; Plex accounts
 and Plex Home identities are not used.
 
+## Libraries, Plex-style (v0.11.0)
+
+Think of the server as having **libraries**, like Plex: for example *Movies* and *TV Shows*. In **Admin → Libraries** the administrator
+creates as many as they like, picks a content type for each (movies, TV shows, or both) and chooses who can see it:
+
+- **Visible to everyone**: every active account on the server sees it, including people who sign up later. No per-person step.
+- **Chosen people**: only the accounts you add under *Who can watch*.
+- **Paused**: hidden from everyone but the administrator without losing the access list.
+
+People find everything under one **Library** item in the navigation; they no longer have separate *Shared libraries* and *My library*
+pages. The administrator's debrid import screen is still available to administrators, now named **Imports**. A library always
+shows the administrator's imported media of its type, including titles imported later. The API fields are `everyone` on
+`/api/admin/shared-libraries` (create and update) and the library list a viewer receives. Existing libraries keep their exact
+access: the new setting starts off.
+
 ## Account administration
 
 The first account is an administrator unless `ADMIN_EMAIL` designates a specific

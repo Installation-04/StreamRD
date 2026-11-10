@@ -185,7 +185,7 @@ export default function AdminUsersPage() {
 
       <section className="panel access-section" aria-labelledby="members-heading">
         <div className="access-section-top"><div><h3 id="members-heading">Members</h3><p className="dim access-description">Administrators can configure this server and manage other members.</p></div>
-          <Link className="btn btn-quiet btn-sm" href="/admin/shared-libraries">Manage shared libraries</Link>
+          <Link className="btn btn-quiet btn-sm" href="/admin/shared-libraries">Manage libraries</Link>
         </div>
         <div className="field access-filter"><label htmlFor="member-filter">Find a member</label><input id="member-filter" placeholder="Name or email" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
         <div className="access-list">

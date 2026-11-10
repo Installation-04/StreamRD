@@ -53,8 +53,8 @@ export function Nav() {
           {link("/search", t("nav.search"), "search")}
           {user && link("/discover", "Find media", "search")}
           {user && link("/requests", "Requests", "film")}
-          {user && link("/shared-libraries", "Shared libraries", "grid")}
-          {user && link("/library", "My library", "film")}
+          {user && link("/shared-libraries", "Library", "film")}
+          {user?.role === "admin" && link("/library", "Imports", "grid")}
           {user && link("/setup", "Setup", "settings")}
           {user && link("/account/profile", t("nav.account"), "user")}
           {user?.role === "admin" && link("/admin", t("nav.admin"), "grid")}
