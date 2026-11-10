@@ -1,5 +1,6 @@
 "use client";
 
+import PlaybackHelp from "@/components/PlaybackHelp";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -105,7 +106,7 @@ export default function WatchPage() {
       ) : stream ? (
         <div>
           <video ref={videoRef} src={stream.url} controls autoPlay onError={() => setPlayerError(true)} />
-          {playerError && <p role="alert" style={{ padding: 16 }}>This browser could not play the selected file. <a href={stream.url} target="_blank" rel="noreferrer">Open the video link</a> to use a compatible player.</p>}
+          <PlaybackHelp url={stream.url} failed={playerError} />
           {choice?.titleId === id && <button className="btn btn-secondary" onClick={() => setChoice(null)}>Choose another file</button>}
         </div>
       ) : (

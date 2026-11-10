@@ -5,7 +5,8 @@ runs them in one container. Both web interfaces, their APIs, background workers,
 SQLite databases and the local download client are included. No Docker socket or
 Docker-in-Docker service is needed inside the application.
 
-From a checkout of the release:
+The quickest route is the one-line installer in the [README](../README.md#quick-install)
+(`get.sh`). Otherwise, from a checkout of the release:
 
 ```bash
 docker compose up -d --build

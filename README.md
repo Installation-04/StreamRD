@@ -19,6 +19,23 @@ You bring your own debrid subscriptions; StreamRD turns them into a private,
 multi-user streaming service with a curated catalog. Use it within the
 providers' terms of service and your local law.
 
+## Quick install
+
+With Docker and the Compose plugin installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
+```
+
+This installs the all-in-one container (StreamRD on port 8080, Phosphor on 8081) into
+`~/streamrd`, using the published image for a release or building from source when
+none is available. It generates no secrets for you to manage, never overwrites your
+`.env` or data volume, and re-running it updates in place. Options go after `bash -s --`,
+for example `--version v0.8.0 --port 9090 --admin-email you@example.com`; run it with
+`--help` to see all of them and `--uninstall` to remove the container (data is kept).
+It does not install Docker, set up HTTPS or open firewall ports. Read the
+[script](get.sh) before piping any script to a shell.
+
 ## Server Sharing — v0.6.0
 
 Invite users, publish named libraries from your imported account collection, and
