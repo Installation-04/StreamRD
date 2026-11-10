@@ -93,6 +93,7 @@ export interface LogEntry {
   message: string;
   userId: string | null;
   provider: string | null;
+  meta?: string | null;
   createdAt: string;
 }
 
