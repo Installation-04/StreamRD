@@ -11,16 +11,19 @@ With Docker and the Compose plugin, one command installs the all-in-one containe
 Phosphor on 8081, plus qBittorrent), laid out as:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
 # choose ports, the first administrator, or leave parts out:
-curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash -s -- --port 3000 --admin-email you@example.com --no-phosphor --no-qbittorrent
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- --port 3000 --admin-email you@example.com --no-phosphor --no-qbittorrent
 ```
+
+Run from a terminal, it first asks how you want it: Default, or Advanced (folder, ports, Phosphor and qBittorrent on or off, Jellyfin and/or Plex
+already mapped to your libraries, Zilean, Zurg) with a summary to confirm. `--yes` skips the questions.
 
 It creates `~/streamrd` with `docker-compose.yml`, `config/` (all settings, databases and backups) and `data/` (downloads).
 **To update:** `cd ~/streamrd && docker compose pull && docker compose up -d` (or re-run the script). Your two folders are never
 touched. `--import-db` moves an existing install across, `--uninstall` removes the container and keeps the folders. Optional add-ons:
-`--zilean` (a Debrid Media Manager torrent index for Phosphor) and `--zurg --rd-token …` (your Real-Debrid movies and shows as a mounted folder; Linux only).
-It does not install Docker, set up HTTPS or open ports; read [get.sh](https://github.com/Installation-04/StreamRD/blob/main/get.sh) before piping any script to a shell.
+`--media-server jellyfin|plex|both` (a media server with your libraries already mapped), `--zilean` (a Debrid Media Manager torrent index for Phosphor) and `--zurg --rd-token …` (your Real-Debrid movies and shows as a mounted folder; Linux only).
+It does not install Docker, set up HTTPS or open ports; read [install.sh](https://github.com/Installation-04/StreamRD/blob/main/install.sh) before piping any script to a shell.
 The sections below describe the older split-service install.
 
 ## Install (split services)

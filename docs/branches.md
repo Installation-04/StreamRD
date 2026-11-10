@@ -15,7 +15,7 @@
 
 ## What does not change
 
-- Only tags on `main` publish `:latest` and version tags, and only those are offered by **Admin → System** and `get.sh`. Running `:beta` or `:dev` never causes a stable install to update.
+- Only tags on `main` publish `:latest` and version tags, and only those are offered by **Admin → System** and `install.sh`. Running `:beta` or `:dev` never causes a stable install to update.
 - Every migration is still additive and tested against every earlier release; that applies on all three branches.
 
 ## Trying a pre-release

@@ -25,14 +25,14 @@ examples) and only removes them after you confirm. Removed names are skipped by 
 serves it as a Torznab feed, which Phosphor can search like Jackett or Prowlarr.
 
 ```bash
-bash get.sh --zilean          # add it to an existing install (re-running is safe)
+bash install.sh --zilean          # add it to an existing install (re-running is safe)
 ```
 
 This adds two containers to your Compose project, `zilean` and `zilean-db` (PostgreSQL 17), with their own named volumes and a
 generated database password in `.env`. Phosphor registers **Zilean** as an indexer by itself (`ZILEAN_URL`); you can rename,
 disable or delete it under **Admin → Indexers**, and it is not recreated if you do. Its first import of the hash lists runs
 in the background and takes a while, so searches return nothing until it has finished. It needs outbound access to GitHub
-and uses noticeable CPU, memory and disk while importing. Stop it with `bash get.sh --no-zilean`.
+and uses noticeable CPU, memory and disk while importing. Stop it with `bash install.sh --no-zilean`.
 
 Verified here: the images start with the generated settings, Zilean applies its migrations, its Torznab capabilities and search
 endpoints answer, Phosphor registers it and searches it without errors. **Not verified:** real search results (the import could not
@@ -45,12 +45,12 @@ exercised against real data. Zilean sets its own database connection from a stri
 as folders. StreamRD then reads real files from `/mnt/zurg` for its optional Plex/Jellyfin exports.
 
 ```bash
-bash get.sh --zurg --rd-token YOUR_REAL_DEBRID_API_TOKEN
+bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_API_TOKEN
 ```
 
 - **Free build, Real-Debrid only.** AllDebrid, Premiumize and the other providers need Zurg's sponsor build, which this does not set up.
 - **Linux host only** (needs `/dev/fuse` and mount propagation; Docker Desktop on Windows/macOS is not supported). The mount folder
-  `./mnt/zurg` must be a shared mount; `get.sh` does this when run as root, otherwise it prints the two commands. This does not survive a
+  `./mnt/zurg` must be a shared mount; `install.sh` does this when run as root, otherwise it prints the two commands. This does not survive a
   host reboot by itself: add `mount --bind` and `mount --make-rshared` for that folder to a boot-time unit before the containers start.
 - **Movies and shows only.** `zurg/config.yml` defines two directories: `shows` (has episodes) and `movies`, each requiring a video file and
   excluding obvious games, software, music and courses. Edit it freely and apply with `docker compose restart zurg`. The file holds your

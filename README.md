@@ -74,8 +74,13 @@ You decide who joins and what they can see, and nobody else needs a debrid subsc
 You need Docker with the Compose plugin. Then run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
 ```
+
+Run in a terminal, it asks how you want it: **Default** (StreamRD on 8080, Phosphor on 8081, the download client) or
+**Advanced** (folder, every port, Phosphor and qBittorrent on or off, **Jellyfin and/or Plex already wired to your libraries**,
+Zilean, Zurg, the reserved administrator email), then shows a summary to confirm. Add `--yes` (or run it without a terminal) to skip
+the questions.
 
 Open **http://YOUR_SERVER:8080**, create your account (the first one becomes the administrator), and follow the
 guided **Setup** page to connect a debrid account. That is all.
@@ -90,13 +95,14 @@ The script creates `~/streamrd` with one `docker-compose.yml` and two folders, l
 **Update** any time with `cd ~/streamrd && docker compose pull && docker compose up -d` (or run the script again).
 Your folders are never touched. Options go after `bash -s --`, for example `--port 3000 --admin-email you@example.com`;
 `--help` lists them. `--import-db` moves an existing install across and `--uninstall` removes the container, keeping your folders.
-It does not install Docker, set up HTTPS or open firewall ports. Read [`get.sh`](get.sh) before piping any script to a shell.
+It does not install Docker, set up HTTPS or open firewall ports. Read [`install.sh`](install.sh) before piping any script to a shell.
 
 <details>
 <summary><b>Optional add-ons</b>: Zilean, Zurg, Plex and Jellyfin</summary>
 
-- `get.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
-- `get.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).
+- `install.sh --media-server jellyfin|plex|both` runs Jellyfin and/or Plex next to StreamRD with the library folders and your downloads already mapped (read-only); you only add the libraries in their setup. See [Plex and Jellyfin](docs/plex-jellyfin.md#built-in-jellyfin-and-plex).
+- `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
+- `install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).
 - Admin → Plex / Jellyfin exports mounted files as symlink libraries for your media server:
   [setup and scanning guide](docs/plex-jellyfin.md).
 
