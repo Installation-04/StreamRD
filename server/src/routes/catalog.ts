@@ -23,7 +23,7 @@ catalogRouter.use(asyncHandler(browseGate));
 catalogRouter.use("/browse", browseRouter);
 
 /**
- * GET /api/catalog/rows — Netflix-style home rows: recently added,
+ * GET /api/catalog/rows — Home rows: recently added,
  * movies, series, then one row per genre.
  */
 /** The home rows view shows the newest titles; the paged browse API reaches the rest. */

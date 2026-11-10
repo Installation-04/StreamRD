@@ -31,7 +31,7 @@ function Row({ title, note, tiles, label }: { title: string; note?: string; tile
   </section>;
 }
 
-/** Plex-style rows: what the viewer can watch (continue, recently added, popular here) and what the world is watching (trending, popular). */
+/** Home rows: what the viewer can watch (continue, recently added, popular here) and what the world is watching (trending, popular). */
 export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: number, slides: number) => void }) {
   const [home, setHome] = useState<HomeData | null>(null), [resume, setResume] = useState<SharedContinueItem[]>([]);
   useEffect(() => {

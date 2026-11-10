@@ -8,7 +8,7 @@ lockfiles in each server/web directory.
 ## Quick install
 
 With Docker and the Compose plugin, one command installs the all-in-one container (StreamRD on port 8080,
-Phosphor on 8081, plus qBittorrent), laid out like Radarr or Sonarr:
+Phosphor on 8081, plus qBittorrent), laid out as:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash

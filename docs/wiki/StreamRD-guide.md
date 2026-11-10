@@ -13,7 +13,7 @@ Favorites belong to the account and are shared across its viewing profiles.
 
 ## Watch and resume
 
-On a title in a library, **Play from server** opens a full-page player (like Plex): a fading title bar, resume, a chooser for packs, **Up next** for the following episode, and keyboard shortcuts (Space, J/L, arrows, M, F, N, Esc).
+On a title in a library, **Play from server** opens a full-page player: a fading title bar, resume, a chooser for packs, **Up next** for the following episode, and keyboard shortcuts (Space, J/L, arrows, M, F, N, Esc).
 
 Choose a viewing profile using **Watching as**, then open a title and press Play.
 StreamRD resolves the selected source through your configured providers and hands

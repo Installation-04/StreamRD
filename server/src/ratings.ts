@@ -15,7 +15,7 @@ export function ageForRating(label: string | null | undefined): number | null {
   const age = /^(?:FSK|BBFC|AGE)?-?(\d{1,2})(?:A|\+)?$/.exec(value);
   return age && Number(age[1]) <= 21 ? Number(age[1]) : null;
 }
-/** What an administrator can choose for a person, like Plex's restriction levels. `maxAge: null` means no limit. */
+/** What an administrator can choose for a person. `maxAge: null` means no limit. */
 export const VIEWING_LIMITS = [
   { id: "kids", maxAge: 7, label: "Kids", detail: "G, TV-Y, TV-G, TV-Y7" },
   { id: "preteen", maxAge: 8, label: "Pre-teens", detail: "up to PG and TV-PG" },

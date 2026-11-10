@@ -8,8 +8,8 @@ Native-client versions remain independent.
   [v0.15.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.15.0.md) (invitation links that carry library access) ·
   [v0.14.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.14.0.md) (viewing limits: a kids account) ·
   [v0.13.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.13.0.md) (featured carousel with optional trailers) ·
-  [v0.12.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.12.0.md) (Plex-style home page rows) ·
-  [v0.11.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.11.0.md) (one Library, Plex-style) ·
+  [v0.12.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.12.0.md) (home page rows) ·
+  [v0.11.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.11.0.md) (one Library) ·
   [v0.10.3 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.10.3.md) (built-in search finds short films) ·
   [v0.10.2 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.10.2.md) (metadata with no account) ·
   [v0.10.1 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.10.1.md) (HttpOnly sessions in the single container) ·
@@ -18,7 +18,7 @@ Native-client versions remain independent.
   [v0.9.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.9.0.md) (tag it to release) ·
   [v0.8.1 release](https://github.com/Installation-04/StreamRD/releases/tag/v0.8.1)
 
-**v0.9.0** keeps settings and data in `config/` and `data/` like Radarr/Sonarr, so updating is `docker compose pull && docker compose up -d`; imports only movies and shows from your accounts (with a cleanup for what was imported before); and adds optional Zilean (indexer) and Zurg (Real-Debrid mount) Compose add-ons. See [the add-ons guide](https://github.com/Installation-04/StreamRD/blob/main/docs/zilean-zurg.md).
+**v0.9.0** keeps settings and data in `config/` and `data/`, so updating is `docker compose pull && docker compose up -d`; imports only movies and shows from your accounts (with a cleanup for what was imported before); and adds optional Zilean (indexer) and Zurg (Real-Debrid mount) Compose add-ons. See [the add-ons guide](https://github.com/Installation-04/StreamRD/blob/main/docs/zilean-zurg.md).
 
 **v0.8.1** fixes automatic matching for release-style file names (the title is searched without year, edition and
 quality tags, unambiguous exact or near-year matches are accepted, and the worker is much faster), adds match progress and

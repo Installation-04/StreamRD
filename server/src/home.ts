@@ -5,7 +5,7 @@ import { accountMediaViews } from "./routes/account-library";
 import { currentAccountMediaFilter } from "./account-library";
 
 /**
- * The Plex-style rows on the home page. Library rows (recently added, popular on this server) come from the libraries the viewer may
+ * The rows on the home page. Library rows (recently added, popular on this server) come from the libraries the viewer may
  * see. The "trending" and "popular" rows come from the public Cinemeta catalogues (no account, no key), fetched by the server and
  * cached, so a browser never contacts them and nothing about a viewer is sent. Set HOME_EXTERNAL_LISTS=false to turn them off.
  */

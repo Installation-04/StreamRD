@@ -6,9 +6,9 @@ grants selected users access. Viewers sign in to this server and can watch witho
 supplying debrid credentials. This is a local server account system; Plex accounts
 and Plex Home identities are not used.
 
-## Libraries, Plex-style (v0.11.0)
+## Libraries (v0.11.0)
 
-Think of the server as having **libraries**, like Plex: for example *Movies* and *TV Shows*. In **Admin → Libraries** the administrator
+Think of the server as having **libraries**: for example *Movies* and *TV Shows*. In **Admin → Libraries** the administrator
 creates as many as they like, picks a content type for each (movies, TV shows, or both) and chooses who can see it:
 
 - **Visible to everyone**: every active account on the server sees it, including people who sign up later. No per-person step.
@@ -23,7 +23,7 @@ access: the new setting starts off.
 
 ## The home page (StreamRD)
 
-The home page has Plex-style rows, from top to bottom: **Continue watching**, **New in your libraries**, **Popular on this server**,
+The home page has rows, from top to bottom: **Continue watching**, **New in your libraries**, **Popular on this server**,
 **Trending now**, **Popular movies** and **Popular TV shows**, followed by the older catalogue rows.
 
 - *New in your libraries* and *Popular on this server* come from the libraries the signed-in person can see (administrators also see

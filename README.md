@@ -29,9 +29,9 @@ in it, matches artwork and details, and gives you and the people you invite a pr
 You decide who joins and what they can see, and nobody else needs a debrid subscription.
 
 - 🎬 **Your collection, nicely browsed.** Imports only movies and shows (games, software and music are skipped), with posters and details that work with no account or API key (add your own TMDB or OMDb key for richer results).
-- 👥 **Libraries, like Plex.** Create libraries such as Movies and TV Shows, choose who sees each one (everyone or chosen people), and invite people with a link. Everyone gets their own resume positions, and playback uses your account so nobody else needs a key.
+- 👥 **Libraries.** Create libraries such as Movies and TV Shows, choose who sees each one (everyone or chosen people), and invite people with a link. Everyone gets their own resume positions, and playback uses your account so nobody else needs a key.
 - 🔎 **Find and request more.** Search TMDB, request a title, and follow it from approval to download.
-- 🐳 **One container, Radarr-style.** Settings in `config/`, downloads in `data/`; updating is `docker compose pull && docker compose up -d`.
+- 🐳 **One container.** Settings in `config/`, downloads in `data/`; updating is `docker compose pull && docker compose up -d`.
 - 🔒 **Careful with your secrets.** Stored keys are encrypted, sessions are HttpOnly, backups are verified.
 
 ## 🖼 Screenshots
@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.s
 Open **http://YOUR_SERVER:8080**, create your account (the first one becomes the administrator), and follow the
 guided **Setup** page to connect a debrid account. That is all.
 
-The script creates `~/streamrd` with one `docker-compose.yml` and two folders, laid out like Radarr or Sonarr:
+The script creates `~/streamrd` with one `docker-compose.yml` and two folders, laid out as:
 
 | Folder | Holds |
 |---|---|
@@ -130,7 +130,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 **Watch**
 - A streaming-style web UI in black and orange (dark, light or system theme), responsive, with up to five viewing profiles per account.
 - A full-page player with resume, Up next, keyboard shortcuts and a VLC/mpv hand-off for files a browser cannot play.
-- A Plex-style home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
+- A home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
 - My List and per-viewer resume across all libraries.
 - Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
 - Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.
@@ -188,8 +188,8 @@ flowchart LR
 
 ## 🗺 Where it is going
 
-StreamRD is becoming **one library managed by the administrator, like Plex**. Done so far: one Library page, libraries visible to
-everyone or chosen people, a Plex-style home page, viewing limits for a kids account, invitation links that carry library
+StreamRD is becoming **one library managed by the administrator**. Done so far: one Library page, libraries visible to
+everyone or chosen people, a home page with a featured carousel, viewing limits for a kids account, invitation links that carry library
 access, and a full-page player. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
 
 ## 📚 Documentation

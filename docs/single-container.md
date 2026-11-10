@@ -5,7 +5,7 @@ runs them in one container. Both web interfaces, their APIs, background workers,
 SQLite databases and the local download client are included. No Docker socket or
 Docker-in-Docker service is needed inside the application.
 
-## Install (the Radarr/Sonarr way)
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
@@ -57,7 +57,7 @@ server snapshots each database (verified) before applying any migration. You can
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
 `docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
-Updates are never applied by the app itself, as with Radarr and Sonarr in Docker. **Admin → System** tells you when
+Updates are never applied by the app itself. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
 [Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label
 (`com.centurylinklabs.watchtower.enable`). Watchtower can also serve an HTTP update endpoint; point

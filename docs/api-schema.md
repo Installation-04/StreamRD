@@ -44,7 +44,7 @@ on `/api/auth/*`), `502` provider failure).
 | GET | `/api/account/profile` | `{ user, profiles }` |
 | PUT | `/api/account/update` | Update `displayName` / `avatarUrl` |
 | POST | `/api/account/change-password` | `{ currentPassword, newPassword }` |
-| GET | `/api/account/profiles` | `{ profiles: [Profile] }` — Netflix-style viewing profiles, up to 5 per account |
+| GET | `/api/account/profiles` | `{ profiles: [Profile] }` — viewing profiles, up to 5 per account |
 | POST | `/api/account/profiles` | `{ name, avatarUrl? }` → 201 `{ profile }`; 409 once the cap is reached |
 | PATCH | `/api/account/profiles/:id` | Partial update; 404 for another account's profile |
 | DELETE | `/api/account/profiles/:id` | 404 for another account's profile |
@@ -82,7 +82,7 @@ on `/api/auth/*`), `502` provider failure).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/catalog/rows` | Netflix-style rows: `{ rows: [{ id, label, titles: [Title] }] }` |
+| GET | `/api/catalog/rows` | Home rows: `{ rows: [{ id, label, titles: [Title] }] }` |
 | GET | `/api/catalog/search?q=` | `{ results: [Title] }` (max 50) |
 | GET | `/api/catalog/title/:id` | `{ title: Title }` |
 
