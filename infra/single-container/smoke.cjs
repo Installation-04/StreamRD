@@ -30,7 +30,7 @@ async function call(port, route, data, token, method) {
  assert.equal((await fetch('http://127.0.0.1:8081/api/account/profile',{headers:{Authorization:`Bearer ${users[0].token}`}})).status,401);
  const config=fs.readFileSync(CONFIG+'/qbittorrent/qBittorrent/config/qBittorrent.conf','utf8');
  assert.ok(config.includes('127.0.0.1')); assert.ok(!config.includes(fs.readFileSync(CONFIG+'/secrets/qbittorrent-password','utf8').trim()));
- for (const file of ['streamrd-jwt','phosphor-jwt','qbittorrent-password']) assert.equal(fs.statSync(CONFIG+'/secrets/'+file).mode & 0o777,0o600);
+ for (const file of ['streamrd-jwt','phosphor-jwt','streamrd-data-key','phosphor-data-key','qbittorrent-password']) assert.equal(fs.statSync(CONFIG+'/secrets/'+file).mode & 0o777,0o600);
  assert.equal(process.getuid(),1000);
  // With separate volumes nothing from the settings tree may end up in the data volume, and downloads must not land in config.
  if (CONFIG !== '/data') {
