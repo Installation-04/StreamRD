@@ -57,7 +57,7 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
   checks.push({
     id: "catalog", title: contentReady ? "Your library has content" : "Something to watch", required: true, status: contentReady ? "complete" : "action",
     description: contentReady ? "Your connected account has finished items. Put them in a library to share them; playback availability is checked when you choose Play."
-      : admin ? "Import finished items from your debrid account (Imports), then put them in a library for your people."
+      : admin ? "Import finished items from your debrid account (Imports), then put them in a library for your family and friends."
       : "Your administrator needs to share a library with you before you can start watching.",
     href: contentReady ? "/library" : admin ? "/library" : null,
     actionLabel: contentReady ? "Open Imports" : admin ? "Import from your account" : "Ask your administrator",

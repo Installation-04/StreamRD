@@ -150,7 +150,7 @@ export default function AdminUsersPage() {
   return (
     <div className="access-page">
       <header className="access-heading">
-        <div><p className="dim access-eyebrow">YOUR SERVER · YOUR PEOPLE</p><h2>People & access</h2>
+        <div><p className="dim access-eyebrow">YOUR SERVER · FAMILY & FRIENDS</p><h2>People & access</h2>
           <p className="dim">Choose who can join, manage members and keep control of server access.</p></div>
         {ready && <span className="pill pill-dim">{users.length} members · {pending} pending invitations</span>}
       </header>
