@@ -64,3 +64,36 @@ it("stops private matching before a second provider request when the owner is de
   const work = runMetadataJob(); await started; await db.user.update({ where: { id: user.id }, data: { active: false } }); release(); await work;
   expect(fetch).toHaveBeenCalledTimes(1); expect(await recordFor("account", item.id)).toMatchObject({ status: "error", data: "{}" });
 });
+
+async function extraItem(name: string, year: number | null, ref: string) {
+  return db.accountMedia.create({ data: { userId: user.id, provider: "realdebrid", providerRef: ref, credentialFingerprint: "f".repeat(64), name, type: "movie", year, phase: "finished", progress: 100 } });
+}
+it("summarizes only the caller's library and retries unmatched, failed and never-started titles", async () => {
+  const stuck = await extraItem("Crank 2006 Director's Cut 1080p BluRay DTS x264-CtrlHD.mkv", null, "stuck-ref"), fresh = await extraItem("Sintel 2010 1080p", null, "fresh-ref");
+  await db.metadataRecord.create({ data: { targetType: "account", targetId: stuck.id, ownerId: user.id, name: stuck.name, mediaType: "movie", year: null, status: "review", requestedBy: "automatic", error: "Review the possible matches before applying metadata." } });
+  const before = await request(app).get("/api/account/library/metadata/summary").set(auth(user.token));
+  expect(before.status).toBe(200); expect(before.headers["cache-control"]).toContain("no-store");
+  expect(before.body).toMatchObject({ total: 3, review: 1, matched: 0, notStarted: 2, provider: { configured: true, automatic: false } });
+  expect(JSON.stringify(before.body)).not.toMatch(/Crank|Sintel|private-metadata/);
+  // Another member's summary and retry never see or touch these records.
+  const other = await request(app).get("/api/account/library/metadata/summary").set(auth(admin.token));
+  expect(other.body).toMatchObject({ total: 0, review: 0, notStarted: 0 });
+  expect((await request(app).post("/api/account/library/metadata/rematch").set(auth(admin.token))).body.queued).toBe(0);
+  expect((await request(app).get("/api/account/library/metadata/summary")).status).toBe(401);
+
+  fetch.mockImplementation(async (input: unknown) => json(String(input).includes("/search/") ? { results: [{ ...movie, title: String(input).includes("Crank") ? "Crank" : "Sintel", release_date: String(input).includes("Crank") ? "2006-08-31" : "2010-09-30" }] } : movie));
+  const retried = await request(app).post("/api/account/library/metadata/rematch").set(auth(user.token));
+  expect(retried.status).toBe(200); expect(retried.body).toMatchObject({ queued: 3, configured: true });
+  for (let step = 0; step < 6; step++) await runMetadataJob();
+  const after = (await request(app).get("/api/account/library/metadata/summary").set(auth(user.token))).body;
+  expect(after).toMatchObject({ matched: 3, review: 0, unmatched: 0, notStarted: 0 });
+  const queries = fetch.mock.calls.map((call: unknown[]) => decodeURIComponent(String(call[0]))).filter((url: string) => url.includes("/search/"));
+  expect(queries.some((url: string) => /query=Crank(&|$)/.test(url))).toBe(true); // the title is searched without edition or quality tags
+});
+it("refuses to retry without a configured provider and does not call it", async () => {
+  await saveMetadataSettings({ clearTmdbApiKey: true } as never).catch(() => undefined);
+  await db.setting.deleteMany({ where: { key: { startsWith: "metadata." } } });
+  fetch.mockClear();
+  const response = await request(app).post("/api/account/library/metadata/rematch").set(auth(user.token));
+  expect(response.status).toBe(200); expect(response.body).toMatchObject({ queued: 0, configured: false }); expect(fetch).not.toHaveBeenCalled();
+});

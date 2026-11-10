@@ -62,6 +62,19 @@ account. See the [users and sharing guide](../../docs/server-sharing.md) for set
 revocation behavior and differences from Plex Home.
 
 
+## Logs
+
+**Admin → Logs** is the structured event log (sign-ins, searches, downloads, provider errors,
+administrator actions). Search message text, filter by type, level, provider and a
+from/to date range, and page through as much history as you need (100–1000 per page,
+then **Load more**). **Copy shown** copies the entries on screen as plain text, each
+row has its own **Copy** and **Details** (its extra data), and **Download all
+matching…** saves every matching entry (up to 50,000) as a text log, JSON lines or
+CSV with the same filters. Turn on **Live** to refresh every 10 seconds. Spreadsheet
+exports neutralize cells that start with `=`, `+`, `-` or `@`. Downloading is itself
+recorded as an administrator action. Logs can contain user ids and provider names;
+share exports carefully.
+
 ## Updates, backups and restore (System page)
 
 **Admin → System** has two sections below the upgrade status.

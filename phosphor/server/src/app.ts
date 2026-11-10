@@ -29,6 +29,8 @@ export function createApp(): Express {
     cors({
       origin: config.corsOrigins === "*" ? true : config.corsOrigins.split(","),
       credentials: true,
+      // Lets the browser read the file name when it downloads an export across origins.
+      exposedHeaders: ["Content-Disposition"],
     })
   );
   app.use(express.json({ limit: "2mb" }));

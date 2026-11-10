@@ -9,6 +9,7 @@ const LEVELS = ["", "info", "warn", "error"];
 const PAGE_SIZES = [100, 250, 500, 1000];
 const FORMATS = [{ id: "txt", label: "Text (.log)" }, { id: "ndjson", label: "JSON lines (.ndjson)" }, { id: "csv", label: "CSV (.csv)" }] as const;
 const line = (log: LogEntry) => `${new Date(log.createdAt).toISOString()} ${log.level.toUpperCase().padEnd(5)} ${log.type}${log.provider ? ` [${log.provider}]` : ""} ${log.message.replace(/\r?\n/g, " ")}${log.meta ? " " + log.meta : ""}`;
+const field = { background: "var(--bg-raised)", color: "var(--text, var(--fg))", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 11px", font: "inherit", fontSize: 12, colorScheme: "dark light" } as const;
 const localInput = (value: string) => value ? new Date(value).toISOString() : "";
 
 export default function AdminLogsPage() {
@@ -57,7 +58,7 @@ export default function AdminLogsPage() {
       const token = getToken();
       const response = await fetch(`${API_BASE}/api/admin/logs/export?${query({ format, max: "50000" })}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!response.ok) throw new Error("export");
-      const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `streamrd-logs.${format}`;
+      const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `streamrd-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.${format === "txt" ? "log" : format}`;
       const url = URL.createObjectURL(await response.blob()), a = document.createElement("a");
       a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       setNotice(`Downloaded ${name} (up to 50,000 matching entries).`);
@@ -67,12 +68,12 @@ export default function AdminLogsPage() {
   return (
     <>
       <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap", alignItems: "end" }}>
-        <input type="search" aria-label="Search log messages" placeholder="Search messages…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} style={{ minWidth: 220 }} />
+        <input type="search" aria-label="Search log messages" placeholder="Search messages…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} style={{ ...field, minWidth: 220 }} />
         <select aria-label="Type" value={type} onChange={e => setType(e.target.value)}>{TYPES.map(v => <option key={v} value={v}>{v || "All types"}</option>)}</select>
         <select aria-label="Level" value={level} onChange={e => setLevel(e.target.value)}>{LEVELS.map(v => <option key={v} value={v}>{v || "All levels"}</option>)}</select>
         <select aria-label="Provider" value={provider} onChange={e => setProvider(e.target.value)}><option value="">All providers</option>{PROVIDER_IDS.map(p => <option key={p} value={p}>{p}</option>)}</select>
-        <label className="dim" style={{ fontSize: 11 }}>From<br /><input type="datetime-local" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label className="dim" style={{ fontSize: 11 }}>To<br /><input type="datetime-local" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label className="dim" style={{ fontSize: 11 }}>From<br /><input type="datetime-local" style={field} value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label className="dim" style={{ fontSize: 11 }}>To<br /><input type="datetime-local" style={field} value={to} onChange={e => setTo(e.target.value)} /></label>
         <label className="dim" style={{ fontSize: 11 }}>Per page<br /><select value={limit} onChange={e => setLimit(Number(e.target.value))}>{PAGE_SIZES.map(n => <option key={n} value={n}>{n}</option>)}</select></label>
         {filtered && <button type="button" className="btn btn-secondary" onClick={() => { setType(""); setLevel(""); setProvider(""); setQ(""); setSearch(""); setFrom(""); setTo(""); }}>Clear filters</button>}
       </div>

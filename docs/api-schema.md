@@ -522,3 +522,15 @@ All routes require a live administrator session, are `no-store`, and are rate li
 - `GET /api/admin/system/update[?refresh=1]` → `{current, latest, updateAvailable, publishedAt, url, checkEnabled, checkedAt, error, canApply}`.
 - `POST /api/admin/system/update` `{version}` → 202 `{requested, backup}`. Requires `UPDATE_WEBHOOK_URL`,
   a matching newer release, and takes a `pre-update-*` backup first; hook failures return 502.
+
+## Logs and library matching (v0.8.1)
+
+- `GET /api/admin/logs?limit&cursor&type&level&provider&userId&q&from&to` → `{logs, nextCursor}`.
+  `limit` 1–1000 (default 100); `cursor` is opaque keyset paging (newest first); `q` searches
+  message text; `from`/`to` are ISO dates. Invalid dates or cursors return 400.
+- `GET /api/admin/logs/export?format=ndjson|csv|txt&max=…&(same filters)` streams an attachment
+  (max 50,000 rows, 10 requests/minute). CSV neutralizes formula-leading cells.
+- `GET /api/account/library/metadata/summary` → counts for the caller's own library only:
+  `{total, matched, matching, review, unmatched, error, notStarted, provider:{configured, automatic}}`.
+- `POST /api/account/library/metadata/rematch` queues up to 500 of the caller's review, unmatched,
+  failed or never-started titles → `{queued, remaining, configured}`. Call until `queued` is 0.

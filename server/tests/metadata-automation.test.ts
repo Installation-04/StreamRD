@@ -8,7 +8,7 @@ import { app, signup, auth, resetDb, TestUser } from "./helpers";
 import { config } from "../src/config";
 import { db } from "../src/db";
 import { getMetadataSettings, saveMetadataSettings } from "../src/metadata/settings";
-import { confidentMatch, metadataQuery, queueAutomaticTargets, queueTarget, recordFor, runMetadataJob } from "../src/metadata/automation";
+import { confidentMatch, matchPlans, metadataQuery, queueAutomaticTargets, queueTarget, recordFor, runMetadataJob } from "../src/metadata/automation";
 import { mediaLibrary } from "../src/library-instance";
 import { MetadataCandidate } from "../src/metadata/types";
 
@@ -171,6 +171,26 @@ it("normalizes release tokens without stripping genuine numeric title suffixes a
   expect(confidentMatch(target, [candidate])).toBe(candidate); expect(confidentMatch(target, [candidate, { ...candidate, id: "2" }])).toBeNull();
   expect(confidentMatch({ ...target, year: null }, [candidate])).toBe(candidate);
   expect(confidentMatch({ ...target, year: null }, [candidate, { ...candidate, id: "2", year: 2020 }])).toBeNull();
+});
+
+it("cuts release names at the title so editions, audio and quality tags do not defeat automatic matching", () => {
+  const plan = (name: string, year?: number | null) => matchPlans(name, year)[0];
+  expect(plan("Crank 2006 Director's Cut 1080p BluRay DTS x264-CtrlHD.mkv")).toEqual({ query: "Crank", year: 2006 });
+  expect(plan("Crank.2006.Directors.Cut.1080p.BluRay.DTS.x264-CtrlHD.mkv", 2006)).toEqual({ query: "Crank", year: 2006 });
+  expect(plan("Blade Runner 2049 2017 2160p UHD BluRay x265")).toEqual({ query: "Blade Runner 2049", year: 2017 });
+  expect(plan("Mr Morfina (2025) [1080p] [WEBRip]")).toEqual({ query: "Mr Morfina", year: 2025 });
+  expect(plan("Show.Name.S02E05.720p.HDTV.x264")).toEqual({ query: "Show Name", year: null });
+  // A trailing number may be part of the title, so an unhinted name also offers the uncut query.
+  expect(matchPlans("Wonder Woman 1984")).toEqual([{ query: "Wonder Woman", year: 1984 }, { query: "Wonder Woman 1984", year: null }]);
+  const movie = (name: string, year: number, id = "1"): MetadataCandidate => ({ provider: "tmdb", id, type: "movie", name, year, posterUrl: null, description: "" });
+  const target = (name: string, year: number | null) => ({ targetType: "account" as const, targetId: "x", name, mediaType: "movie" as const, year });
+  const crank = "Crank 2006 Director's Cut 1080p BluRay DTS x264-CtrlHD.mkv";
+  expect(confidentMatch(target(crank, null), [movie("Crank", 2006), movie("Crank: High Voltage", 2009, "2")], plan(crank))?.id).toBe("1");
+  expect(confidentMatch(target("Safe", 2012), [movie("Safe", 2013)])?.id).toBe("1"); // one near-year title
+  expect(confidentMatch(target("Safe", 2012), [movie("Safe", 2011), movie("Safe", 2013, "2")])).toBeNull();
+  expect(confidentMatch(target("Safe", 2012), [movie("Safe", 2012), movie("Safe", 2012, "2")])).toBeNull();
+  expect(confidentMatch(target("Dune", null), [movie("Dune", 2021), movie("Dune: Part Two", 2024, "3")])?.id).toBe("1"); // one exact title
+  expect(confidentMatch(target("Dune", null), [movie("Dune", 2021), movie("Dune", 1984, "2")])).toBeNull(); // a remake stays in review
 });
 
 it("caps transient retries at three attempts without automatic budget resets", async () => {

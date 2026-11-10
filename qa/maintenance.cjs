@@ -51,4 +51,31 @@ module.exports = async function maintenance({ product, page, url, api, admin, ca
   await page.getByRole('status').filter({ hasText: 'Backup deleted.' }).waitFor();
   assert.equal((await call(api, '/api/admin/system/maintenance', null, admin.token)).backups.length, before);
   report.journeys.push(`${product}: admin update check, verified backup create/verify/download, typed restore confirmation and delete`);
+
+  // Logs: search, copy, download.
+  await page.goto(`${url}/admin/logs`, { waitUntil: 'networkidle' });
+  await page.getByRole('searchbox', { name: 'Search log messages' }).waitFor();
+  const shown = Number((await page.getByRole('status').filter({ hasText: /entries shown/ }).first().innerText()).match(/(\d+) entries shown/)[1]);
+  assert.ok(shown > 0, 'The log should contain the QA run so far');
+  await page.getByRole('searchbox', { name: 'Search log messages' }).fill('no-such-message-xyz');
+  await page.getByText('No entries match these filters.').waitFor();
+  await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await page.getByRole('button', { name: /^Copy shown \(\d+\)$/ }).click();
+  await page.getByRole('status').filter({ hasText: /^(Copied|Your browser blocked copying)/ }).waitFor();
+  const logDownload = page.waitForEvent('download');
+  await page.getByLabel('Download format').selectOption('ndjson');
+  assert.match((await logDownload).suggestedFilename(), /^(streamrd|phosphor)-logs-.*\.ndjson$/);
+  await noOverflow('desktop logs'); await shot('logs');
+  report.journeys.push(`${product}: admin logs search, copy and download`);
+
+  // The signed-in user's library: matching progress panel (and, for StreamRD, the dashboard row).
+  await page.goto(`${url}/library`, { waitUntil: 'networkidle' });
+  await page.getByRole('region', { name: 'Metadata matching progress' }).waitFor();
+  await noOverflow('desktop library match status'); await shot('library-match-status');
+  if (product === 'streamrd') {
+    await page.goto(`${url}/`, { waitUntil: 'networkidle' });
+    await page.getByRole('region', { name: 'From your library' }).waitFor();
+    await noOverflow('desktop dashboard library row'); await shot('dashboard-library-row');
+  }
+  report.journeys.push(`${product}: library matching progress${product === 'streamrd' ? ' and dashboard library row' : ''}`);
 };

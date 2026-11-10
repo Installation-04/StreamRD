@@ -7,7 +7,8 @@ import { db } from "../db";
 import { asyncHandler } from "../http";
 import { AccountLibraryError, cancelAccountScan, getAccountScanStatus, playImportedMedia, queueAccountScans } from "../account-library";
 import { PROVIDER_IDS } from "../providers/types";
-import { decorateAccountMedia } from "../metadata/account";
+import { accountMetadataSummary, decorateAccountMedia, rematchAccountMetadata } from "../metadata/account";
+import { rateLimit } from "../util/rateLimit";
 
 export const accountLibraryRouter = Router();
 accountLibraryRouter.use(requireAuth);
@@ -54,6 +55,8 @@ accountLibraryRouter.post("/scan/cancel", action(async (req, res) => {
   if (!parsed.success) throw new AccountLibraryError("Choose a supported provider to cancel.");
   await cancelAccountScan(req.session!.sub, parsed.data.provider); res.json({ ok: true });
 }));
+accountLibraryRouter.get("/metadata/summary", action(async (req, res) => { res.json(await accountMetadataSummary(req.session!.sub)); }));
+accountLibraryRouter.post("/metadata/rematch", rateLimit({ windowMs: 60_000, max: 30 }), action(async (req, res) => { res.json(await rematchAccountMetadata(req.session!.sub)); }));
 accountLibraryRouter.get("/:id", action(async (req, res) => {
   if (!idSchema.safeParse(req.params.id).success) throw new AccountLibraryError("Library item not found.", 404);
   const item = await db.accountMedia.findFirst({ where: { id: req.params.id, userId: req.session!.sub } });
