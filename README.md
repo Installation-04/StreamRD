@@ -216,7 +216,7 @@ URL the *browser* uses to reach the API. **Debrid providers**: each user pastes 
 Account → Debrid services (Real-Debrid [apitoken](https://real-debrid.com/apitoken),
 AllDebrid [apikeys](https://alldebrid.com/apikeys), Premiumize [account](https://www.premiumize.me/account)).
 
-Run the pieces directly while developing (Node 22):
+Run the pieces directly while developing (Node 24):
 
 ```bash
 git clone https://github.com/Installation-04/StreamRD.git && cd StreamRD
@@ -227,7 +227,7 @@ cd server && npm test                                                           
 
 | Piece | Stack |
 |---|---|
-| Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, Vitest + Supertest |
+| Backend (`/server`) | Node.js 24, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, Vitest + Supertest |
 | Web (`/web`) | Next.js (App Router), React, TypeScript |
 | Infra (`/infra`) | Docker, Compose, Caddy and Nginx examples, GitHub Actions |
 

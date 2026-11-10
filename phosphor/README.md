@@ -50,7 +50,7 @@ Use it within the providers' terms of service and your local law.
 
 | Piece | Stack |
 |---|---|
-| Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, `fast-xml-parser` (Torznab), Vitest + Supertest |
+| Backend (`/server`) | Node.js 24, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, `fast-xml-parser` (Torznab), Vitest + Supertest |
 | Web (`/web`) | Next.js (App Router), React, TypeScript |
 | Infra (`/infra`) | Docker, docker-compose, Caddy & Nginx configs |
 

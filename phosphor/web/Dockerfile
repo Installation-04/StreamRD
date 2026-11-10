@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca \
@@ -10,7 +10,7 @@ ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:61337
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3100 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/.next/standalone ./
