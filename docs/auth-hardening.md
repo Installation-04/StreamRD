@@ -71,9 +71,14 @@ promises. Real local browser/API checks for both products verified password form
 replacement cookies, old-token rejection, logout revocation, and retaining valid
 cookies after temporary profile errors, with no page errors.
 
-Provider keys remain plaintext in the existing database. Browser tokens remain
-JavaScript-accessible; HttpOnly/BFF sessions and CSRF handling need a compatible
-client/API migration. Business/provider logs need a separate redaction review.
+Provider keys, indexer keys and the qBittorrent password are encrypted at rest since v0.10.0
+(see [single-container.md](single-container.md)). Since v0.10.1, when the web app and the API share an
+origin (the single container) the browser session lives in an HttpOnly, SameSite=Lax cookie that page
+scripts cannot read; the sign-in response then omits the token, and cookie-authenticated changes are
+rejected unless they come from the same site (`Sec-Fetch-Site`, `Origin` against `Host`, or an origin
+listed in `CORS_ORIGINS`). Bearer requests, mobile/TV clients and split installs on another origin keep
+the earlier behaviour: the token is returned in the body and a script-readable cookie. In that case an
+XSS bug could still read it. Business/provider logs need a separate redaction review.
 Expired revocations need retention cleanup. Production entrypoints, frozen installs,
 and backup/restore checks are covered in [production-runtime.md](production-runtime.md).
 Versioned schema migrations and exact historical upgrade fixtures are now covered in

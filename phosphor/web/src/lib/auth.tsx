@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { ApiError, clearSession, get, getToken, post, storeSession } from "./api";
+import { ApiError, clearSession, cookieSessions, get, hasSession, post, storeSession } from "./api";
 import { User } from "./types";
 
 interface AuthState {
@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!getToken()) {
+    if (!hasSession()) {
       setUser(null);
       setLoading(false);
       return;
@@ -30,6 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(res.user);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        // An expired or revoked cookie session: ask the server to drop its HttpOnly cookie too.
+        if (cookieSessions()) void post("/api/auth/logout").catch(() => undefined);
         clearSession();
         setUser(null);
       }
@@ -43,13 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await post<{ token: string; user: User }>("/api/auth/login", { email, password });
+    const res = await post<{ token?: string; user: User }>("/api/auth/login", { email, password });
     storeSession(res.token, res.user.role);
     setUser(res.user);
   }, []);
 
   const signup = useCallback(async (email: string, password: string, displayName: string, inviteToken?: string) => {
-    const res = await post<{ token: string; user: User }>("/api/auth/signup", { email, password, displayName, ...(inviteToken ? { inviteToken } : {}) });
+    const res = await post<{ token?: string; user: User }>("/api/auth/signup", { email, password, displayName, ...(inviteToken ? { inviteToken } : {}) });
     storeSession(res.token, res.user.role);
     setUser(res.user);
   }, []);

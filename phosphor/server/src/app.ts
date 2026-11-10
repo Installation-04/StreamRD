@@ -10,7 +10,7 @@ import { libraryRouter } from "./routes/library";
 import { errorHandler, requestId, securityHeaders } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
-import { attachSession } from "./auth/middleware";
+import { attachSession, csrfGuard } from "./auth/middleware";
 import { config } from "./config";
 import { accountRouter } from "./routes/account";
 import { adminRouter } from "./routes/admin";
@@ -36,6 +36,7 @@ export function createApp(): Express {
   );
   app.use(express.json({ limit: "2mb" }));
   app.use(attachSession);
+  app.use(csrfGuard);
 
   app.use("/api/health", healthRouter);
   app.use("/api/discovery", discoveryRouter);

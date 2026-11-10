@@ -1,6 +1,6 @@
 {
   "name": "@phosphor/server",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "description": "Phosphor backend: auth, multiservice debrid providers, Torznab indexer search, download queue.",
   "type": "commonjs",

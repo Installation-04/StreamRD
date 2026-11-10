@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE, get, getToken, post, put } from "@/lib/api";
+import { authFetch, get, post, put } from "@/lib/api";
 import { PROVIDER_NAMES, ProviderId, ServerSettings } from "@/lib/types";
 
 export default function AdminServerPage() {
@@ -46,7 +46,7 @@ export default function AdminServerPage() {
   };
 
   const exportConfig = async () => {
-    const res = await fetch(`${API_BASE}/api/admin/export/config`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    const res = await authFetch("/api/admin/export/config");
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

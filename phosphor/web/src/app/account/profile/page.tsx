@@ -38,7 +38,7 @@ export default function ProfilePage() {
     setMsg(null);
     setError(null);
     try {
-      const session = await post<{ token: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
+      const session = await post<{ token?: string; role: string }>("/api/account/change-password", { currentPassword, newPassword });
       storeSession(session.token, session.role);
       setMsg("> password changed");
       setCurrentPassword("");
