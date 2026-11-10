@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { t } from "@/lib/i18n";
+import { BrandMark } from "./BrandMark";
 import { Icon, IconName } from "./Icon";
 
 type ThemePreference = "dark" | "light" | "system";
@@ -46,7 +47,7 @@ export function Nav() {
     <a href="#main-content" className="skip-link">Skip to content</a>
     <header className="site-header">
       <nav className="nav" aria-label="Main navigation">
-        <Link href="/" className="nav-logo" aria-label="StreamRD home"><span className="brand-mark"><Icon name="play" size={17} /></span>stream<span>rd</span><span className="brand-dot" /></Link>
+        <Link href="/" className="nav-logo" aria-label="StreamRD home"><BrandMark />stream<span>rd</span></Link>
         <div className="nav-links">
           {link("/", "Discover", "home")}
           {link("/search", t("nav.search"), "search")}

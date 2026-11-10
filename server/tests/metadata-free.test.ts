@@ -16,19 +16,29 @@ const bunny = { id: "tt1254207", imdb_id: "tt1254207", type: "movie", name: "Big
   description: "A large rabbit deals with three tiny bullies.", runtime: "10 min", genres: ["Animation", "Short", "Comedy"], cast: ["Fixture Voice"], imdbRating: "6.8" };
 const hero = { id: "tt2245084", imdb_id: "tt2245084", type: "movie", name: "Big Hero 6", year: "2014", poster: poster("tt2245084"), description: "Another film." };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
+// Wikidata stub: "Sintel" is a known item with an IMDb ID; anything else is unknown. Replace to simulate failures.
+const defaultWikidata = (url: URL): Response => {
+  const action = url.searchParams.get("action");
+  if (action === "wbsearchentities") return json({ search: url.searchParams.get("search") === "Sintel" ? [{ id: "Q1" }, { id: "Q2" }, { id: "bad id" }] : [] });
+  return json({ entities: { Q1: { claims: { P345: [{ mainsnak: { datavalue: { value: "tt1727587" } } }] } }, Q2: { claims: { P345: [{ mainsnak: { datavalue: { value: "not-an-id" } } }] } } } });
+};
+let wikidata = defaultWikidata;
+const sintel = { id: "tt1727587", imdb_id: "tt1727587", type: "movie", name: "Sintel", year: "2010", poster: poster("tt1727587") };
 let calls: Array<{ url: URL; headers: Record<string, string> }>;
 function cinemeta(handler: (url: URL) => Response | undefined = () => undefined) {
   calls = [];
   vi.stubGlobal("fetch", vi.fn(async (input: unknown, init?: RequestInit) => {
     const url = new URL(String(input)); calls.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
+    if (url.hostname === "www.wikidata.org") return wikidata(url);
     if (url.hostname !== "v3-cinemeta.strem.io") throw new Error(`Unexpected upstream host ${url.hostname}`);
     const custom = handler(url); if (custom) return custom;
     if (url.pathname.toLowerCase() === "/catalog/movie/top/search=big%20buck%20bunny.json") return json({ metas: [hero, bunny] });
     if (url.pathname === "/meta/movie/tt1254207.json") return json({ meta: bunny });
+    if (url.pathname === "/meta/movie/tt1727587.json") return json({ meta: sintel });
     return json({ metas: [] });
   }));
 }
-beforeEach(async () => { await db.setting.deleteMany({ where: { key: METADATA_SETTINGS_KEY } }); cinemeta(); });
+beforeEach(async () => { wikidata = defaultWikidata; await db.setting.deleteMany({ where: { key: METADATA_SETTINGS_KEY } }); cinemeta(); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("the built-in metadata source", () => {
@@ -78,6 +88,35 @@ describe("the built-in metadata source", () => {
     await expect(searchMetadata({ query: "Broken", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS })).rejects.toMatchObject({ code: "metadata-unavailable" });
     cinemeta(() => json({ nope: true }));
     await expect(searchMetadata({ query: "Odd", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS })).rejects.toMatchObject({ code: "metadata-invalid-response" });
+  });
+});
+
+describe("the built-in source's second lookup", () => {
+  it("finds a title the catalogue misses through its IMDb ID in Wikidata, and sends only the title", async () => {
+    const results = await searchMetadata({ query: "Sintel", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS });
+    expect(results).toHaveLength(1); expect(results[0]).toMatchObject({ provider: "free", id: "tt1727587", name: "Sintel", year: 2010, posterUrl: poster("tt1727587") });
+    const wiki = calls.filter(call => call.url.hostname === "www.wikidata.org");
+    expect(wiki).toHaveLength(2); expect(wiki[0].url.searchParams.get("search")).toBe("Sintel");
+    expect(wiki.every(call => !call.headers.Authorization && /-metadata$/.test(call.headers["User-Agent"]))).toBe(true);
+  });
+  it("puts the Wikidata match ahead of loosely related catalogue results", async () => {
+    cinemeta(url => url.pathname.startsWith("/catalog/") ? json({ metas: [hero] }) : undefined);
+    const results = await searchMetadata({ query: "Sintel", type: "movie", refresh: true }, { ...DEFAULT_METADATA_SETTINGS });
+    expect(results.map(item => item.id)).toEqual(["tt1727587", "tt2245084"]);
+  });
+  it("is not used when a catalogue result is named exactly as typed, or for an IMDb ID", async () => {
+    await searchMetadata({ query: "Big Buck Bunny", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS });
+    await searchMetadata({ query: "tt1254207", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS });
+    expect(calls.some(call => call.url.hostname === "www.wikidata.org")).toBe(false);
+  });
+  it("returns nothing, not an error, when Wikidata knows nothing, fails or answers badly", async () => {
+    expect(await searchMetadata({ query: "Unknown Title", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS })).toEqual([]);
+    for (const [index, reply] of [() => json({}, 429), () => new Response("<html>", { status: 200 }), () => json({ search: "nope" })].entries()) {
+      wikidata = reply; expect(await searchMetadata({ query: `Sintel ${index}`, type: "movie" }, { ...DEFAULT_METADATA_SETTINGS })).toEqual([]);
+    }
+  });
+  it("keeps only IDs the catalogue knows as the requested type", async () => {
+    expect(await searchMetadata({ query: "Sintel", type: "series" }, { ...DEFAULT_METADATA_SETTINGS })).toEqual([]);
   });
 });
 
