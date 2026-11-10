@@ -215,7 +215,7 @@ it("upgrades a populated managed v0.5 account library without granting or publis
   command(["migrate","resolve","--applied",name]);
  }
  const db=client();await seed(db,true);
- await db.accountMedia.create({data:{id:"private-item",userId:"user",provider:"realdebrid",providerRef:"private-ref",credentialFingerprint:"unchanged-binding",name:"Private movie",phase:"finished",progress:100}});
+ await db.$executeRawUnsafe(`INSERT INTO "AccountMedia" ("id","userId","provider","providerRef","credentialFingerprint","name","type","phase","progress","createdAt","updatedAt") VALUES ('private-item','user','realdebrid','private-ref','unchanged-binding','Private movie','movie','finished',100,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`); // SQL: the current client already knows columns that later migrations add
  const before=await snapshot(db);
  expect(await inspectDatabase({root,url})).toMatchObject({state:"pending",applied:releasedCount});
  const result=await migrateDatabase({root,url});expect(result.backup).toBeTruthy();await preserved(db,before);
@@ -231,7 +231,7 @@ it("upgrades a populated v0.6 server without creating or starting media requests
   command(["migrate","resolve","--applied",name]);
  }
  const db=client();await seed(db,true);
- await db.accountMedia.create({data:{id:"existing-import",userId:"user",provider:"realdebrid",providerRef:"private-existing-ref",credentialFingerprint:"existing-binding",name:"Existing media",phase:"finished",progress:100}});
+ await db.$executeRawUnsafe(`INSERT INTO "AccountMedia" ("id","userId","provider","providerRef","credentialFingerprint","name","type","phase","progress","createdAt","updatedAt") VALUES ('existing-import','user','realdebrid','private-existing-ref','existing-binding','Existing media','movie','finished',100,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`); // SQL: the current client already knows columns that later migrations add
  // Inserted with SQL: the generated client already knows columns that later migrations add to this older database.
  await db.$executeRawUnsafe(`INSERT INTO "SharedLibrary" ("id","name","sourceUserId","mediaType","enabled","createdAt","updatedAt") VALUES ('existing-library','Movie night','user','all',1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`);
  const before=await snapshot(db);const result=await migrateDatabase({root,url});

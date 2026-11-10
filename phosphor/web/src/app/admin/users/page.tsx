@@ -65,7 +65,7 @@ export default function AdminUsersPage() {
     finally { setBusy(null); }
   };
 
-  const updateUser = (account: User, data: Partial<Pick<User, "role" | "active">>) => action(account.id, async () => {
+  const updateUser = (account: User, data: Partial<Pick<User, "role" | "active" | "maxAge">>) => action(account.id, async () => {
     const result = await patch<{ user: User }>(`/api/admin/users/${account.id}`, data);
     setUsers((current) => current.map((entry) => entry.id === account.id ? result.user : entry));
     setNotice(`Updated ${account.displayName}.`);
@@ -199,6 +199,7 @@ export default function AdminUsersPage() {
               <div className="access-member-controls"><div className="access-actions"><span className={`pill ${account.role === "admin" ? "pill-ok" : "pill-dim"}`}>{account.role === "admin" ? "Administrator" : "Member"}</span>
                 <span className={`pill ${account.active ? "pill-ok" : "pill-err"}`}>{account.active ? "Active" : "Deactivated"}</span></div>
                 {!self && <div className="access-actions">
+                  {account.role !== "admin" && <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, whiteSpace: "nowrap" }}><span>Viewing limit</span><select style={{ background: "var(--bg-raised, #111)", color: "var(--text, var(--fg, inherit))", border: "1px solid var(--border, #333)", borderRadius: 8, padding: "7px 10px", font: "inherit" }} aria-label={`Viewing limit for ${account.displayName}`} value={account.maxAge ?? ""} disabled={disabled} onChange={event => { void updateUser(account, { maxAge: event.target.value === "" ? null : Number(event.target.value) }); }}><option value="">No limit</option><option value="7">Kids (G, TV-Y, TV-Y7)</option><option value="8">Pre-teens (up to PG)</option><option value="14">Teens (up to PG-13, TV-14)</option><option value="17">Mature (up to R, TV-MA)</option></select></label>}
                   <button className="btn btn-quiet btn-sm" disabled={disabled} onClick={() => { void updateUser(account, { role: account.role === "admin" ? "user" : "admin" }); }}>{account.role === "admin" ? "Demote" : "Make admin"}</button>
                   <button className="btn btn-quiet btn-sm" disabled={disabled || !account.active} onClick={() => signOut(account)}>Sign out all devices</button>
                   <button className={`btn btn-sm ${account.active ? "btn-danger" : "btn-secondary"}`} disabled={disabled} onClick={() => { void updateUser(account, { active: !account.active }); }}>{account.active ? "Deactivate" : "Reactivate"}</button>

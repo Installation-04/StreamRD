@@ -3,6 +3,7 @@ import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
 import { createApp } from "./app";
+import { backfillRatings } from "./ratings";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
@@ -23,6 +24,7 @@ async function main() {
     setAccountImportHook(queueImportedMetadata);
     startAccountLibraryWorker();
     startMetadataWorker();
+    void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     startRequestWorker();
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);
   });

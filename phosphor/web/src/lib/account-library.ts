@@ -6,6 +6,8 @@ export interface AccountMedia {
   id: string; name: string; type: "movie" | "series"; year: number | null;
   provider: AccountProvider; phase: "queued" | "downloading" | "finished" | "error";
   progress: number; createdAt: string; metadata: MetadataDetails | null; metadataStatus: string | null;
+  /** The age rating in effect (for example PG-13), and whether an administrator set it by hand. */
+  ratingLabel?: string | null; ratingManual?: boolean;
 }
 export type ScanState = "not-started" | "queued" | "scanning" | "complete" | "error" | "cancelled";
 export interface AccountProviderScan {

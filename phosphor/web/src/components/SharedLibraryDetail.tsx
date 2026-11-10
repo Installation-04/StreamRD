@@ -68,6 +68,10 @@ export default function SharedLibraryDetail() {
         {metadata?.genres.length ? <p className={styles.genres}>{metadata.genres.join(" · ")}</p> : null}
         <p className={styles.overview}>{metadata?.description || "This title is part of a collection shared with you by the server. Your server handles the connection when you press Play."}</p>
         <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" disabled={playing} onClick={() => void play()}>{playing ? "Resolving stream…" : "▶ Play from server"}</button></div>
+        {user?.role === "admin" && <label className={styles.availability} style={{ display: "block" }}>Age rating (administrators only):{" "}<select aria-label="Age rating" value={item.ratingManual ? item.ratingLabel ?? "" : ""} onChange={event => { void api(`/api/admin/shared-libraries/items/${encodeURIComponent(item.id)}/rating`, { method: "PUT", body: JSON.stringify({ rating: event.target.value || null }) }).then(() => load()).catch(reason => setError(reason instanceof Error ? reason.message : "The rating could not be saved.")); }}>
+          <option value="">{!item.ratingManual && item.ratingLabel ? `From metadata: ${item.ratingLabel}` : "Not rated: hidden from limited accounts"}</option>
+          {["G", "TV-Y", "TV-Y7", "PG", "TV-PG", "PG-13", "TV-14", "R", "TV-MA"].map(label => <option key={label} value={label}>{label}</option>)}
+        </select></label>}
         <p className={styles.availability}>Server-managed playback <span>·</span> {item.phase === "finished" ? "Provider reports ready" : item.phase === "error" ? "Provider entry needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}{matching ? " · Metadata matching queued" : item.metadataStatus === "review" ? " · Metadata needs review" : ""}</p>
       </div>
     </section>

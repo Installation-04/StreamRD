@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { mediaLibrary } from "../library-instance";
+import { ageForRating } from "../ratings";
 import { MetadataDetails } from "./types";
 export type TargetType = "catalog" | "library" | "account";
 export interface MetadataTarget { targetType: TargetType; targetId: string; ownerId?: string; name: string; mediaType: "movie" | "series"; year: number | null }
@@ -25,6 +26,8 @@ async function applyAccountMetadata(tx: Prisma.TransactionClient, target: Metada
   const managed = { ...applied }, update: { name?: string; year?: number } = {};
   if (!locks.includes("name") && details.name && (manual || !item.name || applied.name === item.name)) { update.name = details.name; managed.name = details.name; }
   if (!locks.includes("year") && details.year !== null && (manual || item.year === null || applied.year === item.year)) { update.year = details.year; managed.year = details.year; }
-  if (Object.keys(update).length) await tx.accountMedia.update({ where: { id: item.id }, data: update });
+  // The title's age rating follows its metadata unless an administrator set one by hand.
+  const ratingLabel = (item.ratingOverride ?? details.contentRating ?? "").trim() || null;
+  await tx.accountMedia.update({ where: { id: item.id }, data: { ...update, ratingLabel, minAge: ageForRating(ratingLabel) } });
   return managed;
 }

@@ -28,6 +28,7 @@ model User {
   displayName    String
   avatarUrl      String?
   role           String         @default("user") // "user" | "admin"
+  maxAge         Int? // viewing limit: the highest minimum age this user may see; null = no limit
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -238,6 +239,9 @@ model AccountMedia {
   credentialFingerprint String
   name                  String
   type                  String @default("movie")
+  ratingOverride        String? // set by an administrator; wins over the metadata rating
+  ratingLabel           String? // the rating in effect, as shown (for example PG-13)
+  minAge                Int? // that rating as a minimum age; null = unrated
   year                  Int?
   phase                 String
   progress              Int @default(0)

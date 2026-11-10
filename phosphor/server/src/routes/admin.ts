@@ -15,6 +15,7 @@ import { debridManager } from "../providers/manager";
 import { getProvider, providers } from "../providers/registry";
 import { PROVIDER_IDS, ProviderId } from "../providers/types";
 import { getProviderSettings, getServerSettings, saveProviderSettings, saveServerSettings } from "../settings";
+import { LIMIT_AGES } from "../ratings";
 import { parseBody, publicUser } from "./helpers";
 
 export const adminRouter = Router();
@@ -33,6 +34,8 @@ const userUpdateSchema = z.object({
   role: z.enum(["user", "admin"]).optional(),
   active: z.boolean().optional(),
   displayName: z.string().min(1).max(80).optional(),
+  // The highest minimum age this person may see (7 kids, 8 pre-teens, 14 teens, 17 mature); null removes the limit.
+  maxAge: z.number().int().refine(age => LIMIT_AGES.includes(age)).nullable().optional(),
 });
 
 adminRouter.patch("/users/:id", asyncHandler(async (req, res) => {
