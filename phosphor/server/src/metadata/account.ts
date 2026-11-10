@@ -1,7 +1,7 @@
 import { AccountMedia } from "@prisma/client";
 import { db } from "../db";
 import { queueAutomaticTargets, queueTarget, storedMetadata } from "./automation";
-import { getMetadataSettings } from "./settings";
+import { activeProvider, getMetadataSettings } from "./settings";
 import { classifyTitle } from "../media-filter";
 
 /** Only decorate rows already selected through the caller's account boundary. */
@@ -36,13 +36,12 @@ export async function accountMetadataSummary(userId: string) {
   return {
     total, matched: count("matched"), matching: count("queued", "processing"), review: count("review"), unmatched: count("unmatched"), error: count("error"),
     notStarted: Math.max(0, total - recorded),
-    provider: { configured: Boolean(settings.tmdbApiKey || settings.omdbApiKey), automatic: settings.automatic },
+    provider: { configured: true, source: activeProvider(settings), automatic: settings.automatic },
   };
 }
 /** Queue the caller's own unmatched, review, failed and never-started titles again (bounded per call). */
 export async function rematchAccountMetadata(userId: string, limit = 500) {
   const settings = await getMetadataSettings();
-  if (!settings.tmdbApiKey && !settings.omdbApiKey) return { queued: 0, remaining: 0, configured: false };
   const retry = await db.metadataRecord.findMany({ where: { targetType: "account", ownerId: userId, status: { in: ["review", "unmatched", "error"] } }, orderBy: { id: "asc" }, take: limit, select: { targetId: true } });
   let ids = retry.map(row => row.targetId);
   if (ids.length < limit) {

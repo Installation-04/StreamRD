@@ -39,7 +39,7 @@ accountMetadataRouter.get("/", action(async (req, res) => {
   res.json({ record: record && record.ownerId === req.session!.sub ? metadataView(record) : null });
 }));
 accountMetadataRouter.post("/search", action(async (req, res) => {
-  const body = parseBody(z.object({ query: z.string().trim().min(1).max(160), type: z.enum(["movie", "series"]), year: z.number().int().min(1800).max(2200).optional(), provider: z.enum(["tmdb", "omdb"]).optional() }).strict(), req.body, res);
+  const body = parseBody(z.object({ query: z.string().trim().min(1).max(160), type: z.enum(["movie", "series"]), year: z.number().int().min(1800).max(2200).optional(), provider: z.enum(["tmdb", "omdb", "free"]).optional() }).strict(), req.body, res);
   if (body) res.json({ results: await searchMetadata(body) });
 }));
 accountMetadataRouter.post("/preview", action(async (req, res) => {
@@ -47,7 +47,7 @@ accountMetadataRouter.post("/preview", action(async (req, res) => {
   if (body) res.json({ metadata: await fetchMetadata(body) });
 }));
 accountMetadataRouter.post("/match", action(async (req, res) => {
-  const body = parseBody(z.object({ provider: z.enum(["tmdb", "omdb"]), id: z.string().min(1).max(32), type: z.enum(["movie", "series"]), expectedRevision: z.number().int().nonnegative().optional() }).strict(), req.body, res);
+  const body = parseBody(z.object({ provider: z.enum(["tmdb", "omdb", "free"]), id: z.string().min(1).max(32), type: z.enum(["movie", "series"]), expectedRevision: z.number().int().nonnegative().optional() }).strict(), req.body, res);
   if (!body) return;
   if (!metadataSelectionSchema.safeParse({ provider: body.provider, id: body.id, type: body.type }).success) { res.status(400).json({ error: "Invalid provider title ID" }); return; }
   res.json({ record: metadataView(await matchMetadata("account", req.params.id, body)) });

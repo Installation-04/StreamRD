@@ -2,7 +2,7 @@ import type { MetadataDetails, MetadataCandidate } from "./metadata";
 export type RequestStatus = "requested" | "approved" | "submitting" | "queued" | "downloading" | "downloaded" | "available" | "rejected" | "cancelled" | "attention" | "failed";
 export interface MediaRequest {
     id: string;
-    provider: "tmdb" | "omdb";
+    provider: "tmdb" | "omdb" | "free";
     externalId: string;
     type: "movie" | "series";
     name: string;

@@ -24,7 +24,7 @@
 in it, matches artwork and details, and gives you and the people you invite a private place to browse and watch.
 You decide who joins and what they can see, and nobody else needs a debrid subscription.
 
-- 🎬 **Your collection, nicely browsed.** Imports only movies and shows (games, software and music are skipped), with posters and details from TMDB or OMDb.
+- 🎬 **Your collection, nicely browsed.** Imports only movies and shows (games, software and music are skipped), with posters and details that work with no account or API key (add your own TMDB or OMDb key for richer results).
 - 👥 **Share with family and friends.** Invitations, named shared libraries and per-viewer resume, with server-managed playback so viewers never see your keys.
 - 🔎 **Find and request more.** Search TMDB, request a title, and follow it from approval to download.
 - 🐳 **One container, Radarr-style.** Settings in `config/`, downloads in `data/`; updating is `docker compose pull && docker compose up -d`.
@@ -123,7 +123,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 
 **Discover and request**
 - Search TMDB or OMDb, request a title, and track it from administrator approval to a finished download (debrid cloud or the bundled qBittorrent).
-- Automatic artwork and details matching for release-style file names, with manual correction and a *Retry matching* button.
+- Automatic artwork and details matching for release-style file names, with manual correction and a *Retry matching* button. A built-in source works with no account or key; TMDB and OMDb keys are optional upgrades.
 
 **Share**
 - Invitation-only, open or closed registration; expiring one-use invitation links.

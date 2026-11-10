@@ -90,10 +90,10 @@ it("summarizes only the caller's library and retries unmatched, failed and never
   const queries = fetch.mock.calls.map((call: unknown[]) => decodeURIComponent(String(call[0]))).filter((url: string) => url.includes("/search/"));
   expect(queries.some((url: string) => /query=Crank(&|$)/.test(url))).toBe(true); // the title is searched without edition or quality tags
 });
-it("refuses to retry without a configured provider and does not call it", async () => {
+it("retries with the built-in source when no provider key is saved, queuing locally without calling any provider", async () => {
   await saveMetadataSettings({ clearTmdbApiKey: true } as never).catch(() => undefined);
   await db.setting.deleteMany({ where: { key: { startsWith: "metadata." } } });
   fetch.mockClear();
   const response = await request(app).post("/api/account/library/metadata/rematch").set(auth(user.token));
-  expect(response.status).toBe(200); expect(response.body).toMatchObject({ queued: 0, configured: false }); expect(fetch).not.toHaveBeenCalled();
+  expect(response.status).toBe(200); expect(response.body).toMatchObject({ queued: 1 }); expect(fetch).not.toHaveBeenCalled();
 });

@@ -1,5 +1,6 @@
 /** Public metadata shapes contain no API credentials or provider response bodies. */
-export type MetadataProvider = "tmdb" | "omdb";
+/** "free" is the built-in source that needs no account or key (Cinemeta, which serves IMDb data by IMDb ID). */
+export type MetadataProvider = "tmdb" | "omdb" | "free";
 export type MediaType = "movie" | "series";
 export interface MetadataCandidate {
   provider: MetadataProvider;
@@ -32,6 +33,8 @@ export interface MetadataSettings {
   omdbApiKey: string;
 }
 export type PublicMetadataSettings = Omit<MetadataSettings, "tmdbApiKey" | "omdbApiKey"> & {
+  /** The source actually used: the chosen provider when it has a key, otherwise the built-in one. */
+  activeProvider: MetadataProvider;
   tmdbConfigured: boolean;
   omdbConfigured: boolean;
 };
