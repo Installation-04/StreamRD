@@ -1,3 +1,6 @@
+> The current screenshots, in the black and orange theme with libraries and the new home page, are in [v0.13.0/](v0.13.0/README.md).
+> The files below are older captures kept for history.
+
 # Application screenshots — v0.2.0
 
 Captured from the production web images in Chromium at 1440 × 1000, using fresh,

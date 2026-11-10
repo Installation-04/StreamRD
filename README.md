@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/readme/hero.jpg" alt="StreamRD on desktop in dark and light themes, on a phone, and next to Phosphor" width="100%">
+  <img src="docs/assets/readme/hero.jpg" alt="StreamRD in black and orange: the home page with a featured carousel, on desktop, light theme, a phone, and next to Phosphor" width="100%">
 </p>
 
 <p align="center">
@@ -38,28 +38,28 @@ You decide who joins and what they can see, and nobody else needs a debrid subsc
 
 <table>
   <tr>
-    <td align="center" width="50%"><img src="docs/assets/readme/discover-dark.png" alt="Discover page in the dark theme"><br><sub><b>Discover</b>: your collection, My List and continue watching</sub></td>
-    <td align="center" width="50%"><img src="docs/assets/readme/discover-light.png" alt="Discover page in the light theme"><br><sub><b>Light, dark or system theme</b></sub></td>
+    <td align="center" width="50%"><img src="docs/assets/readme/discover-dark.png" alt="Home page with a featured carousel and trending row in the black and orange theme"><br><sub><b>Home</b>: a featured carousel (optional trailers), then Continue watching, New in your libraries, Popular and Trending</sub></td>
+    <td align="center" width="50%"><img src="docs/assets/readme/discover-light.png" alt="Home page in the light theme"><br><sub><b>Light, dark or system theme</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/libraries.png" alt="A library as seen by an invited viewer"><br><sub><b>Library</b>: what an invited viewer sees</sub></td>
+    <td align="center"><img src="docs/assets/readme/libraries-admin.png" alt="Admin page for creating libraries and choosing who can see them"><br><sub><b>Libraries</b>: visible to everyone or chosen people</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/assets/readme/find-media.png" alt="Searching TMDB for a movie to request"><br><sub><b>Find media</b>: search TMDB and request what you want</sub></td>
     <td align="center"><img src="docs/assets/readme/requests.png" alt="Request list with measured download progress"><br><sub><b>Requests</b>: real download progress, cloud or local</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/readme/my-library.png" alt="My library with artwork matching status"><br><sub><b>My library</b>: imported from your debrid account, matched automatically</sub></td>
-    <td align="center"><img src="docs/assets/readme/shared-library.png" alt="A shared library as seen by an invited viewer"><br><sub><b>Shared libraries</b>: what an invited viewer sees</sub></td>
+    <td align="center"><img src="docs/assets/readme/imports.png" alt="Imports page with artwork matching status"><br><sub><b>Imports</b>: pulled from your debrid account, matched automatically</sub></td>
+    <td align="center"><img src="docs/assets/readme/people-access.png" alt="Admin page for members, invitations and registration policy"><br><sub><b>People &amp; access</b>: invitations, members, sign-out everywhere</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/readme/people-access.png" alt="Admin page for members, invitations and registration policy"><br><sub><b>People &amp; access</b>: invitations, members, sign-out everywhere</sub></td>
     <td align="center"><img src="docs/assets/readme/system.png" alt="Admin system page with updates and backups"><br><sub><b>System</b>: update checks, verified backups and restore</sub></td>
+    <td align="center"><img src="docs/assets/readme/discover-mobile.png" alt="StreamRD on a phone" height="420"><br><sub><b>Phones and tablets</b>: responsive everywhere</sub></td>
   </tr>
 </table>
 
-<p align="center">
-  <img src="docs/assets/readme/discover-mobile.png" alt="StreamRD on a phone" height="420">
-  &nbsp;&nbsp;
-  <sub>Responsive on phones and tablets.<br>More in the <a href="https://github.com/Installation-04/StreamRD/wiki/Screenshots">screenshot gallery</a>.<br>All screenshots use demo data.</sub>
-</p>
+<p align="center"><sub>More in the <a href="https://github.com/Installation-04/StreamRD/wiki/Screenshots">screenshot gallery</a>. All screenshots use demo data; the trending and popular rows are live public lists.</sub></p>
 
 ## 🚀 Quick install
 

@@ -28,7 +28,6 @@ const crops = {
   "discover-dark.png": ["streamrd-discover.png", 1200, 875],
   "discover-light.png": ["streamrd-discover-light.png", 1200, 875],
   "discover-mobile.png": ["streamrd-discover-mobile.png", 390, 844],
-  "home-rows.png": ["streamrd-dashboard-library-row.png", 1200, 1100],
   "find-media.png": ["streamrd-request-discovery.png", 1200, 931],
   "requests.png": ["streamrd-requests-queue.png", 1200, 633],
   "imports.png": ["streamrd-account-library.png", 1200, 1000],
