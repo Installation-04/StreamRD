@@ -52,11 +52,11 @@ FROM base AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends qbittorrent-nox tini && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 DATA_DIR=/data
 WORKDIR /opt
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /config /data && chown node:node /config /data
 COPY --from=bundle --chown=node:node /opt /opt
 COPY --chown=node:node infra/single-container/start.cjs infra/single-container/health.cjs /opt/single-container/
 USER node
-VOLUME ["/data"]
+VOLUME ["/config", "/data"]
 EXPOSE 8080 8081 6881/tcp 6881/udp
 HEALTHCHECK --interval=30s --timeout=8s --start-period=90s --retries=3 CMD ["node", "/opt/single-container/health.cjs"]
 ENTRYPOINT ["/usr/bin/tini", "--"]

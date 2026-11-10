@@ -27,14 +27,13 @@ With Docker and the Compose plugin installed:
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
 ```
 
-This installs the all-in-one container (StreamRD on port 8080, Phosphor on 8081) into
-`~/streamrd`, using the published image for a release or building from source when
-none is available. It generates no secrets for you to manage, never overwrites your
-`.env` or data volume, and re-running it updates in place. Options go after `bash -s --`,
-for example `--version v0.8.1 --port 9090 --admin-email you@example.com`; run it with
-`--help` to see all of them and `--uninstall` to remove the container (data is kept).
-It does not install Docker, set up HTTPS or open firewall ports. Read the
-[script](get.sh) before piping any script to a shell.
+One container (StreamRD on port 8080, Phosphor on 8081, qBittorrent), laid out like Radarr or Sonarr:
+`~/streamrd/config` holds all settings and databases, `~/streamrd/data` holds downloads. **To update:**
+`cd ~/streamrd && docker compose pull && docker compose up -d` (or re-run the script); your folders are never
+touched. Options go after `bash -s --`, for example `--port 3000 --admin-email you@example.com`; `--help` lists them,
+`--import-db` moves an existing install across and `--uninstall` removes the container (folders kept). It does not
+install Docker, set up HTTPS or open firewall ports. Read the [script](get.sh) before piping any script to a shell,
+and see the [single-container guide](docs/single-container.md).
 
 ## Server Sharing — v0.6.0
 

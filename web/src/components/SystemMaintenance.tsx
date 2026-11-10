@@ -71,7 +71,12 @@ export default function SystemMaintenance() {
       </dl>}
       {update?.error && <p className={styles.notice}>{update.error}</p>}
       {update?.updateAvailable && update.url && <p className={styles.copy}><a href={update.url} target="_blank" rel="noreferrer">Read the v{update.latest} release notes ↗</a></p>}
-      {update?.updateAvailable && !update.canApply && <p className={styles.notice}>This installation has no update hook, so the button is off. Set <code>UPDATE_WEBHOOK_URL</code> to a host-side updater (for example a script or Watchtower) to enable one-click updates, or update from the host with the documented upgrade steps. A verified backup is always taken first.</p>}
+      {update?.updateAvailable && !update.canApply && <div className={styles.notice}>
+        <strong>How to update.</strong> In your install folder run:
+        <pre style={{ margin: "8px 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>docker compose pull &amp;&amp; docker compose up -d</pre>
+        <div className={styles.actions}><button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard?.writeText("docker compose pull && docker compose up -d").then(() => setNotice("Update command copied."), () => setNotice("Your browser blocked copying; select the command above.")); }}>Copy command</button></div>
+        <p className={styles.hint}>Your settings (<code>config</code>) and downloads (<code>data</code>) are kept; the database is snapshotted before any upgrade. Running the older split install? Use <code>git pull</code> then <code>docker compose up -d --build</code>. For a one-click button, point <code>UPDATE_WEBHOOK_URL</code> at an updater such as Watchtower.</p>
+      </div>}
       {update?.updateAvailable && update.canApply && !confirmUpdate && <button type="button" className="btn" disabled={busy !== ""} onClick={() => setConfirmUpdate(true)}>Update to v{update.latest}…</button>}
       {update?.updateAvailable && update.canApply && confirmUpdate && <div className={styles.confirm}><p className={styles.copy}>This creates a verified backup, then asks your updater to roll out v{update.latest}. The server restarts and applies database upgrades on startup. Users are briefly disconnected.</p><div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void applyUpdate()}>{busy === "update" ? "Backing up…" : "Back up and update"}</button><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => setConfirmUpdate(false)}>Cancel</button></div></div>}
     </section>

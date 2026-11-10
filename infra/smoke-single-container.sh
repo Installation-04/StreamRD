@@ -4,14 +4,21 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 image="${1:-streamrd-all-in-one:local}"
 suffix="$(openssl rand -hex 8)"
 volume="streamrd-single-smoke-$suffix"
+config_volume="streamrd-single-config-$suffix"
+layout="${2:-split}" # split = /config + /data (default); legacy = the original single /data volume
 container="streamrd-single-smoke-$suffix"
-created=false
-cleanup(){ local code=$?; set +e; docker rm -f "$container" >/dev/null 2>&1; if [ "$created" = true ]; then docker volume rm "$volume" >/dev/null 2>&1; fi; return "$code"; }
+created=false config_created=false
+cleanup(){ local code=$?; set +e; docker rm -f "$container" >/dev/null 2>&1; if [ "$created" = true ]; then docker volume rm "$volume" >/dev/null 2>&1; fi; if [ "$config_created" = true ]; then docker volume rm "$config_volume" >/dev/null 2>&1; fi; return "$code"; }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 docker volume inspect "$volume" >/dev/null 2>&1 && { echo 'Refusing an existing smoke volume'; exit 1; }
 docker volume create "$volume" >/dev/null; created=true
-docker run --pull=never -d -p 127.0.0.1::8080 -p 127.0.0.1::8081 --name "$container" --mount "type=volume,src=$volume,dst=/data" "$image" >/dev/null
+mounts=(--mount "type=volume,src=$volume,dst=/data")
+if [ "$layout" = split ]; then
+  docker volume create "$config_volume" >/dev/null; config_created=true
+  mounts+=(--mount "type=volume,src=$config_volume,dst=/config" -e CONFIG_DIR=/config)
+fi
+docker run --pull=never -d -p 127.0.0.1::8080 -p 127.0.0.1::8081 --name "$container" "${mounts[@]}" "$image" >/dev/null
 ready(){ for attempt in $(seq 1 120); do if docker exec "$container" node /opt/single-container/health.cjs >/dev/null 2>&1; then return; fi; if [ "$(docker inspect --format '{{.State.Running}}' "$container")" != true ]; then break; fi; sleep 1; done; echo 'Single-container readiness failed'; docker logs "$container"; return 1; }
 ready
 docker exec -i "$container" node < infra/single-container/smoke.cjs

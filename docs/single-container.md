@@ -5,60 +5,110 @@ runs them in one container. Both web interfaces, their APIs, background workers,
 SQLite databases and the local download client are included. No Docker socket or
 Docker-in-Docker service is needed inside the application.
 
-The quickest route is the one-line installer in the [README](../README.md#quick-install)
-(`get.sh`). Otherwise, from a checkout of the release:
+## Install (the Radarr/Sonarr way)
 
 ```bash
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
 ```
 
-Open StreamRD at `http://YOUR_SERVER:8080` and Phosphor at
-`http://YOUR_SERVER:8081`. Each interface sends API calls to its own browser origin;
-you do not need to expose ports 47821 or 61337, or compile a public API hostname.
-The products keep separate accounts, sessions and databases.
+This creates `~/streamrd` with one `docker-compose.yml`, a small `.env`, and two folders:
 
-The Compose file starts exactly one service and mounts a named volume at `/data`.
-It also publishes qBittorrent's peer port 6881 over TCP and UDP. The internal
-qBittorrent Web UI binds to loopback port 8082 and is not published to the host.
-Plex, Jellyfin, debrid subscriptions, metadata providers and external indexers are
-integrations rather than software bundled in this image.
+| Folder | Mounted at | Holds |
+|---|---|---|
+| `config/` | `/config` | Everything that is *settings*: both databases and their backups/snapshots, signing keys and generated passwords, the download client's settings |
+| `data/` | `/data` | Downloads and media: `data/downloads` by default, and anything you mount for Plex/Jellyfin exports |
+
+Open StreamRD at `http://YOUR_SERVER:8080` and Phosphor at `http://YOUR_SERVER:8081` (use
+`--port` and `--phosphor-port` to change them, `--no-phosphor` / `--no-qbittorrent` to leave a part out).
+Each interface sends API calls to its own browser origin, so ports 47821 and 61337 are never exposed.
+The products keep separate accounts, sessions and databases. Plex, Jellyfin, debrid subscriptions, metadata
+providers and indexers are integrations, not software inside this image.
+
+Prefer to write the compose file yourself? This is the whole thing:
+
+```yaml
+services:
+  streamrd:
+    image: ghcr.io/installation-04/streamrd:latest
+    container_name: streamrd
+    restart: unless-stopped
+    ports: ["8080:8080", "8081:8081", "6881:6881/tcp", "6881:6881/udp"]
+    environment:
+      CONFIG_DIR: /config
+      TZ: UTC
+    volumes:
+      - ./config:/config
+      - ./data:/data
+```
+
+The container runs as UID/GID 1000, so `config` and `data` must be writable by it (`get.sh` does this for you).
+Only `CONFIG_DIR=/config` is new compared with the first all-in-one release: without it everything lives under
+`/data`, exactly as before.
+
+## Updating
+
+```bash
+cd ~/streamrd
+docker compose pull && docker compose up -d
+```
+
+That is all: the new image replaces the old container, and `config/` and `data/` are not modified. On start the
+server snapshots each database (verified) before applying any migration. You can also just re-run `get.sh`, which
+does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
+`docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database.
+
+Updates are never applied by the app itself, as with Radarr and Sonarr in Docker. **Admin → System** tells you when
+a newer release exists and shows the command. For automatic updates run
+[Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label
+(`com.centurylinklabs.watchtower.enable`). Watchtower can also serve an HTTP update endpoint; point
+`UPDATE_WEBHOOK_URL` and `UPDATE_WEBHOOK_TOKEN` at it and Admin → System shows a one-click **Update** button
+(it takes a verified backup first).
 
 ## Prebuilt image
 
-Each version tag also publishes the image to this repository's GitHub Container
-Registry (`publish-image.yml`), for `linux/amd64` only:
+Each version tag publishes the image to this repository's GitHub Container Registry (`publish-image.yml`),
+for `linux/amd64` only. The package is private until you make it public in the repository's package settings;
+until then `get.sh` falls back to building from source. Pin a version tag in production if you do not want
+unattended major changes. The image is built from the tagged source by GitHub Actions and is not signed.
 
-```bash
-docker pull ghcr.io/installation-04/streamrd:latest   # or a version such as :0.8.0
-```
+## Moving from a split install (`infra/`, separate backend and web containers)
 
-To run it instead of building, set `image:` to that name in
-`infra/docker-compose.single.yml`. The package is created private by default; make it
-public in the repository's package settings if you want anonymous pulls. Pin a
-version in production and use **Admin → System** or your updater to move forward.
-The image is built from the tagged source by GitHub Actions; it is not signed.
+1. In the old install folder take a verified backup and copy it out:
+   ```bash
+   docker compose exec backend node scripts/backup-db.cjs /app/data/migrate.db
+   docker compose cp backend:/app/data/migrate.db ~/streamrd-import.db
+   ```
+2. Note your old `JWT_SECRET` from its `.env`.
+3. Install with the import (the same web port as before keeps your bookmarks working):
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash -s -- \
+     --port 3000 --no-phosphor --no-qbittorrent --import-db ~/streamrd-import.db --jwt-secret 'YOUR_OLD_JWT_SECRET'
+   ```
+   Stop the old stack first (`docker compose down`, without `-v`) so the port is free. Your accounts, provider
+   keys, libraries and metadata come across, and existing logins stay valid because the signing key is the same.
+   `--import-db` only works on a first install and never overwrites an existing database. Keep the old volume until
+   you have checked everything.
+
+## Moving from the first all-in-one layout (one `/data` volume)
+
+Nothing changes if you keep running it. To adopt `config/` and `data/`, stop the container and move
+`secrets`, `streamrd`, `phosphor` and `qbittorrent` from the old volume into `config/`, and `downloads` into `data/`, then
+start with `CONFIG_DIR=/config`. Back the volume up first.
 
 ## Persistent data
 
-| Path inside the container | Purpose |
+| Path | Purpose |
 |---|---|
-| `/data/streamrd` | StreamRD SQLite database, migration snapshots and scanner exports |
-| `/data/phosphor` | Phosphor database, snapshots and exports |
-| `/data/qbittorrent` | qBittorrent configuration, resume data and transfer state |
+| `/config/streamrd` | StreamRD SQLite database, `backups/` and migration snapshots, scanner exports |
+| `/config/phosphor` | Phosphor database, snapshots and exports |
+| `/config/qbittorrent` | qBittorrent configuration, resume data and transfer state |
+| `/config/secrets` | Stable session signing keys and the local client's generated password |
 | `/data/downloads` | Default local download location |
-| `/data/secrets` | Stable session signing keys and the local client's generated password |
 
-Keep the volume when updating or recreating the container. `docker compose down`
-keeps it; adding `-v` deletes it. Generated secrets are private files, not values
-baked into the image. Back up the whole volume with the container stopped for a
-consistent copy of application and downloader state. Existing API-level SQLite
-backup/restore tools remain available under `/opt/streamrd/server/scripts` and
-`/opt/phosphor/server/scripts`.
-
-The runtime user has UID/GID 1000. Named volumes inherit the image's permissions.
-For bind mounts, prepare writable directories for that UID before starting.
-Do not point this new layout at an old database directory without first backing
-it up and arranging the documented product-specific paths.
+Back up `config/` (with the container stopped for a copy that includes the downloader's state, or use the
+**Admin → System** backup for the databases). `docker compose down` keeps both folders. Generated secrets are private
+files, not values baked into the image. The API-level SQLite backup/restore tools remain available under
+`/opt/streamrd/server/scripts` and `/opt/phosphor/server/scripts`.
 
 ## Enable local requests
 
@@ -67,12 +117,12 @@ Configure the bundled qBittorrent connection with:
 
 - Web UI URL: `http://127.0.0.1:8082`
 - Username: `admin`, unless `QBIT_USERNAME` was set
-- Password: the generated value stored in `/data/secrets/qbittorrent-password`
+- Password: the generated value stored in `/config/secrets/qbittorrent-password`
 
 The container operator can retrieve the password when configuring the app:
 
 ```bash
-docker compose exec streamrd cat /data/secrets/qbittorrent-password
+docker compose exec streamrd cat /config/secrets/qbittorrent-password
 ```
 
 Save and test the connection. It stays on the server; viewers never receive the
@@ -80,9 +130,9 @@ password. Requests still require administrator approval. Completed local downloa
 remain awaiting library import rather than receiving an invented Play link. See
 [requesting and tracking media](media-requests.md).
 
-For optional Plex/Jellyfin exports, mount the same data volume at `/data` in the
+For optional Plex/Jellyfin exports, mount the same `config` and `data` folders at `/config` and `/data` in the
 scanner's container so absolute symlink targets remain valid. Configure the
-scanner to read the appropriate `/data/streamrd/library` or Phosphor export
+scanner to read the appropriate `/config/streamrd/library` or Phosphor export
 folder. Source preservation and mounted-library rules remain unchanged.
 
 ## Configuration
@@ -96,6 +146,7 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `STREAMRD_JWT_SECRET`, `PHOSPHOR_JWT_SECRET` | Optional explicit signing keys, at least 32 characters; changing one invalidates old sessions |
 | `QBIT_USERNAME` | `admin`; use letters, numbers, dot, underscore or hyphen |
 | `QBIT_PASSWORD` | Optional explicit password of at least 16 characters; otherwise generated and persisted |
+| `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
 | `TRUST_PROXY` | `false`; enable only behind your own trusted HTTPS reverse proxy to honor its protocol header |
 

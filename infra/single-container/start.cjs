@@ -4,14 +4,17 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
+// DATA_DIR holds downloads and media. CONFIG_DIR holds databases, secrets and the download client's settings;
+// when it is not set (the original layout) everything lives under DATA_DIR, so existing volumes keep working.
 const root = process.env.DATA_DIR || '/data';
+const configRoot = process.env.CONFIG_DIR || root;
 const qbitEnabled = process.env.ENABLE_QBITTORRENT !== 'false';
 const phosphorEnabled = process.env.ENABLE_PHOSPHOR !== 'false';
 const children = new Map();
 const gateways = [];
 let stopping = false;
 function secret(name, supplied) {
-  const file = path.join(root, 'secrets', name);
+  const file = path.join(configRoot, 'secrets', name);
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   if (fs.existsSync(file) && fs.lstatSync(file).isSymbolicLink()) throw Error('Secret files must not be symlinks');
   if (supplied) fs.writeFileSync(file, supplied, { mode: 0o600 });
@@ -67,7 +70,7 @@ function prepareQbit() {
   const password = secret('qbittorrent-password', process.env.QBIT_PASSWORD);
   const username = process.env.QBIT_USERNAME || 'admin';
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(username)) throw Error('Invalid QBIT_USERNAME');
-  const directory = path.join(root, 'qbittorrent', 'qBittorrent', 'config');
+  const directory = path.join(configRoot, 'qbittorrent', 'qBittorrent', 'config');
   fs.mkdirSync(directory, { recursive: true });
   const file = path.join(directory, 'qBittorrent.conf');
   let config = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '[LegalNotice]\nAccepted=true\n[BitTorrent]\nSession\\DefaultSavePath=' + path.join(root, 'downloads') + '/\nSession\\Port=6881\n[Preferences]\nDownloads\\SavePath=' + path.join(root, 'downloads') + '/\nConnection\\PortRangeMin=6881\n';
@@ -75,7 +78,7 @@ function prepareQbit() {
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512');
   for (const [key, value] of Object.entries({ 'WebUI\\Address': '127.0.0.1', 'WebUI\\Port': '8082', 'WebUI\\Username': username, 'WebUI\\Password_PBKDF2': `"@ByteArray(${salt.toString('base64')}:${hash.toString('base64')})"`, 'WebUI\\LocalHostAuth': 'true', 'WebUI\\AuthSubnetWhitelistEnabled': 'false', 'WebUI\\ServerDomains': '127.0.0.1;localhost' })) config = ini('Preferences', key, value, config);
   fs.writeFileSync(file, config, { mode: 0o600 }); fs.chmodSync(file, 0o600);
-  return ['--profile=' + path.join(root, 'qbittorrent'), '--webui-port=8082'];
+  return ['--profile=' + path.join(configRoot, 'qbittorrent'), '--webui-port=8082'];
 }
 function proxy(port, webPort, apiPort) {
   const server = http.createServer(async (req, res) => {
@@ -105,17 +108,17 @@ async function main() {
   const products = ['streamrd', ...(phosphorEnabled ? ['phosphor'] : [])];
   const environments = {};
   for (const product of products) {
-    const directory = path.join(root, product); fs.mkdirSync(directory, { recursive: true });
+    const directory = path.join(configRoot, product); fs.mkdirSync(directory, { recursive: true });
     environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '' };
     await migrate('/opt/' + product + '/server', environments[product]);
   }
-  if (qbitEnabled) launch('qbittorrent', 'qbittorrent-nox', prepareQbit(), root);
+  if (qbitEnabled) launch('qbittorrent', 'qbittorrent-nox', prepareQbit(), configRoot);
   for (const product of products) {
     launch(product + '-api', process.execPath, ['dist/src/index.js'], '/opt/' + product + '/server', environments[product]);
     launch(product + '-web', process.execPath, ['server.js'], '/opt/' + product + '/web', { NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', PORT: product === 'streamrd' ? '3000' : '3100', HOSTNAME: '127.0.0.1' });
   }
   proxy(8080, 3000, 47821); if (phosphorEnabled) proxy(8081, 3100, 61337);
-  console.log('StreamRD is available on :8080' + (phosphorEnabled ? '; Phosphor on :8081' : '') + '. Data and generated credentials persist under ' + root + '.');
+  console.log('StreamRD is available on :8080' + (phosphorEnabled ? '; Phosphor on :8081' : '') + '. Settings and generated credentials persist under ' + configRoot + (configRoot === root ? '' : '; downloads under ' + root) + '.');
 }
 process.on('SIGTERM', () => shutdown(0)); process.on('SIGINT', () => shutdown(0));
 main().catch(error => { console.error(error.message); shutdown(1); });
