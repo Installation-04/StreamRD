@@ -1,4 +1,4 @@
-import { AccessError, checkSignupAccess, inspectInvitation, lockRegistration, registrationMode } from "../auth/access";
+import { AccessError, applyInvitationAccess, checkSignupAccess, inspectInvitation, invitationPreview, lockRegistration, registrationMode } from "../auth/access";
 import { Prisma } from "@prisma/client";
 import { asyncHandler } from "../http";
 import { Router } from "express";
@@ -24,7 +24,7 @@ authRouter.post("/invitation", invitationRateLimit, asyncHandler(async (req, res
   if (!body) return;
   try {
     const invitation = await inspectInvitation(body.inviteToken);
-    res.json({ email: invitation.email, expiresAt: invitation.expiresAt });
+    res.json({ email: invitation.email, expiresAt: invitation.expiresAt, ...await invitationPreview(invitation) });
   } catch (error) {
     if (error instanceof AccessError) { res.status(error.status).json({ error: error.message }); return; }
     throw error;
@@ -59,10 +59,12 @@ authRouter.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
     const hashedPassword = await hashPassword(body.password);
     user = await db.$transaction(async tx => {
       await lockRegistration(tx);
-      await checkSignupAccess(email, body.inviteToken, tx, true);
+      const consumed = await checkSignupAccess(email, body.inviteToken, tx, true);
       const count = await tx.user.count();
       const role = config.adminEmail ? (email === config.adminEmail.toLowerCase() ? "admin" : "user") : count === 0 ? "admin" : "user";
-      return tx.user.create({ data: { email, displayName: body.displayName, hashedPassword, role, debridConfig: { create: {} } } });
+      const created = await tx.user.create({ data: { email, displayName: body.displayName, hashedPassword, role, debridConfig: { create: {} } } });
+      await applyInvitationAccess(tx, created.id, consumed);
+      return tx.user.findUniqueOrThrow({ where: { id: created.id } });
     }, { maxWait: 10000, timeout: 10000 });
   } catch (error) {
     if (error instanceof AccessError) { res.status(error.status).json({ error: error.message }); return; }

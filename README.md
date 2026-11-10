@@ -133,6 +133,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 **Share**
 - Invitation-only, open or closed registration; expiring one-use invitation links.
 - Libraries (Movies, TV Shows, or your own) visible to everyone or to chosen people; viewers need no debrid account.
+- Invitation links that carry the libraries and viewing limit the new person gets, with a link address for your local network, Tailscale or a domain.
 - A kids account: give a member a viewing limit (Kids, Pre-teens, Teens, Mature) and they see only titles rated at or below it; unrated titles stay hidden.
 - Administrators can deactivate accounts and sign someone out of every device.
 
@@ -179,8 +180,8 @@ flowchart LR
 ## 🗺 Where it is going
 
 StreamRD is becoming **one library managed by the administrator, like Plex**. Done so far: one Library page, libraries visible to
-everyone or chosen people, a Plex-style home page, and viewing limits for a kids account. Next: invitation links that carry
-library access, and a dedicated player page. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
+everyone or chosen people, a Plex-style home page, viewing limits for a kids account, and invitation links that carry library
+access. Next: a dedicated player page. See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
 
 ## 📚 Documentation
 

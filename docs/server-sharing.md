@@ -36,6 +36,14 @@ The home page has Plex-style rows, from top to bottom: **Continue watching**, **
 - The banner at the top is a **carousel** of featured titles (your own matched titles first, then what is trending). Trailers are optional
   per viewer: nothing is loaded from YouTube until a viewer presses *Watch trailer* or ticks *Autoplay trailers*, and `HOME_TRAILERS=false` removes the option.
 
+## Invitations that carry access
+
+When you invite someone (Admin → Users → Invite someone) you choose the **libraries** they will get and, optionally, a **viewing limit** to start
+them with; both are applied when they create their account, so a kids account is set up in one step. **Address for invitation links** is how
+invited people reach your server: a local network address, a Tailscale name or a domain; links are built from it. The invited person
+sees which libraries they will get before signing up. API: `POST /api/admin/invitations` takes `libraryIds` (libraries you manage, at most 20) and
+`maxAge` (7, 8, 14, 17 or null); `GET/PUT /api/admin/invite-address` reads and sets the link address (`{"url": "http://host:port"}`).
+
 ## Viewing limits (a kids account)
 
 In **Admin → Users**, each member has a **Viewing limit**: Kids (G, TV-Y, TV-G, TV-Y7), Pre-teens (up to PG, TV-PG), Teens (up to PG-13, TV-14),
