@@ -7,6 +7,7 @@ import { LogEntry, PROVIDER_NAMES, ProviderId } from "@/lib/types";
 interface AdminHealth {
   db: string;
   users: number;
+  brokenLinks?: number;
   enabledIndexers: number;
   downloads: { totalJobs: number; jobsByProvider: Record<string, number>; jobsLastHour: number; recentFailures: number };
   providers: Array<{ id: ProviderId; enabled: boolean }>;
@@ -35,6 +36,10 @@ export default function AdminOverviewPage() {
         <div className="stat">
           <div className="stat-value">{health.enabledIndexers}</div>
           <div className="stat-label">Enabled indexers</div>
+        </div>
+        <div className="stat">
+          <div className="stat-value" style={{ color: (health.brokenLinks ?? 0) > 0 ? "var(--err)" : undefined }}>{health.brokenLinks ?? 0}</div>
+          <div className="stat-label">Links needing attention</div>
         </div>
         <div className="stat">
           <div className="stat-value">{health.downloads.totalJobs}</div>

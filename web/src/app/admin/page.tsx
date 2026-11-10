@@ -7,6 +7,7 @@ import { LogEntry, PROVIDER_NAMES, ProviderId } from "@/lib/types";
 interface AdminHealth {
   db: string;
   users: number;
+  brokenLinks?: number;
   titles: number;
   playback: {
     totalPlays: number;
@@ -40,6 +41,10 @@ export default function AdminOverviewPage() {
         <div className="stat">
           <div className="stat-value">{health.titles}</div>
           <div className="stat-label">Library titles</div>
+        </div>
+        <div className="stat">
+          <div className="stat-value" style={{ color: (health.brokenLinks ?? 0) > 0 ? "var(--err)" : undefined }}>{health.brokenLinks ?? 0}</div>
+          <div className="stat-label">Links needing attention</div>
         </div>
         <div className="stat">
           <div className="stat-value">{health.playback.totalPlays}</div>

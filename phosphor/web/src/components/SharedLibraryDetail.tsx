@@ -76,7 +76,7 @@ export default function SharedLibraryDetail() {
           <option value="">{!item.ratingManual && item.ratingLabel ? `From metadata: ${item.ratingLabel}` : "Not rated: hidden from limited accounts"}</option>
           {["G", "TV-Y", "TV-Y7", "PG", "TV-PG", "PG-13", "TV-14", "R", "TV-MA"].map(label => <option key={label} value={label}>{label}</option>)}
         </select></label>}
-        <p className={styles.availability}>Server-managed playback <span>·</span> {item.phase === "finished" ? "Provider reports ready" : item.phase === "error" ? "Provider entry needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}{matching ? " · Metadata matching queued" : item.metadataStatus === "review" ? " · Metadata needs review" : ""}</p>
+        <p className={styles.availability}>Server-managed playback <span>·</span> {item.health === "broken" ? "Link needs attention" : item.phase === "finished" ? "Provider reports ready" : item.phase === "error" ? "Provider entry needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}{matching ? " · Metadata matching queued" : item.metadataStatus === "review" ? " · Metadata needs review" : ""}</p>
       </div>
     </section>
     <section className={styles.playback} aria-label="Shared library playback">

@@ -35,13 +35,13 @@ export function qualityLabel(release: string | null | undefined): string | null 
   return parts.length ? parts.join(" · ") : null;
 }
 
-/** Chooses the primary version of each named group: a finished one first, then the newest. */
+/** Chooses the primary version of each named group: one whose link works, then a finished one, then the newest. */
 export async function refreshPrimaries(client: Client, userId: string, keys: Array<string | null | undefined>): Promise<void> {
   const unique = [...new Set(keys.filter((key): key is string => Boolean(key)))];
   for (let offset = 0; offset < unique.length; offset += 200) {
     const batch = unique.slice(offset, offset + 200);
     await client.$executeRawUnsafe(
-      `UPDATE "AccountMedia" SET "isPrimary" = CASE WHEN "id" = (SELECT b."id" FROM "AccountMedia" b WHERE b."userId" = "AccountMedia"."userId" AND b."groupKey" = "AccountMedia"."groupKey" ORDER BY (b."phase" = 'finished') DESC, b."createdAt" DESC, b."id" DESC LIMIT 1) THEN 1 ELSE 0 END WHERE "userId" = ? AND "groupKey" IN (${batch.map(() => "?").join(",")})`,
+      `UPDATE "AccountMedia" SET "isPrimary" = CASE WHEN "id" = (SELECT b."id" FROM "AccountMedia" b WHERE b."userId" = "AccountMedia"."userId" AND b."groupKey" = "AccountMedia"."groupKey" ORDER BY (b."health" <> 'broken') DESC, (b."phase" = 'finished') DESC, b."createdAt" DESC, b."id" DESC LIMIT 1) THEN 1 ELSE 0 END WHERE "userId" = ? AND "groupKey" IN (${batch.map(() => "?").join(",")})`,
       userId, ...batch);
   }
 }

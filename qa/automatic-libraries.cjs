@@ -109,5 +109,13 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   await call(api, '/api/account/library/scan', { provider: 'realdebrid', force: true }, admin.token);
   await poll(() => call(api, '/api/account/library/scans', null, admin.token), result => result.providers.some(provider => provider.provider === 'realdebrid' && provider.status === 'complete'), 'idempotent account rescan');
   assert.equal((await call(api, '/api/account/library', null, admin.token)).total, 2);
+  // Link health: check one import now, read the administrator-only summary and see the panel on the Imports page.
+  const checked = await call(api, `/api/account/library/${privateTitle.id}/check`, {}, admin.token); assert.equal(checked.health, 'ok');
+  const healthSummary = await call(api, '/api/account/library/health', null, admin.token); assert.ok(healthSummary.ok >= 1); assert.equal(healthSummary.broken, 0);
+  assert.equal((await fetch(`http://127.0.0.1:${api}/api/account/library/health`, { headers: { Authorization: `Bearer ${member.token}` } })).status, 403);
+  await page.goto(`${url}/library`, { waitUntil: 'networkidle' });
+  await page.getByRole('region', { name: 'Link health', exact: true }).waitFor(); await page.getByRole('heading', { name: 'Your links are healthy.' }).waitFor();
+  await shot('link-health');
+  report.journeys.push(`${product}: link health check, administrator-only summary and Imports panel`);
   report.journeys.push(`${product}: on-connect read-only account scan, automatic metadata, private gallery, file choice and synthetic video playback`);
 };

@@ -28,7 +28,7 @@ provider settings and order, connectivity, logs, and configuration export/import
 information; store them outside public source control. Deactivating an account revokes its older sessions; password changes revoke
 other sessions while retaining the initiating web session.
 
-Only the administrator imports from a debrid account. The curated catalogue (hand-added links, its search, favourites, My List and
+Only the administrator imports from a debrid account. Imported links are checked in the background; a title whose link stopped working is marked **Link needs attention**, another working version is shown instead, and when none works a replacement is requested for the administrator to approve. The curated catalogue (hand-added links, its search, favourites, My List and
 viewing profiles) was retired in v0.18.0; nothing was deleted and its endpoints answer "gone".
 
 See [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots) and the

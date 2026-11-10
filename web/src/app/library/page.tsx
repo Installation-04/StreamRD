@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { ACCOUNT_PROVIDER_NAMES, AccountLibraryPage, AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { useAccountMetadataRefresh } from "@/lib/useAccountMetadataRefresh";
 import AccountScanPanel from "@/components/AccountScanPanel";
+import LinkHealthPanel from "@/components/LinkHealthPanel";
 import LibraryMatchStatus from "@/components/LibraryMatchStatus";
 import styles from "./library.module.css";
 
@@ -33,6 +34,7 @@ export default function AccountLibraryPageView() {
   if (authLoading || !user) return <main className={styles.page}><p role="status">Checking your account…</p></main>;
   return <main className={styles.page}>
     <header className={styles.header}><div><p className={styles.eyebrow}>ALREADY IN YOUR ACCOUNT. READY TO DISCOVER.</p><h1>My library<span>.</span></h1><p>Your debrid accounts, together in one private collection. Artwork and details appear as metadata is matched.</p></div><div className={styles.headerActions}><Link className="btn btn-secondary" href="/account/debrid">Connections</Link><button type="button" className="btn" aria-expanded={scanOpen} aria-controls="library-scans" onClick={() => setScanOpen(open => !open)}>{scanOpen ? "Hide account scans" : "Scan my accounts"}</button></div></header>
+    <LinkHealthPanel />
     <div id="library-scans" hidden={!scanOpen}><AccountScanPanel onChanged={count => { if (importCount.current !== -1 && count !== importCount.current) void load(); importCount.current = count; }} /></div>
     <LibraryMatchStatus onProgress={() => void load()} />
     <section className={styles.toolbar} aria-label="Library filters"><label className={styles.search}><span>Find something in your library</span><input type="search" aria-label="Search my library" value={query} maxLength={160} placeholder="Search titles…" onChange={event => setQuery(event.target.value)} /></label><label className={styles.type}><span>Show</span><select aria-label="Filter my library by type" value={type} onChange={event => setType(event.target.value)}><option value="all">Everything</option><option value="movie">Movies</option><option value="series">Series</option></select></label><div className={styles.total}><strong>{total}</strong><span>{total === 1 ? "title" : "titles"}</span></div><button type="button" className={styles.textButton} disabled={loading} onClick={() => void load()}>Refresh library</button></section>

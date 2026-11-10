@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth/middleware";
 import { db } from "../db";
 import { asyncHandler } from "../http";
+import { checkItem, linkHealthSummary } from "../link-health";
 import { AccountLibraryError, cancelAccountScan, getAccountScanStatus, playImportedMedia, queueAccountScans } from "../account-library";
 import { PROVIDER_IDS } from "../providers/types";
 import { accountMetadataSummary, cleanupAccountLibrary, decorateAccountMedia, rematchAccountMetadata } from "../metadata/account";
@@ -26,7 +27,7 @@ function action(run: (req: import("express").Request, res: import("express").Res
 /** Whitelist a private media view; internal refs, owner IDs and credential bindings never leave this module. */
 export async function accountMediaViews(items: AccountMedia[]) {
   const decorated = await decorateAccountMedia(items);
-  return decorated.map(item => ({ id: item.id, name: item.name, type: item.type, year: item.year, provider: item.provider, phase: item.phase, progress: item.progress, createdAt: item.createdAt.toISOString(), metadata: item.metadata, metadataStatus: item.metadataStatus, ratingLabel: item.ratingLabel, ratingManual: item.ratingOverride !== null }));
+  return decorated.map(item => ({ id: item.id, name: item.name, type: item.type, year: item.year, provider: item.provider, phase: item.phase, health: item.health, progress: item.progress, createdAt: item.createdAt.toISOString(), metadata: item.metadata, metadataStatus: item.metadataStatus, ratingLabel: item.ratingLabel, ratingManual: item.ratingOverride !== null }));
 }
 accountLibraryRouter.get("/", action(async (req, res) => {
   const parsed = listSchema.safeParse(req.query);
@@ -62,6 +63,14 @@ accountLibraryRouter.post("/cleanup", rateLimit({ windowMs: 60_000, max: 20 }), 
   const body = z.object({ apply: z.boolean().optional() }).strict().safeParse(req.body ?? {});
   if (!body.success) throw new AccountLibraryError("Invalid cleanup request.");
   res.json(await cleanupAccountLibrary(req.session!.sub, body.data.apply === true));
+}));
+/** Link health (administrators): the counts and the titles whose link stopped working. */
+accountLibraryRouter.get("/health", action(async (_req, res) => { res.setHeader("Cache-Control", "private, no-store"); res.json(await linkHealthSummary()); }));
+accountLibraryRouter.post("/:id/check", rateLimit({ windowMs: 60_000, max: 30 }), action(async (req, res) => {
+  const item = await db.accountMedia.findFirst({ where: { id: req.params.id, userId: req.session!.sub }, select: { id: true } });
+  if (!item) throw new AccountLibraryError("Library item not found.", 404);
+  const outcome = await checkItem(item.id);
+  res.json({ outcome, health: (await db.accountMedia.findUnique({ where: { id: item.id }, select: { health: true } }))?.health ?? "unknown" });
 }));
 accountLibraryRouter.get("/:id", action(async (req, res) => {
   if (!idSchema.safeParse(req.params.id).success) throw new AccountLibraryError("Library item not found.", 404);
