@@ -124,12 +124,14 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     await viewer.route('https://example.invalid/qa-account-video.mp4', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: fs.readFileSync(path.join(__dirname, 'fixtures/account-video.mp4')) }));
     await viewer.getByRole('button', { name: 'Play from server', exact: true }).click();
     await viewer.getByRole('heading', { name: 'This torrent has more than one video.', exact: true }).waitFor();
+    if (product === 'streamrd') { await viewerNoOverflow('desktop player chooser'); await viewerShot('player-choose'); }
     assert.equal(await viewer.getByRole('button', { name: /readme\.nfo/ }).count(), 0);
     await viewer.getByRole('button', { name: /Sintel\.2010\.mp4/ }).click();
     await viewer.locator('video').waitFor();
     // Pause as soon as playback starts: the synthetic clip is one second long and must not finish.
     // Pausing mid-clip must persist this viewer's position without exposing any stream data.
     await viewer.waitForFunction(() => { const video = document.querySelector('video'); if (video && video.currentTime > 0 && !video.paused) { video.pause(); return true; } return false; }, null, { polling: 'raf' });
+    if (product === 'streamrd') { await viewerNoOverflow('desktop player'); await viewerShot('player'); }
     await viewer.getByRole('button', { name: 'Close player', exact: true }).click();
     // Watch progress is implemented for StreamRD shared libraries only; Phosphor keeps its v0.6.0 behavior.
     if (product === 'streamrd') {
@@ -151,6 +153,48 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     report.journeys.push(`${product}: shared-library watch progress, per-viewer Continue watching and resume`);
     }
     report.journeys.push(`${product}: named server library grant, no-key onboarding, private-source isolation, file choice and synthetic-video playback`);
+
+    // Invitations that carry libraries and a viewing limit, the title rating an administrator sets, and what a limited account sees.
+    await page.goto(`${url}/admin/users`, { waitUntil: 'networkidle' });
+    const guestEmail = 'second-guest@example.invalid';
+    await page.getByLabel('Invitation email', { exact: true }).fill(guestEmail);
+    assert.equal(await page.getByRole('checkbox', { name: libraryName, exact: true }).isChecked(), true, 'The invitation form should offer the library, ticked by default');
+    await page.getByLabel('Viewing limit', { exact: true }).selectOption('7');
+    const guestIssued = page.waitForResponse(response => response.url().endsWith('/api/admin/invitations') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+    const guestInvitation = await (await guestIssued).json();
+    assert.ok(guestInvitation.invitation.libraryIds.includes(libraryId)); assert.equal(guestInvitation.invitation.maxAge, 7);
+    await page.getByLabel('Private invitation link', { exact: true }).waitFor();
+    await noOverflow('desktop invitation with access'); await shot('invite-access');
+    const guestContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
+    try {
+      const guest = await guestContext.newPage();
+      await guest.goto(`${url}/signup#invite=${guestInvitation.inviteToken}`, { waitUntil: 'networkidle' });
+      await guest.getByText(`You will be able to watch: ${libraryName}`, { exact: false }).waitFor();
+      await guest.screenshot({ path: path.join(output, `${product}-signup-invited.png`), animations: 'disabled' }); report.screenshots.push(`${product}-signup-invited.png`);
+    } finally { await guestContext.close(); }
+    // A limited account: an administrator sets the limit in Users and rates the title; the limited viewer then sees only rated titles.
+    assert.equal(await responseStatus(`/api/shared-libraries/${libraryId}/items/${sintel.id}`, viewerToken), 200);
+    await page.reload({ waitUntil: 'networkidle' });
+    const limitResponse = page.waitForResponse(response => response.url().includes(`/api/admin/users/${viewerUser.id}`) && response.request().method() === 'PATCH');
+    await page.getByRole('combobox', { name: 'Viewing limit for Invited viewer', exact: true }).selectOption('7');
+    assert.equal((await limitResponse).status(), 200);
+    await noOverflow('desktop viewing limits'); await shot('viewing-limits');
+    assert.equal(await responseStatus(`/api/shared-libraries/${libraryId}/items/${sintel.id}`, viewerToken), 404, 'An unrated title must be hidden from a limited account');
+    await page.goto(`${url}/shared-libraries/${libraryId}/${sintel.id}`, { waitUntil: 'networkidle' });
+    const rated = page.waitForResponse(response => response.url().includes('/rating') && response.request().method() === 'PUT');
+    await page.getByRole('combobox', { name: 'Age rating', exact: true }).selectOption('G');
+    assert.equal((await rated).status(), 200);
+    await page.getByRole('combobox', { name: 'Age rating', exact: true }).waitFor();
+    await noOverflow('desktop title rating'); await shot('title-rating');
+    await viewer.goto(`${url}/shared-libraries/${libraryId}`, { waitUntil: 'networkidle' });
+    await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).waitFor();
+    assert.equal(await viewer.getByRole('link', { name: 'Find media', exact: true }).count(), 0, 'A limited account should not be offered discovery');
+    assert.equal(await responseStatus('/api/discovery/search?q=Sintel&type=movie', viewerToken), 403);
+    await viewerNoOverflow('desktop limited account library'); await viewerShot('kids-library');
+    await call(api, `/api/admin/users/${viewerUser.id}`, { maxAge: null }, admin.token, 'PATCH');
+    assert.equal(await responseStatus(`/api/shared-libraries/${libraryId}/items/${sintel.id}`, viewerToken), 200, 'Removing the limit applies at once');
+    report.journeys.push(`${product}: invitation carrying libraries and a viewing limit, signup preview, administrator title rating, limited account view`);
 
     const revokedResponse = page.waitForResponse(response => response.url().endsWith(`/api/admin/shared-libraries/${libraryId}/users/${viewerUser.id}`) && response.request().method() === 'DELETE');
     await library.getByRole('button', { name: `Remove access for ${viewerEmail}`, exact: true }).click();
