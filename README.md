@@ -1,6 +1,6 @@
 # StreamRD
 
-[Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases)
+[Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases) · [Roadmap](docs/roadmap.md)
 
 Self-hosted, Netflix-style streaming for your own **debrid** accounts.
 One backend and a responsive web app for every screen that has a browser.
