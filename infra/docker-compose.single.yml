@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: streamrd-all-in-one:local
+    image: ${STREAMRD_IMAGE:-streamrd-all-in-one:local}
     restart: unless-stopped
     stop_grace_period: 30s
     ports:
