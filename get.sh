@@ -347,7 +347,11 @@ main() {
   local files="docker-compose.yml"
   [ "$use_zilean" = true ] && files="$files:docker-compose.zilean.yml"
   [ "$use_zurg" = true ] && files="$files:docker-compose.zurg.yml"
-  if [ "$files" = "docker-compose.yml" ]; then drop_env COMPOSE_FILE; else set_env COMPOSE_FILE "$files" yes; fi
+  # Always name the files explicitly: Compose otherwise prefers a stray compose.yaml over docker-compose.yml.
+  set_env COMPOSE_FILE "$files" yes
+  for stray in compose.yaml compose.yml docker-compose.yaml; do
+    [ ! -f "$DIR/$stray" ] || log "Ignoring $DIR/$stray (not part of this installation; delete it if it is an old copy)."
+  done
 
   # Image: a published release (pull), or built from source (--build / --ref / no published image).
   local mode=pull TAG; resolve_tag
