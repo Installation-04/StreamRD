@@ -1,9 +1,13 @@
 <p align="center">
+  <img src="docs/assets/logo.svg" alt="StreamRD logo" width="96">
+</p>
+
+<p align="center">
   <img src="docs/assets/readme/hero.jpg" alt="StreamRD on desktop in dark and light themes, on a phone, and next to Phosphor" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/Installation-04/StreamRD/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Installation-04/StreamRD?style=flat-square&color=e11d48"></a>
+  <a href="https://github.com/Installation-04/StreamRD/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Installation-04/StreamRD?style=flat-square&color=ff8a1f"></a>
   <a href="https://github.com/Installation-04/StreamRD/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Installation-04/StreamRD/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Installation-04/StreamRD?style=flat-square"></a>
   <a href="https://github.com/Installation-04/StreamRD/pkgs/container/streamrd"><img alt="Container image" src="https://img.shields.io/badge/ghcr.io-streamrd-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
