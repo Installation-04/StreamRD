@@ -4,6 +4,7 @@ import { setAccountImportHook, startAccountLibraryWorker } from "./account-libra
 import { startMetadataWorker } from "./metadata/automation";
 import { ensureZileanIndexer } from "./indexers/zilean";
 import { createApp } from "./app";
+import { backfillRatings } from "./ratings";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
@@ -23,6 +24,7 @@ async function main() {
     setAccountImportHook(queueImportedMetadata);
     startAccountLibraryWorker();
     startMetadataWorker();
+    void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     startRequestWorker();
     void ensureZileanIndexer().catch(() => undefined);
     void logEvent("info", "system", `Phosphor server listening on :${config.port}`);

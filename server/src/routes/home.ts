@@ -5,12 +5,16 @@ import { externalSections, librarySections } from "../home";
 import { assertActiveSharedViewer } from "../shared-libraries";
 import { AccountLibraryError } from "../account-library";
 import { rateLimit } from "../util/rateLimit";
+import { viewingLimit } from "../restrictions";
 
 export const homeRouter = Router();
 homeRouter.use((_req: Request, res: Response, next: () => void) => { res.setHeader("Cache-Control", "private, no-store"); next(); }, requireAuth);
 homeRouter.get("/", rateLimit({ windowMs: 60_000, max: 60 }), asyncHandler(async (req, res) => {
   try {
-    const [library, external] = await Promise.all([librarySections(req.session!.sub, req.session!.role), externalSections()]);
+    // Public trending lists are not rated, so an account with a viewing limit only sees its libraries.
+    const limit = await viewingLimit(req.session!.sub);
+    const none = { externalEnabled: false, trailersEnabled: false, trending: [], popularMovies: [], popularSeries: [], featured: [] };
+    const [library, external] = await Promise.all([librarySections(req.session!.sub, req.session!.role, limit), limit === null ? externalSections() : Promise.resolve(none)]);
     await assertActiveSharedViewer(req.session!);
     const { libraryFeatured, ...rest } = library, { featured: outside, ...others } = external;
     res.json({ ...rest, ...others, featured: [...libraryFeatured, ...outside].slice(0, 6) });

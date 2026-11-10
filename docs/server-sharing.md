@@ -36,6 +36,16 @@ The home page has Plex-style rows, from top to bottom: **Continue watching**, **
 - The banner at the top is a **carousel** of featured titles (your own matched titles first, then what is trending). Trailers are optional
   per viewer: nothing is loaded from YouTube until a viewer presses *Watch trailer* or ticks *Autoplay trailers*, and `HOME_TRAILERS=false` removes the option.
 
+## Viewing limits (a kids account)
+
+In **Admin → Users**, each member has a **Viewing limit**: Kids (G, TV-Y, TV-G, TV-Y7), Pre-teens (up to PG, TV-PG), Teens (up to PG-13, TV-14),
+Mature (up to R, TV-MA), or no limit. A limited account only sees titles in its libraries rated at or below its level. **Unrated titles
+are never shown to a limited account.** Ratings come from metadata (TMDB or OMDb) or from an administrator: open a title as an
+administrator and use **Age rating**. The limit is read on every request, so changes apply at once. Limited accounts cannot use Find media,
+Requests, Imports, Setup or search, and their home page shows only their libraries. Administrators are never limited.
+API: `PATCH /api/admin/users/:id` accepts `maxAge` (`7`, `8`, `14`, `17` or `null`); `PUT /api/admin/shared-libraries/items/:itemId/rating`
+sets (`{"rating":"PG"}`) or clears (`{"rating":null}`) a title's rating.
+
 ## Account administration
 
 The first account is an administrator unless `ADMIN_EMAIL` designates a specific

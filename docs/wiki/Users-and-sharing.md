@@ -19,9 +19,15 @@ own debrid key; playback uses the administrator's connected account.
 The **home page** shows Continue watching, New in your libraries, Popular on this server, and public Trending and
 Popular lists (see the [full guide](https://github.com/Installation-04/StreamRD/blob/main/docs/server-sharing.md)).
 
+## A kids account (viewing limits)
+
+In **Admin → Users**, choose a **Viewing limit** for a member: Kids, Pre-teens, Teens or Mature. They then see only titles in their
+libraries rated at or below that level, and **titles with no rating stay hidden**. Ratings come from metadata (TMDB or OMDb) or you can set
+one on a title's page (**Age rating**, administrators only). Limited accounts cannot search, request or import, and their home page
+shows only their libraries. See the [full guide](https://github.com/Installation-04/StreamRD/blob/main/docs/server-sharing.md).
+
 ## What is and is not included
 
-This is a server-managed sharing model, not full Plex Home parity. Age-rating limits (for example a kids account),
-PIN-protected managed users, invitations that carry library access, device inventories and concurrency limits are
+This is a server-managed sharing model, not full Plex Home parity. PIN-protected managed users, invitations that carry library access, device inventories and concurrency limits are
 planned; see the [roadmap](https://github.com/Installation-04/StreamRD/blob/main/docs/roadmap.md). Removing a person's access blocks
 new playback requests at once; direct provider links already issued may work until the provider expires them.

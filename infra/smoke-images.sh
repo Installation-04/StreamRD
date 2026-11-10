@@ -82,7 +82,9 @@ docker run --pull=never --rm --interactive --volume "$upgrade_volume:/app/data" 
  const file=process.env.DATABASE_URL.slice(5);fs.closeSync(fs.openSync(file,"wx",0o600));
  execFileSync(process.execPath,["/app/node_modules/prisma/build/index.js","db","push","--skip-generate","--schema","/app/prisma/community-v0.3.prisma"],{stdio:"pipe",env:process.env});
  const db=new PrismaClient();try{
- const user=await db.user.create({data:{email:"container@example.invalid",displayName:"Upgrade fixture",role:"admin",hashedPassword:require("bcryptjs").hashSync("container-password123",10)}});
+ // Raw SQL: the generated client already knows columns that later migrations add to this older database.
+ const user={id:"upgrade-fixture-user"},now=Date.now();
+ await db.$executeRawUnsafe("INSERT INTO User (id,email,hashedPassword,displayName,role,active,createdAt,updatedAt) VALUES (?,?,?,?,?,1,?,?)",user.id,"container@example.invalid",require("bcryptjs").hashSync("container-password123",10),"Upgrade fixture","admin",now,now);
  await db.$executeRawUnsafe("INSERT INTO DebridConfig (userId,realDebridToken,updatedAt) VALUES (?,?,?)",user.id,"upgrade-fixture-only",Date.now());
  if(process.env.SMOKE_PRODUCT==="streamrd")await db.title.create({data:{name:"Container fixture"}});
  else await db.indexerConfig.create({data:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-only"}});

@@ -7,6 +7,7 @@ import { metadataRouter } from "./routes/metadata";
 import { systemRouter } from "./routes/system";
 import { setupRouter } from "./routes/setup";
 import { libraryRouter } from "./routes/library";
+import { requireUnrestricted } from "./restrictions";
 import { errorHandler, requestId, securityHeaders } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
@@ -38,6 +39,8 @@ export function createApp(): Express {
   app.use(attachSession);
   app.use(csrfGuard);
 
+  // Accounts with a viewing limit only watch what the libraries show them: discovery, requests, personal libraries and search are closed to them.
+  app.use(["/api/discovery", "/api/requests", "/api/account/library", "/api/debrid", "/api/search", "/api/downloads"], requireUnrestricted);
   app.use("/api/health", healthRouter);
   app.use("/api/discovery", discoveryRouter);
   app.use("/api/requests", requestsRouter);

@@ -6,6 +6,8 @@ export interface User {
   displayName: string;
   role: Role;
   active: boolean;
+  /** Viewing limit (the highest minimum age this person may see); null or absent means no limit. */
+  maxAge?: number | null;
   createdAt: string;
 }
 

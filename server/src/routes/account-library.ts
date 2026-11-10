@@ -25,7 +25,7 @@ function action(run: (req: import("express").Request, res: import("express").Res
 /** Whitelist a private media view; internal refs, owner IDs and credential bindings never leave this module. */
 export async function accountMediaViews(items: AccountMedia[]) {
   const decorated = await decorateAccountMedia(items);
-  return decorated.map(item => ({ id: item.id, name: item.name, type: item.type, year: item.year, provider: item.provider, phase: item.phase, progress: item.progress, createdAt: item.createdAt.toISOString(), metadata: item.metadata, metadataStatus: item.metadataStatus }));
+  return decorated.map(item => ({ id: item.id, name: item.name, type: item.type, year: item.year, provider: item.provider, phase: item.phase, progress: item.progress, createdAt: item.createdAt.toISOString(), metadata: item.metadata, metadataStatus: item.metadataStatus, ratingLabel: item.ratingLabel, ratingManual: item.ratingOverride !== null }));
 }
 accountLibraryRouter.get("/", action(async (req, res) => {
   const parsed = listSchema.safeParse(req.query);

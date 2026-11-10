@@ -93,11 +93,11 @@ export async function externalSections() {
 }
 
 /** Administrators also see what they imported themselves, even before they put it in a library. */
-export async function librarySections(userId: string, role: string) {
+export async function librarySections(userId: string, role: string, limit: number | null = null) {
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
   const own = role === "admin" ? [{ AND: [{ userId }, await currentAccountMediaFilter(userId)] }] : [];
   if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], libraryFeatured: [] as Slide[] };
-  const where = { phase: "finished", OR: [...await Promise.all(libraries.map(sharedMediaWhere)), ...own] };
+  const where = { phase: "finished", OR: [...await Promise.all(libraries.map(library => sharedMediaWhere(library, limit))), ...own] };
   const libraryOf = (item: { userId: string; type: string }) => libraries.find(library => library.sourceUserId === item.userId && (library.mediaType === "all" || library.mediaType === item.type))?.id ?? null;
   const recent = await db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: ROW });
   // Ranked by how many viewers resumed or finished a title in the last 30 days; only the ranking leaves the server, never who watched.

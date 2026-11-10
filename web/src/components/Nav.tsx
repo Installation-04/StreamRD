@@ -36,6 +36,8 @@ function ThemeToggle() {
 }
 export function Nav() {
   const { user, logout } = useAuth();
+  // An account with a viewing limit only sees Discover (its libraries), Library and Account.
+  const limited = Boolean(user && user.role !== "admin" && user.maxAge != null);
   const pathname = usePathname(), router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   if (pathname.startsWith("/watch/")) return null;
@@ -50,12 +52,12 @@ export function Nav() {
         <Link href="/" className="nav-logo" aria-label="StreamRD home"><BrandMark />stream<span>rd</span></Link>
         <div className="nav-links">
           {link("/", "Discover", "home")}
-          {link("/search", t("nav.search"), "search")}
-          {user && link("/discover", "Find media", "search")}
-          {user && link("/requests", "Requests", "film")}
+          {!limited && link("/search", t("nav.search"), "search")}
+          {user && !limited && link("/discover", "Find media", "search")}
+          {user && !limited && link("/requests", "Requests", "film")}
           {user && link("/shared-libraries", "Library", "film")}
           {user?.role === "admin" && link("/library", "Imports", "grid")}
-          {user && link("/setup", "Setup", "settings")}
+          {user && !limited && link("/setup", "Setup", "settings")}
           {user && link("/account/profile", t("nav.account"), "user")}
           {user?.role === "admin" && link("/admin", t("nav.admin"), "grid")}
         </div>

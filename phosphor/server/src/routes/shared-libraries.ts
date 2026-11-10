@@ -10,6 +10,8 @@ import { AccountLibraryError, playImportedMedia } from "../account-library";
 import { assertActiveSharedViewer, assertSharedViewer, assertUnchangedSharedViewer, sharedLibraryView, sharedMediaWhere, visibleSharedLibrary, visibleSharedLibraryWhere } from "../shared-libraries";
 import { accountMediaViews } from "./account-library";
 import { rateLimit } from "../util/rateLimit";
+import { viewingLimit } from "../restrictions";
+import { ageForRating, syncAccountRating } from "../ratings";
 
 export const sharedLibrariesRouter = Router();
 export const adminSharedLibrariesRouter = Router();
@@ -39,8 +41,8 @@ async function ownedLibrary(req: Request) {
   return library;
 }
 /** Withhold a stale page if account bindings or item eligibility changed while decorating it. */
-async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[]) {
-  const freshWhere = await sharedMediaWhere(library);
+async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[], limit: number | null) {
+  const freshWhere = await sharedMediaWhere(library, limit);
   if (JSON.stringify(freshWhere) !== JSON.stringify(originalWhere)) throw new AccountLibraryError("Shared library account changed. Refresh and try again.", 409);
   if (itemIds.length && await db.accountMedia.count({ where: { id: { in: itemIds }, AND: [freshWhere] } }) !== itemIds.length) throw new AccountLibraryError("Shared library items changed. Refresh and try again.", 409);
 }
@@ -79,6 +81,17 @@ adminSharedLibrariesRouter.delete("/:id", action(async (req, res) => {
   await audit(req, "Removed a shared library", library.id);
   res.json({ ok: true });
 }));
+/** An administrator sets (or clears) the age rating of one of their imported titles; it wins over the metadata rating. */
+adminSharedLibrariesRouter.put("/items/:itemId/rating", action(async (req, res) => {
+  const itemId = parse(id, req.params.itemId), body = parse(z.object({ rating: z.string().trim().min(1).max(20).nullable() }).strict(), req.body, "Choose a rating such as G, PG, PG-13, R, TV-Y7, TV-PG, TV-14 or TV-MA, or clear it.");
+  if (body.rating !== null && ageForRating(body.rating) === null) throw new AccountLibraryError("Choose a known rating such as G, PG, PG-13, R, TV-Y7, TV-PG, TV-14 or TV-MA.");
+  const item = await db.accountMedia.findFirst({ where: { id: itemId, userId: req.session!.sub }, select: { id: true } });
+  if (!item) throw new AccountLibraryError("Library item not found.", 404);
+  await db.accountMedia.update({ where: { id: itemId }, data: { ratingOverride: body.rating } });
+  const rating = await syncAccountRating(itemId);
+  await logEvent("info", "admin_action", body.rating === null ? "Cleared a title's age rating override" : "Set a title's age rating", { userId: req.session!.sub, meta: { itemId } });
+  res.json({ ...rating, ratingManual: body.rating !== null });
+}));
 adminSharedLibrariesRouter.post("/:id/users", action(async (req, res) => {
   const library = await ownedLibrary(req), body = parse(z.object({ userId: id }).strict(), req.body);
   const user = await db.user.findUnique({ where: { id: body.userId }, select: { id: true } });
@@ -97,7 +110,7 @@ adminSharedLibrariesRouter.delete("/:id/users/:userId", action(async (req, res) 
 }));
 sharedLibrariesRouter.get("/", action(async (req, res) => {
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(req.session!.sub), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
-  const views = await Promise.all(libraries.map(sharedLibraryView));
+  const ageLimit = await viewingLimit(req.session!.sub), views = await Promise.all(libraries.map(library => sharedLibraryView(library, ageLimit)));
   await assertActiveSharedViewer(req.session!);
   const fresh = await db.sharedLibrary.findMany({ where: { ...visibleSharedLibraryWhere(req.session!.sub), id: { in: libraries.map(library => library.id) } }, select: { id: true, updatedAt: true } });
   const unchanged = new Set(fresh.filter(library => libraries.some(original => original.id === library.id && original.updatedAt.getTime() === library.updatedAt.getTime())).map(library => library.id));
@@ -106,7 +119,7 @@ sharedLibrariesRouter.get("/", action(async (req, res) => {
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type } = parse(list, req.query);
-  const sourceWhere = await sharedMediaWhere(library);
+  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
   const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : [])] };
   const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
   let after: z.infer<typeof cursorSchema> | undefined;
@@ -118,17 +131,17 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const [items, total] = await Promise.all([db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 }), db.accountMedia.count({ where: filters })]);
   const page = items.slice(0, limit), last = page.at(-1), views = await accountMediaViews(page);
   await assertUnchangedSharedViewer(req.session!, library);
-  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id));
+  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit);
   res.json({ items: views, total, nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
 }));
 sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
-  const sourceWhere = await sharedMediaWhere(library);
+  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
   const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
-  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library) };
+  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library, ageLimit) };
   await assertUnchangedSharedViewer(req.session!, library);
-  await assertCurrentSharedItems(library, sourceWhere, [item.id]);
+  await assertCurrentSharedItems(library, sourceWhere, [item.id], ageLimit);
   res.json(result);
 }));
 sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
@@ -137,7 +150,7 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   const library = await assertSharedViewer(req.session!, libraryId);
   const authorize = async () => {
     const freshLibrary = await assertSharedViewer(req.session!, libraryId);
-    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary)] }, select: { id: true } });
+    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
     if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
   };
   const result = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);

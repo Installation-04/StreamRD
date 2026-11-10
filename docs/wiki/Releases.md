@@ -1,10 +1,11 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.13.0** follows v0.12.0, v0.11.0, v0.10.3, v0.10.2, v0.10.1, v0.10.0, v0.9.1, v0.9.0, v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
+`vMAJOR.MINOR.PATCH`. **v0.14.0** follows v0.13.0, v0.12.0, v0.11.0, v0.10.3, v0.10.2, v0.10.1, v0.10.0, v0.9.1, v0.9.0, v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
 Native-client versions remain independent.
 
-- [v0.13.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.13.0.md) (featured carousel with optional trailers) ·
+- [v0.14.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.14.0.md) (viewing limits: a kids account) ·
+  [v0.13.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.13.0.md) (featured carousel with optional trailers) ·
   [v0.12.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.12.0.md) (Plex-style home page rows) ·
   [v0.11.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.11.0.md) (one Library, Plex-style) ·
   [v0.10.3 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.10.3.md) (built-in search finds short films) ·

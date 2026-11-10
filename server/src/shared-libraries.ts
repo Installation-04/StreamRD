@@ -2,6 +2,7 @@ import { Prisma, SharedLibrary } from "@prisma/client";
 import { db } from "./db";
 import { AccountLibraryError, currentAccountMediaFilter } from "./account-library";
 import { SessionClaims } from "./auth/jwt";
+import { ageWhere, viewingLimit } from "./restrictions";
 
 /** An explicit named view; a private account never becomes globally browsable. */
 export function visibleSharedLibraryWhere(userId: string): Prisma.SharedLibraryWhereInput {
@@ -15,8 +16,8 @@ export function libraryMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | 
   return { userId: library.sourceUserId, ...(library.mediaType === "all" ? {} : { type: library.mediaType }) };
 }
 /** Local configuration only; never resolves or tests an upstream connection. */
-export async function sharedMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | "mediaType">) {
-  return { AND: [libraryMediaWhere(library), await currentAccountMediaFilter(library.sourceUserId)] } satisfies Prisma.AccountMediaWhereInput;
+export async function sharedMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | "mediaType">, limit: number | null = null) {
+  return { AND: [libraryMediaWhere(library), await currentAccountMediaFilter(library.sourceUserId), ageWhere(limit)] } satisfies Prisma.AccountMediaWhereInput;
 }
 export async function visibleSharedLibrary(userId: string, libraryId: string) {
   const library = await db.sharedLibrary.findFirst({ where: { id: libraryId, ...visibleSharedLibraryWhere(userId) } });
@@ -37,8 +38,8 @@ export async function assertUnchangedSharedViewer(session: SessionClaims, librar
   const fresh = await assertSharedViewer(session, library.id);
   if (fresh.updatedAt.getTime() !== library.updatedAt.getTime()) throw new AccountLibraryError("Shared library changed. Refresh and try again.", 409);
 }
-export async function sharedLibraryView(library: SharedLibrary) {
-  return { id: library.id, name: library.name, mediaType: library.mediaType, itemCount: await db.accountMedia.count({ where: await sharedMediaWhere(library) }) };
+export async function sharedLibraryView(library: SharedLibrary, limit: number | null = null) {
+  return { id: library.id, name: library.name, mediaType: library.mediaType, itemCount: await db.accountMedia.count({ where: await sharedMediaWhere(library, limit) }) };
 }
 /** Setup readiness uses only accessible, ready imports with current source bindings. */
 export async function getSharedSetupState(userId: string): Promise<{ libraryCount: number; readyCount: number }> {
@@ -46,6 +47,6 @@ export async function getSharedSetupState(userId: string): Promise<{ libraryCoun
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), take: 100, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   if (!libraries.length) return { libraryCount: 0, readyCount: 0 };
   // OR ensures an item shared through overlapping libraries is counted only once.
-  const filters = await Promise.all(libraries.map(sharedMediaWhere));
+  const limit = await viewingLimit(userId), filters = await Promise.all(libraries.map(library => sharedMediaWhere(library, limit)));
   return { libraryCount: libraries.length, readyCount: await db.accountMedia.count({ where: { phase: "finished", OR: filters } }) };
 }
