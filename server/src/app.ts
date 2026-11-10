@@ -12,15 +12,14 @@ import { requireUnrestricted } from "./restrictions";
 import { errorHandler, requestId, securityHeaders } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
-import { attachSession, csrfGuard } from "./auth/middleware";
+import { attachSession, csrfGuard, requireAdmin, requireAuth } from "./auth/middleware";
 import { config } from "./config";
 import { accountRouter } from "./routes/account";
 import { adminRouter } from "./routes/admin";
 import { authRouter } from "./routes/auth";
-import { catalogRouter } from "./routes/catalog";
 import { debridRouter } from "./routes/debrid";
 import { healthRouter } from "./routes/health";
-import { playRouter } from "./routes/play";
+import { retiredRouter } from "./routes/retired";
 
 /** Builds the Express app; exported separately so tests can run it in-process. */
 export function createApp(): Express {
@@ -41,20 +40,22 @@ export function createApp(): Express {
   app.use(csrfGuard);
 
   // Accounts with a viewing limit only watch what the libraries show them: discovery, requests, personal libraries and search are closed to them.
-  app.use(["/api/discovery", "/api/requests", "/api/account/library", "/api/debrid", "/api/catalog", "/api/play"], requireUnrestricted);
+  app.use(["/api/discovery", "/api/requests", "/api/account/library", "/api/debrid"], requireUnrestricted);
   app.use("/api/health", healthRouter);
+  // Retired in v0.18.0 (see routes/retired.ts). Mounted before the routers that used to own these paths.
+  app.use(["/api/catalog", "/api/play", "/api/admin/catalog", "/api/account/favorites", "/api/account/profiles", "/api/account/continue-watching"], retiredRouter);
   app.use("/api/discovery", discoveryRouter);
   app.use("/api/requests", requestsRouter);
   app.use("/api/admin/requests", adminRequestsRouter);
   app.use("/api/admin/request-settings", requestSettingsRouter);
   app.use("/api/auth", authRouter);
+  // Only the administrator imports from a debrid account (v0.18.0); members request content instead. Earlier personal imports stay stored, hidden.
+  app.use("/api/account/library", requireAuth, requireAdmin);
   app.use("/api/account/library/:id/metadata", accountMetadataRouter);
   app.use("/api/account/setup", setupRouter);
   app.use("/api/account/library", accountLibraryRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/debrid", debridRouter);
-  app.use("/api/catalog", catalogRouter);
-  app.use("/api/play", playRouter);
   app.use("/api/shared-libraries", sharedLibrariesRouter);
   app.use("/api/home", homeRouter);
   app.use("/api/admin/shared-libraries", adminSharedLibrariesRouter);

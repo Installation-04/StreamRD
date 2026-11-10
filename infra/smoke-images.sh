@@ -40,7 +40,7 @@ wait_backend() {
 wait_backend "$backend_id"
 docker exec "$backend_id" node -e 'const fs=require("node:fs"); if(process.getuid()===0)throw Error("Root runtime");for(const name of ["typescript","tsx","vitest"]){if(fs.existsSync(`/app/node_modules/${name}`))throw Error(`Development package shipped: ${name}`)}if(fs.existsSync("/app/dist/tests"))throw Error("Compiled tests shipped");if(fs.existsSync("/app/.env"))throw Error("Local environment file shipped");'
 fixture() {
-  docker exec --interactive --env "SMOKE_MODE=$2" --env "SMOKE_PRODUCT=$product" "$1" node <<'NODE'
+  docker exec --interactive --env "SMOKE_MODE=$2" --env "SMOKE_PRODUCT=$product" --env "SMOKE_SOURCE=${3:-current}" "$1" node <<'NODE'
 (async()=>{
  const base=`http://127.0.0.1:${process.env.PORT}`;
  const call=async(path,data,token)=>{const res=await fetch(base+path,{method:data?"POST":"GET",headers:{"Content-Type":"application/json",...(token?{Authorization:`Bearer ${token}`}:{})},...(data?{body:JSON.stringify(data)}:{})});const body=await res.json();if(!res.ok)throw Error(`Fixture request failed: ${path} ${res.status}`);return body};
@@ -49,7 +49,7 @@ fixture() {
  const session=process.env.SMOKE_MODE==="create"?await call("/api/auth/signup",{...credentials,displayName:"Container fixture"}):await call("/api/auth/login",credentials);
  if(session.user.role!=="admin")throw Error("Admin role was not preserved");
  const streamrd=process.env.SMOKE_PRODUCT==="streamrd";
- if(process.env.SMOKE_MODE==="create")await call(streamrd?"/api/admin/catalog/create":"/api/admin/indexers",streamrd?{name:"Container fixture"}:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-key"},session.token);
+ if(process.env.SMOKE_MODE==="create")await call(streamrd?"/api/admin/invitations":"/api/admin/indexers",streamrd?{email:"container-fixture@example.invalid"}:{name:"Container fixture",baseUrl:"https://example.invalid/api",apiKey:"fixture-key"},session.token);
  if(process.env.SMOKE_MODE==="create"){
    fs.mkdirSync("/app/data/mounted",{recursive:true});fs.writeFileSync("/app/data/mounted/movie.mkv","container-media-fixture");
    await call("/api/admin/library/entries",{name:"Container media fixture",year:2024,type:"movie",sourcePath:"movie.mkv"},session.token);
@@ -61,13 +61,13 @@ fixture() {
    if(fs.readFileSync("/app/data/scanner-library/Movies/Container media fixture (2024)/Container media fixture (2024).mkv","utf8")!=="container-media-fixture")throw Error("Exported symlink target cannot be read");
  }
  const users=await call("/api/admin/users",undefined,session.token);if(users.users.length!==1)throw Error("User count changed");
- const catalog=await call(streamrd?"/api/admin/catalog":"/api/admin/indexers",undefined,session.token);if(!(catalog.titles??catalog.indexers).some(item=>item.name==="Container fixture"))throw Error("Application data missing");
+ if(streamrd&&process.env.SMOKE_SOURCE==="v03"){const keys=(await call("/api/account/debrid",undefined,session.token)).keys;if(!String(keys.realdebrid??"").endsWith("only"))throw Error("Application data missing (v0.3 provider key)");}
+ else{const stored=await call(streamrd?"/api/admin/invitations":"/api/admin/indexers",undefined,session.token);if(!(streamrd?stored.invitations.some(item=>item.email==="container-fixture@example.invalid"):stored.indexers.some(item=>item.name==="Container fixture")))throw Error("Application data missing");}
 })().catch(error=>{console.error(error.message);process.exitCode=1});
 NODE
 }
 fixture "$backend_id" create
 docker restart "$backend_id" >/dev/null; wait_backend "$backend_id"; fixture "$backend_id" login
-if [ "$product" = streamrd ]; then docker exec "$backend_id" node dist/prisma/seed.js >/dev/null; fi
 docker exec "$backend_id" node scripts/backup-db.cjs /app/data/smoke-backup.db
 docker exec "$backend_id" node -e 'if((require("node:fs").statSync("/app/data/smoke-backup.db").mode & 0o777)!==0o600)throw Error("Backup permissions too broad")'
 if docker exec "$backend_id" node scripts/backup-db.cjs /app/data/smoke-backup.db >/dev/null 2>&1; then echo "Backup overwrote an existing file" >&2; exit 1; fi
@@ -93,7 +93,7 @@ docker run --pull=never --rm --interactive --volume "$upgrade_volume:/app/data" 
 })().catch(error=>{console.error(error.message);process.exitCode=1});
 NODE
 upgraded_id="$(docker run --pull=never --detach --volume "$upgrade_volume:/app/data" --env "JWT_SECRET=$smoke_jwt" "$product-server")"
-wait_backend "$upgraded_id"; fixture "$upgraded_id" restore
+wait_backend "$upgraded_id"; fixture "$upgraded_id" restore v03
 docker exec --interactive "$upgraded_id" node <<'NODE'
 (async()=>{
  const fs=require("node:fs"),{PrismaClient}=require("@prisma/client");

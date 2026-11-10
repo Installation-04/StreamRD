@@ -9,8 +9,7 @@ must be reachable by the browser; rebuild the web image after changing them.
 
 All four images use Node 24. Backend builds emit `dist/src/index.js`; compiled
 tests, TypeScript, tsx, and Vitest are excluded from the final runtime. The Prisma
-CLI remains a production dependency for schema administration. The StreamRD demo
-seed runs with `node dist/prisma/seed.js`. Both web images use Next standalone
+CLI remains a production dependency for schema administration. Both web images use Next standalone
 output, explicit ports, and listen on all container interfaces.
 
 Images run as the `node` user (UID/GID 1000). Compose waits for backend health

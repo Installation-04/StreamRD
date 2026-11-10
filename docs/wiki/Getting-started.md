@@ -63,15 +63,8 @@ between the two products.
 
 ## Configure
 
-StreamRD: add provider keys under Account → Debrid, then add titles and sources
-under Admin → Catalog. Optional open-movie demo metadata:
-
-```bash
-docker compose exec backend node dist/prisma/seed.js
-```
-
-Even a direct source link is resolved through a configured provider; the demo
-catalog is not a bypass for missing debrid credentials.
+StreamRD: add your provider key under Account → Debrid, open **Imports** to bring in what is finished, then create libraries in Admin → Libraries.
+Members request what is missing; only the administrator imports.
 
 Phosphor: add provider keys under Account → Debrid, then add your Torznab URL and
 indexer key under Admin → Indexers. Test the indexer, then search and add results.

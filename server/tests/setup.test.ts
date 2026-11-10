@@ -47,17 +47,6 @@ it("keeps the optional library separate from required configuration and honors a
   const changed = await request(app).get("/api/account/setup").set(auth(admin.token));
   expect(changed.body.role).toBe("user"); expect(changed.body.library).toBeUndefined();
 });
-it("requires an actual configured source rather than merely a nonempty sources string", async () => {
-  const { admin } = await adminAndUser();
-  const title = await db.title.create({ data: { name: "Fixture", sources: "invalid JSON" } });
-  const setup = async () => (await request(app).get("/api/account/setup").set(auth(admin.token))).body;
-  expect((await setup()).catalog.hasSources).toBe(false);
-  await db.title.update({ where: { id: title.id }, data: { sources: '["unrelated",{}, {"kind":"link","url":""}]' } });
-  expect((await setup()).catalog.hasSources).toBe(false);
-  await db.title.update({ where: { id: title.id }, data: { sources: '[{"kind":"link","url":"https://example.invalid/video.mp4"}]' } });
-  expect((await setup()).catalog.hasSources).toBe(true);
-});
-
 it("lets granted viewers finish onboarding without personal provider keys or indexers", async () => {
  const {admin,user}=await adminAndUser();
  const key="shared-server-fixture-key";

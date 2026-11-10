@@ -42,15 +42,8 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   const original = (await call(api, '/api/admin/library', null, admin.token)).entries[0];
   await page.getByRole('button', { name: 'Scan mounted library', exact: true }).click();
   await poll(() => call(api, `/api/admin/metadata/records/library/${original.id}`, null, admin.token), result => result.record?.status === 'matched', 'manual scan while automation is disabled');
-  let sintel;
-  if (sr) {
-    await page.getByRole('button', { name: 'Scan catalog', exact: true }).click();
-    sintel = (await call(api, '/api/admin/catalog', null, admin.token)).titles.find(title => title.name === 'Sintel');
-    assert.ok(sintel);
-    await poll(() => call(api, `/api/catalog/title/${sintel.id}`, null, admin.token), result => result.title.metadata?.imdbId === 'tt1727587', 'catalog enrichment');
-  }
   await page.getByRole('button', { name: 'Refresh activity', exact: true }).click();
-  const lockName = sr ? 'Sintel' : 'Big Buck Bunny', lockType = sr ? 'catalog' : 'library', lockId = sr ? sintel.id : original.id;
+  const lockName = 'Big Buck Bunny', lockType = 'library', lockId = original.id;
   await page.getByRole('button', { name: `Field locks for ${lockName}`, exact: true }).click();
   await page.getByRole('region', { name: `Field locks for ${lockName}`, exact: true }).getByRole('checkbox', { name: 'Overview', exact: true }).check();
   await page.getByRole('button', { name: 'Save field locks', exact: true }).click();
@@ -61,13 +54,6 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   await page.getByRole('button', { name: 'Refresh activity', exact: true }).click();
   await noOverflow('desktop metadata'); await shot('metadata');
   await page.setViewportSize({ width: 390, height: 844 }); await noOverflow('mobile metadata'); await shot('metadata-mobile'); await page.setViewportSize({ width: 1440, height: 1050 });
-  if (sr) {
-    await page.goto(`${url}/title/${sintel.id}`, { waitUntil: 'networkidle' });
-    await page.getByRole('region', { name: 'Movie and series metadata' }).waitFor(); await page.getByRole('link', { name: 'View on IMDb', exact: false }).waitFor();
-    assert.ok((await page.locator('main').innerText()).includes('Demo performer'));
-    await noOverflow('desktop enriched title'); await shot('title-metadata');
-    await page.setViewportSize({ width: 390, height: 844 }); await noOverflow('mobile enriched title'); await shot('title-metadata-mobile'); await page.setViewportSize({ width: 1440, height: 1050 });
-  }
   await page.goto(`${url}/admin/library`, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Fix metadata match for Big Buck Bunny', exact: true }).click();
   await page.getByRole('combobox', { name: /^Provider/ }).selectOption('omdb');
@@ -118,8 +104,8 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   await page.getByRole('button', { name: 'Close player', exact: true }).click();
   assert.ok(requests('account').some(request => request.method === 'POST' && request.path.endsWith('/unrestrict/link')));
   assert.ok(requests('account').every(request => request.method === 'GET' || request.path.endsWith('/unrestrict/link')), 'No torrent may be created, selected or deleted');
-  const privateResponse = await fetch(`http://127.0.0.1:${api}/api/account/library/${privateTitle.id}`, { headers: { Authorization: `Bearer ${member.token}` } }); assert.equal(privateResponse.status, 404);
-  const memberLibrary = await call(api, '/api/account/library', null, member.token); assert.equal(memberLibrary.total, 0);
+  const privateResponse = await fetch(`http://127.0.0.1:${api}/api/account/library/${privateTitle.id}`, { headers: { Authorization: `Bearer ${member.token}` } }); assert.equal(privateResponse.status, 403);
+  const memberLibrary = await fetch(`http://127.0.0.1:${api}/api/account/library`, { headers: { Authorization: `Bearer ${member.token}` } }); assert.equal(memberLibrary.status, 403, 'Only the administrator imports');
   await call(api, '/api/account/library/scan', { provider: 'realdebrid', force: true }, admin.token);
   await poll(() => call(api, '/api/account/library/scans', null, admin.token), result => result.providers.some(provider => provider.provider === 'realdebrid' && provider.status === 'complete'), 'idempotent account rescan');
   assert.equal((await call(api, '/api/account/library', null, admin.token)).total, 2);

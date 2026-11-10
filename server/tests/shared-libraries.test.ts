@@ -76,9 +76,9 @@ it("shares only matching owned imports and sanitized metadata while the member's
   expect(JSON.stringify(response.body)).not.toMatch(/private-film-ref|private-show-ref|server-only-private-key|credentialFingerprint|providerRef|userId|_applied|bookkeeping/);
   expect((await request(app).get(`/api/shared-libraries/${shared.id}/items/${show.id}`).set(auth(member.token))).status).toBe(404);
   expect((await request(app).post(playUrl(shared.id, show.id)).set(auth(member.token)).send({})).status).toBe(404);
-  expect((await request(app).get("/api/account/library").set(auth(member.token))).body.total).toBe(0);
-  expect((await request(app).get(`/api/account/library/${film.id}`).set(auth(member.token))).status).toBe(404);
-  expect((await request(app).post(`/api/account/library/${film.id}/metadata/search`).set(auth(member.token)).send({ q: "Film" })).status).toBe(404);
+  expect((await request(app).get("/api/account/library").set(auth(member.token))).status).toBe(403); // personal imports are administrator-only (v0.18.0)
+  expect((await request(app).get(`/api/account/library/${film.id}`).set(auth(member.token))).status).toBe(403);
+  expect((await request(app).post(`/api/account/library/${film.id}/metadata/search`).set(auth(member.token)).send({ q: "Film" })).status).toBe(403);
   expect(play).not.toHaveBeenCalled();
 });
 it("includes future imports, filters searches and binds pagination to member/library/search", async () => {

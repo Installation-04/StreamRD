@@ -17,7 +17,6 @@ the navbar for admin accounts). Non-admins are redirected away and every
 |---|---|
 | **Overview** | User/title counts, total & last-hour plays, 24h playback failures, DB status, per-provider play counts, recent activity feed |
 | **Users** | Filterable table; promote/demote roles, deactivate/reactivate accounts. You cannot demote or deactivate yourself. Deactivation locks the account out on their next request. |
-| **Catalog** | Full CRUD for titles: metadata (name, type, year, genres, artwork URLs) and **debrid sources** — hoster links or magnet URIs with optional quality/label. Sources are only visible to admins; users just see a source count. |
 | **Server** | Global provider order & per-provider global enable, provider timeout, max playback attempts, access toggles (public browse, login-required playback), config **export/import** |
 | **Providers** | Enable/disable each service globally and run a connectivity test. Tests use *your own* API keys from Account → Debrid services, so configure those first. |
 | **Logs** | Structured events with search, filters (type, level, provider, date range), paging, copy and download (see [Logs](#logs)) |
@@ -30,19 +29,14 @@ the navbar for admin accounts). Non-admins are redirected away and every
    Account → Debrid services; hit **Test connection** for each.
 2. Admin → Providers → test connectivity to confirm the server can reach the
    debrid APIs.
-3. Admin → Catalog → add titles with at least one source each.
+3. Open **Imports** and import what is finished in your debrid account (only the administrator imports).
 4. Choose invitation-only registration in Admin → Users, create invitation links,
    then create libraries in Admin → Libraries and make them visible to everyone or to
    chosen people. Viewers do not need their own debrid keys.
 
-### Curating content
+### Content
 
-Each title holds an ordered list of sources. Playback tries sources in order
-and, within each source, providers in the user's order — so put the most
-reliable source first and offer quality alternatives after it. Magnet sources
-resolve instantly only when the provider has the torrent cached; otherwise
-playback returns "not ready yet" and the user can retry once the provider
-finishes downloading.
+Members do not import. They ask for what is missing from **Requests**, and the administrator imports finished items and puts them in libraries.
 
 ### Handling playback complaints
 

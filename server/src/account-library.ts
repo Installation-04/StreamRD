@@ -22,7 +22,7 @@ function strings(value: unknown): string[] { return Array.isArray(value) ? value
 /** Local state only; called again inside transactions before committing provider results. */
 async function context(userId: string, provider: ProviderId, client: Client = db) {
   const [cfg, settings] = await Promise.all([
-    client.debridConfig.findUnique({ where: { userId }, include: { user: { select: { active: true } } } }),
+    client.debridConfig.findUnique({ where: { userId }, include: { user: { select: { active: true, role: true } } } }),
     client.setting.findMany({ where: { key: { in: ["server", "providers"] } } }),
   ]);
   const server = { ...DEFAULT_SERVER_SETTINGS, ...jsonObject(settings.find(row => row.key === "server")?.value) };
@@ -36,7 +36,7 @@ async function context(userId: string, provider: ProviderId, client: Client = db
   const fingerprint = createHash("sha256").update(JSON.stringify([userId, provider, apiKey, baseUrl ?? ""])).digest("hex");
   const timeout = Number(server.providerTimeoutMs);
   const creds: ProviderCredentials = { apiKey, baseUrl, timeoutMs: Number.isFinite(timeout) ? Math.max(1000, Math.min(timeout, 15000)) : 15000, deadline: Date.now() + 20000 };
-  return { cfg, configured: Boolean(apiKey), enabled, active: cfg?.user.active === true, fingerprint, creds };
+  return { cfg, configured: Boolean(apiKey), enabled, active: cfg?.user.active === true && cfg.user.role === "admin", fingerprint, creds };
 }
 export const accountProviderContext = context;
 function current(scan: AccountScan, ctx: Awaited<ReturnType<typeof context>>) {

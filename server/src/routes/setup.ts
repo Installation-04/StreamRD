@@ -52,30 +52,15 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
         : "Add your own debrid API key. Setup checks configuration only; test the connection on the Debrid page.",
     href: sharedViewer ? "/shared-libraries" : "/account/debrid", actionLabel: sharedViewer ? "Open shared libraries" : providerReady ? "Review or test connection" : "Configure debrid",
   }];
-  const [titleCount, sourcedTitle, profileCount, privateReadyCount] = await Promise.all([
-    db.title.count(), db.$queryRaw<{ available: number }[]>`SELECT EXISTS(
-      SELECT 1 FROM Title, json_each(CASE WHEN json_valid(sources) THEN sources ELSE '[]' END) item
-      WHERE item.type = 'object'
-      AND json_extract(CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END, '$.kind') IN ('link', 'magnet')
-      AND length(trim(COALESCE(json_extract(CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END, '$.url'), ''))) > 0
-    ) AS available`,
-    db.profile.count({ where: { userId } }), countReadyAccountMedia(userId),
-  ]);
-  const curatedReady = titleCount > 0 && Boolean(sourcedTitle[0]?.available);
-  const contentReady = curatedReady || privateReadyCount > 0;
+  const privateReadyCount = await countReadyAccountMedia(userId);
+  const contentReady = privateReadyCount > 0;
   checks.push({
-    id: "catalog", title: !curatedReady && privateReadyCount ? "Your private library is ready" : "A catalog to explore", required: true, status: contentReady ? "complete" : "action",
-    description: curatedReady ? "The catalog contains titles with configured sources. Source reachability and playback still depend on your provider."
-      : privateReadyCount ? "Your connected account has finished items in your private library. Playback availability is checked when you choose Play."
-      : admin ? "Add a title and at least one link or magnet source to give your community something to watch."
-      : "Your administrator needs to add catalog titles with playable sources before you can start watching.",
-    href: curatedReady ? "/" : privateReadyCount ? "/library" : admin ? "/admin/catalog" : null,
-    actionLabel: privateReadyCount && !curatedReady ? "Open your private library" : contentReady ? "Explore the library" : admin ? "Add catalog titles" : "Ask your administrator",
-  }, {
-    id: "profiles", title: "Make it your own", required: false, status: profileCount ? "complete" : "optional",
-    description: profileCount ? "Your viewing profiles are ready. Select one before watching to keep progress separate."
-      : "Optional: create viewing profiles for separate watch progress. Your account works on its own, too.",
-    href: "/account/profiles", actionLabel: "Manage profiles",
+    id: "catalog", title: contentReady ? "Your library has content" : "Something to watch", required: true, status: contentReady ? "complete" : "action",
+    description: contentReady ? "Your connected account has finished items. Put them in a library to share them; playback availability is checked when you choose Play."
+      : admin ? "Import finished items from your debrid account (Imports), then put them in a library for your people."
+      : "Your administrator needs to share a library with you before you can start watching.",
+    href: contentReady ? "/library" : admin ? "/library" : null,
+    actionLabel: contentReady ? "Open Imports" : admin ? "Import from your account" : "Ask your administrator",
   });
   if (admin) checks.push({
     id: "library", title: "Plex / Jellyfin library", required: false,
@@ -103,7 +88,6 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
     product: "streamrd", role: admin ? "admin" : "user", configurationReady: completed === required.length,
     accountLibrary, sharedLibraries: shared,
     connectionVerified: false, progress: { completed, total: required.length }, providers, checks,
-    catalog: { available: titleCount > 0, hasSources: Boolean(sourcedTitle[0]?.available) }, profiles: { count: profileCount },
     ...(admin ? { library: { configured: Boolean(config.mediaSourceRoot && config.mediaLibraryRoot), verification: "not-tested" } } : {}),
   });
 }));

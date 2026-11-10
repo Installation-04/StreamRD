@@ -15,7 +15,7 @@ flowchart LR
   U --> C
 ```
 
-StreamRD combines a curated catalog with provider fallback, persistent source
+StreamRD combines administrator-managed libraries with provider fallback, persistent source
 references, scoped file selection, and web profile progress. Its resolver limits
 attempts across the full operation and shares one upstream time budget, including
 HTTP response bodies. Source references are user-scoped, leased, and reusable

@@ -12,7 +12,7 @@ video folders. Phosphor also supports Torbox torrents. Scans follow bounded page
 and retain progress across restarts. They read existing account content without
 creating/deleting torrents, selecting provider files or copying videos.
 
-Your imports are separate from the shared curated catalog. Open a title and press
+Only the administrator imports from a debrid account; the imports are separate from what members see until they are put in a library. Open a title and press
 **Play from my account** to resolve a temporary link. Multi-video torrents offer a
 file picker; pending transfers report readiness. Stream URLs are not persisted.
 Browser compatibility depends on the media codecs/container; there is no transcoder.

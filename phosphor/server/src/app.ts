@@ -11,7 +11,7 @@ import { requireUnrestricted } from "./restrictions";
 import { errorHandler, requestId, securityHeaders } from "./http";
 import cors from "cors";
 import express, { Express } from "express";
-import { attachSession, csrfGuard } from "./auth/middleware";
+import { attachSession, csrfGuard, requireAdmin, requireAuth } from "./auth/middleware";
 import { config } from "./config";
 import { accountRouter } from "./routes/account";
 import { adminRouter } from "./routes/admin";
@@ -47,6 +47,8 @@ export function createApp(): Express {
   app.use("/api/admin/requests", adminRequestsRouter);
   app.use("/api/admin/request-settings", requestSettingsRouter);
   app.use("/api/auth", authRouter);
+  // Only the administrator imports from a debrid account (v0.18.0); members request content instead. Earlier personal imports stay stored, hidden.
+  app.use("/api/account/library", requireAuth, requireAdmin);
   app.use("/api/account/library/:id/metadata", accountMetadataRouter);
   app.use("/api/account/setup", setupRouter);
   app.use("/api/account/library", accountLibraryRouter);

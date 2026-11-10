@@ -9,7 +9,7 @@ import { ProviderError } from "../src/providers/types";
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
 const scan = vi.mocked(scanAccountPage), play = vi.mocked(playAccountItem);
 let serial = 0;
-async function owner(role: "user" | "admin" = "user") {
+async function owner(role: "user" | "admin" = "admin") { // only the administrator imports (v0.18.0)
   const user = await db.user.create({ data: { email: `account-library-${serial++}@example.invalid`, displayName: "Library owner", hashedPassword: "fixture-no-password-auth", role } });
   return { ...user, token: signSession({ sub: user.id, email: user.email, role, version: user.sessionVersion }) };
 }
@@ -194,7 +194,7 @@ it("counts only own finished imports with a current enabled credential binding t
   const user = await owner(), other = await owner(); const imported = await importOne(user.id);
   const check = async (token: string) => {
     const response = await request(app).get("/api/account/setup").set(auth(token)); expect(response.status).toBe(200);
-    if (response.body.product === "streamrd") expect(response.body.catalog.available).toBe(false); else expect(response.body.indexers.configured).toBe(false);
+    if (response.body.product !== "streamrd") expect(response.body.indexers.configured).toBe(false);
     return response.body.checks.find((row: { id: string }) => row.id === "catalog" || row.id === "indexers");
   };
   expect(await check(user.token)).toMatchObject({ status: "complete", href: "/library" });

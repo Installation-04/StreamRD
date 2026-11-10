@@ -30,22 +30,22 @@ async function seed(userId: string, names: string[]) {
 }
 it("previews and then removes only the caller's non-movie entries, leaving the provider and other users alone", async () => {
   const { admin, user } = await adminAndUser();
-  const mine = await seed(user.id, ["Parker", "XBOX Master Game Collection [CCI", "Adobe Photoshop 2024", "3424e951679a42e7ad891930319ce1df[EZTV x to", "Safe"]);
-  const theirs = await seed(admin.id, ["XBOX Master Game Collection [CCI"]);
-  await db.metadataRecord.create({ data: { targetType: "account", targetId: mine[1].id, ownerId: user.id, name: mine[1].name, mediaType: "movie", status: "review", requestedBy: "automatic" } });
+  const mine = await seed(admin.id, ["Parker", "XBOX Master Game Collection [CCI", "Adobe Photoshop 2024", "3424e951679a42e7ad891930319ce1df[EZTV x to", "Safe"]);
+  const theirs = await seed(user.id, ["XBOX Master Game Collection [CCI"]);
+  await db.metadataRecord.create({ data: { targetType: "account", targetId: mine[1].id, ownerId: admin.id, name: mine[1].name, mediaType: "movie", status: "review", requestedBy: "automatic" } });
   expect((await request(app).post("/api/account/library/cleanup").send({})).status).toBe(401);
 
-  const preview = await request(app).post("/api/account/library/cleanup").set(auth(user.token)).send({});
+  const preview = await request(app).post("/api/account/library/cleanup").set(auth(admin.token)).send({});
   expect(preview.status).toBe(200); expect(preview.headers["cache-control"]).toContain("no-store");
   expect(preview.body).toMatchObject({ matched: 3, removed: 0, applied: false, counts: { game: 1, software: 1, unreadable: 1 } });
   expect(preview.body.samples.map((row: { name: string }) => row.name)).toContain("XBOX Master Game Collection [CCI");
   expect(await db.accountMedia.count()).toBe(6); // a preview never deletes
 
-  expect((await request(app).post("/api/account/library/cleanup").set(auth(user.token)).send({ apply: "yes" })).status).toBe(400);
-  const applied = await request(app).post("/api/account/library/cleanup").set(auth(user.token)).send({ apply: true });
+  expect((await request(app).post("/api/account/library/cleanup").set(auth(admin.token)).send({ apply: "yes" })).status).toBe(400);
+  const applied = await request(app).post("/api/account/library/cleanup").set(auth(admin.token)).send({ apply: true });
   expect(applied.body).toMatchObject({ matched: 3, removed: 3, applied: true });
-  expect((await db.accountMedia.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } })).map(row => row.name)).toEqual(["Parker", "Safe"]);
+  expect((await db.accountMedia.findMany({ where: { userId: admin.id }, orderBy: { name: "asc" } })).map(row => row.name)).toEqual(["Parker", "Safe"]);
   expect(await db.accountMedia.findUnique({ where: { id: theirs[0].id } })).not.toBeNull(); // another user's identical title is untouched
   expect(await db.metadataRecord.count({ where: { targetId: mine[1].id } })).toBe(0);
-  expect((await request(app).post("/api/account/library/cleanup").set(auth(user.token)).send({ apply: true })).body).toMatchObject({ matched: 0, removed: 0 });
+  expect((await request(app).post("/api/account/library/cleanup").set(auth(admin.token)).send({ apply: true })).body).toMatchObject({ matched: 0, removed: 0 });
 });

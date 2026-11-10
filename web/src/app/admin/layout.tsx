@@ -15,7 +15,6 @@ const NAV = [
   { href: "/admin/library", label: "Plex / Jellyfin" },
   { href: "/admin", label: t("admin.overview") },
   { href: "/admin/users", label: t("admin.users") },
-  { href: "/admin/catalog", label: t("admin.catalog") },
   { href: "/admin/server", label: t("admin.server") },
   { href: "/admin/providers", label: t("admin.providers") },
   { href: "/admin/logs", label: t("admin.logs") },

@@ -124,14 +124,6 @@ export default function AdminServerPage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 16, marginBottom: 14 }}>Access</h2>
-        <label style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 14 }}>
-          <input
-            type="checkbox"
-            checked={settings.allowUnauthenticatedBrowse}
-            onChange={(e) => setSettings({ ...settings, allowUnauthenticatedBrowse: e.target.checked })}
-          />
-          Allow browsing the catalog without an account
-        </label>
         <label style={{ display: "flex", gap: 8, fontSize: 14 }}>
           <input
             type="checkbox"

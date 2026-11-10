@@ -87,9 +87,10 @@ it("lets an administrator rate a title by hand, which wins over metadata and can
 });
 it("closes discovery, requests and personal libraries to limited accounts only", async () => {
   const kid = await user("user", 7), grown = await user();
-  for (const path of ["/api/discovery/search?q=Sintel&type=movie", "/api/requests", "/api/account/library", "/api/debrid/status"]) {
+  for (const path of ["/api/discovery/search?q=Sintel&type=movie", "/api/requests", "/api/debrid/status"]) {
     expect((await request(app).get(path).set(auth(kid.token))).status, path).toBe(403);
     expect((await request(app).get(path).set(auth(grown.token))).status, path).not.toBe(403);
   }
+  expect((await request(app).get("/api/account/library").set(auth(kid.token))).status).toBe(403); // personal imports are administrator-only (v0.18.0)
   expect((await request(app).get("/api/shared-libraries").set(auth(kid.token))).status).toBe(200);
 });
