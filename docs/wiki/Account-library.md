@@ -15,6 +15,9 @@ Your imports are separate from the shared curated catalog. Open a title and pres
 file picker; pending transfers report readiness. Stream URLs are not persisted.
 Browser compatibility depends on the media codecs/container; there is no transcoder.
 
+StreamRD's **Discover** page also shows a **From your library** row (titles with artwork first) with a
+link to all of them. The match panel at the top of My library tracks artwork matching and offers **Retry matching**.
+
 With [metadata matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching)
 configured, imports can gain artwork, plot, cast, ratings and IMDb references.
 Owners can preview and correct their own matches. Credential changes invalidate

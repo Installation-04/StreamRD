@@ -20,6 +20,15 @@ upgrade. [Versioned upgrade guide](https://github.com/Installation-04/StreamRD/b
 Admin → System shows actual readiness without applying database changes.
 `APPLY_SCHEMA_ON_START=false` performs inspection only and refuses incompatible schemas.
 
+## Updates, backups and restore from the admin panel
+
+**Admin → System** can check the latest release, create/download/verify/delete integrity-checked backups
+and restore one. Restore needs a typed confirmation, takes a safety backup first and is applied at the next start
+(before anything opens the database); the Compose files let the page restart the service. **Update** appears
+only when you set `UPDATE_WEBHOOK_URL` to your own host-side updater: the server takes a verified backup and asks that hook to roll
+out the new version; it never replaces itself. Keep downloaded backups private and off the host. See the
+[admin guide](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/admin-guide.md#updates-backups-and-restore-system-page).
+
 ## Back up
 
 ```bash

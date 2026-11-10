@@ -5,7 +5,24 @@ debrid account. Phosphor additionally needs a Jackett/Prowlarr Torznab endpoint.
 The production containers use Node 22; direct development uses the committed npm
 lockfiles in each server/web directory.
 
-## Install
+## Quick install
+
+With Docker and the Compose plugin, one command installs the all-in-one container
+(StreamRD on port 8080, Phosphor on 8081, plus qBittorrent) into `~/streamrd`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
+# pin a release and choose ports / the first administrator:
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash -s -- --version v0.8.1 --port 9090 --admin-email you@example.com
+```
+
+It uses the published image for a release (or builds from source), generates its own
+secrets inside the data volume, never overwrites your settings or data, and updates in place when
+re-run. `--uninstall` removes the container and keeps the data. It does not install Docker, set up
+HTTPS or open ports; read [get.sh](https://github.com/Installation-04/StreamRD/blob/main/get.sh)
+before piping any script to a shell. The sections below describe the older split-service install.
+
+## Install (split services)
 
 ```bash
 git clone https://github.com/Installation-04/StreamRD.git

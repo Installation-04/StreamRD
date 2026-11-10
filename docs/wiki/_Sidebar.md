@@ -18,4 +18,5 @@
 - [My library and account scans](https://github.com/Installation-04/StreamRD/wiki/Account-library)
 - [Metadata and matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching)
 
+- [Discover and request media](https://github.com/Installation-04/StreamRD/wiki/Media-requests)
 - [Users and server sharing](https://github.com/Installation-04/StreamRD/wiki/Users-and-sharing)
