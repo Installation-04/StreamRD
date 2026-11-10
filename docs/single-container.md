@@ -5,10 +5,10 @@ runs them in one container. Both web interfaces, their APIs, background workers,
 SQLite databases and the local download client are included. No Docker socket or
 Docker-in-Docker service is needed inside the application.
 
-## Install (the Radarr/Sonarr way)
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
 ```
 
 This creates `~/streamrd` with one `docker-compose.yml`, a small `.env`, and two folders:
@@ -17,6 +17,10 @@ This creates `~/streamrd` with one `docker-compose.yml`, a small `.env`, and two
 |---|---|---|
 | `config/` | `/config` | Everything that is *settings*: both databases and their backups/snapshots, signing keys and generated passwords, the download client's settings |
 | `data/` | `/data` | Downloads and media: `data/downloads` by default, and anything you mount for Plex/Jellyfin exports |
+
+Run from a terminal on a first install, the script asks how you want it: **Default**, or **Advanced** (folder, every port, Phosphor
+and qBittorrent on or off, Jellyfin and/or Plex, Zilean, Zurg, the reserved administrator email) and shows a summary to confirm.
+Options you pass skip their question; `--yes`, or running without a terminal, skips all of them.
 
 Open StreamRD at `http://YOUR_SERVER:8080` and Phosphor at `http://YOUR_SERVER:8081` (use
 `--port` and `--phosphor-port` to change them, `--no-phosphor` / `--no-qbittorrent` to leave a part out).
@@ -41,7 +45,7 @@ services:
       - ./data:/data
 ```
 
-The container runs as UID/GID 1000, so `config` and `data` must be writable by it (`get.sh` does this for you).
+The container runs as UID/GID 1000, so `config` and `data` must be writable by it (`install.sh` does this for you).
 Only `CONFIG_DIR=/config` is new compared with the first all-in-one release: without it everything lives under
 `/data`, exactly as before.
 
@@ -53,11 +57,11 @@ docker compose pull && docker compose up -d
 ```
 
 That is all: the new image replaces the old container, and `config/` and `data/` are not modified. On start the
-server snapshots each database (verified) before applying any migration. You can also just re-run `get.sh`, which
+server snapshots each database (verified) before applying any migration. You can also just re-run `install.sh`, which
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
 `docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
-Updates are never applied by the app itself, as with Radarr and Sonarr in Docker. **Admin → System** tells you when
+Updates are never applied by the app itself. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
 [Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label
 (`com.centurylinklabs.watchtower.enable`). Watchtower can also serve an HTTP update endpoint; point
@@ -66,8 +70,12 @@ a newer release exists and shows the command. For automatic updates run
 
 ## Optional add-ons
 
-`get.sh --zilean` runs [Zilean](zilean-zurg.md#zilean-an-indexer-of-debrid-media-managers-cached-torrents) as a Torznab indexer for Phosphor, and
-`get.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows. Both are optional Compose overlays kept in your install folder; see
+`install.sh --media-server jellyfin|plex|both` runs [Jellyfin and/or Plex](plex-jellyfin.md#built-in-jellyfin-and-plex) in the same Compose project, already mapped to the
+libraries StreamRD and Phosphor export and to your downloads, with their own settings kept under `config/jellyfin` and `config/plex`. Choose their ports with
+`--jellyfin-port` and `--plex-port` (defaults 8096 and 32400).
+
+`install.sh --zilean` runs [Zilean](zilean-zurg.md#zilean-an-indexer-of-debrid-media-managers-cached-torrents) as a Torznab indexer for Phosphor, and
+`install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows. Both are optional Compose overlays kept in your install folder; see
 [Movies and shows only, plus Zilean and Zurg](zilean-zurg.md) for what they do and what is and is not verified. Account scans also skip games,
 software and other non-movie items.
 
@@ -75,7 +83,7 @@ software and other non-movie items.
 
 Each version tag publishes the image to this repository's GitHub Container Registry (`publish-image.yml`),
 for `linux/amd64` only. The package is private until you make it public in the repository's package settings;
-until then `get.sh` falls back to building from source. Pin a version tag in production if you do not want
+until then `install.sh` falls back to building from source. Pin a version tag in production if you do not want
 unattended major changes. The image is built from the tagged source by GitHub Actions and is not signed.
 
 ## Moving from a split install (`infra/`, separate backend and web containers)
@@ -88,7 +96,7 @@ unattended major changes. The image is built from the tagged source by GitHub Ac
 2. Note your old `JWT_SECRET` from its `.env`.
 3. Install with the import (the same web port as before keeps your bookmarks working):
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash -s -- \
+   curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- \
      --port 3000 --no-phosphor --no-qbittorrent --import-db ~/streamrd-import.db --jwt-secret 'YOUR_OLD_JWT_SECRET'
    ```
    Stop the old stack first (`docker compose down`, without `-v`) so the port is free. Your accounts, provider

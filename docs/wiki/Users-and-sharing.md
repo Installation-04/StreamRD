@@ -1,6 +1,6 @@
 # Users and libraries
 
-StreamRD works like Plex: the server has **libraries** (for example *Movies* and *TV Shows*), the administrator
+The server has **libraries** (for example *Movies* and *TV Shows*), the administrator
 decides who can see each one, and everyone signs in with a local account on this server. Nobody needs their
 own debrid key; playback uses the administrator's connected account.
 

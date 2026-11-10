@@ -12,7 +12,7 @@ const embed = (id: string, background: boolean) => `https://www.youtube-nocookie
 const read = () => { try { return window.localStorage.getItem(STORAGE_KEY) === "1"; } catch { return false; } };
 
 /**
- * The home banner: a rotating carousel of featured titles, Apple TV style. Trailers are optional and per viewer: nothing is loaded from
+ * The home banner: a rotating carousel of featured titles. Trailers are optional and per viewer: nothing is loaded from
  * YouTube until the viewer turns on "Autoplay trailers" or presses "Watch trailer", and reduced-motion settings stop all movement.
  */
 export default function HomeCarousel({ slides, trailersEnabled }: { slides: Slide[]; trailersEnabled: boolean }) {

@@ -2,7 +2,7 @@
 
 Phosphor doesn't crawl torrent sites itself — it searches whatever
 **Torznab-compatible** endpoints you point it at. Torznab is the same
-protocol Sonarr/Radarr use: a simple `?t=search&q=<query>&apikey=<key>` GET
+a simple `?t=search&q=<query>&apikey=<key>` GET
 request that returns an RSS feed with per-result size/seeders/peers
 attributes. Both of the tools below speak it identically, so Phosphor
 doesn't need to know or care which one produced a given URL.

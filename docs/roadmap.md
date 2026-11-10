@@ -7,7 +7,7 @@ independent of it. Sizes are rough (S = days, M = a week or two, L = several wee
 ## Status
 
 Shipped so far, as the visible half of this plan: **v0.11.0** one Library page and libraries visible to everyone or chosen people (Phase A,
-plus the Plex-style *Share* idea as an *Everyone* switch); **v0.12.0 and v0.13.0** a Plex-style home page with a featured carousel;
+plus an *Everyone* switch); **v0.12.0 and v0.13.0** a home page with a featured carousel;
 **v0.14.0** viewing limits for a kids account (part of Phase C); **v0.15.0** invitations that carry library access (part of Phase C);
 **v0.16.0** a full-page player. Still ahead are the parts that change the data model underneath (Phases B, D and E below): a unified
 library model with one row per movie or episode, merging duplicates, and retiring the old catalogue, personal-library and request
@@ -31,7 +31,7 @@ which users can see which library, and everyone gets their own watch state.**
 
 - A single **Library** page (movies and shows, search, filters, continue watching). It shows everything the signed-in user
   is allowed to see; nobody has to know whether an item came from the catalog, a debrid account, a request or a mounted folder.
-- The administrator has one **Library access** screen, like Plex's *Share* dialog: pick a user (or "everyone"), tick the libraries
+- The administrator has one **Library access** screen: pick a user (or "everyone"), tick the libraries
   they can see, optionally limit by type or label. Changes apply on the next request.
 - Items still have a source (a debrid account, a link, a mounted file); the source decides *how it plays*, never *where it appears*.
 - A user who connects their own debrid account can still keep **personal** items, but they appear in the same Library under a
@@ -40,7 +40,7 @@ which users can see which library, and everyone gets their own watch state.**
 ### Decisions I need from you before building the data model
 
 1. **Can regular users still connect their own debrid account**, or is every item on the server's library supplied by the administrator?
-   (Plex-style means the administrator supplies; keeping personal accounts is an optional extra.)
+   (The administrator supplies the library; keeping personal accounts is an optional extra.)
 2. **How fine-grained should access be?** Whole library only, library plus movie/show type, or per title? (Plex: per library with labels.)
 3. **Should requests go straight into the library** when approved, with no separate "Requests" destination?
 4. **Phosphor:** does it join the same model (recommended, now that most code is shared) or stay search-and-queue only?
@@ -50,7 +50,7 @@ which users can see which library, and everyone gets their own watch state.**
 ### Phase A: one Library in the interface (M, no data migration)
 Ships first because it removes the confusion without touching the database.
 - Nav becomes **Discover · Library · Requests · Account** (plus Admin). *Shared libraries* and *My library* become filters on one Library page.
-- Admin gets a **Library access** page that wraps today's shared-library grants (who sees which library) in the Plex-style *Share* dialog.
+- Admin gets a **Library access** page that wraps today's shared-library grants (who sees which library) in one dialog.
 - Existing URLs keep working (redirects) for one release.
 - Risk: low. Everything underneath is unchanged. Release: v0.11.0.
 

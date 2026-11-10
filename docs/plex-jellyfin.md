@@ -20,6 +20,29 @@ a relative file path manually and add it to review. This deliberate mapping avoi
 provider pack correspond to a catalog title or download. The browser lists existing mounted files; provider-to-mount matching and scanner
 API integration remain manual. Filename guesses are not metadata verification.
 
+## Built-in Jellyfin and Plex
+
+With the one-command install you can have the media server set up for you. Choose it in the installer's Advanced menu, or:
+
+```bash
+bash install.sh --media-server jellyfin     # or plex, or both; --media-server none removes them (their settings are kept)
+bash install.sh --media-server plex --plex-port 32400 --plex-claim TOKEN   # claim token optional: https://plex.tv/claim
+```
+
+It adds `docker-compose.jellyfin.yml` and/or `docker-compose.plex.yml` to your install folder and lists them in `COMPOSE_FILE`, so
+`docker compose pull && docker compose up -d` keeps them updated. Everything is already mapped, read-only:
+
+| Inside Jellyfin / Plex | Is | Why |
+|---|---|---|
+| `/library/streamrd`, `/library/phosphor` | the folders StreamRD and Phosphor export (`config/streamrd/library`, `config/phosphor/library`) | the Movies and TV Shows you add as libraries |
+| `/data` | your downloads (`data/`) | the exported links point at `/data/downloads/...`, so the same path must exist |
+| `/mnt/zurg` | your Real-Debrid mount, when Zurg is on | same reason |
+
+In the media server's own setup add **Movies** with folder `/library/streamrd/Movies` and **TV Shows** with `/library/streamrd/TV Shows` (and the
+same under `/library/phosphor` if you export from Phosphor), then scan. Jellyfin is at `http://YOUR_SERVER:8096`, Plex at `http://YOUR_SERVER:32400/web`.
+Their settings and caches live in `config/jellyfin` and `config/plex`, so backing up `config/` keeps them. Plex discovery on your LAN (DLNA, GDM)
+is limited by Docker's bridge network; set `network_mode: host` on the `plex` service in `docker-compose.plex.yml` if you need it (then remove its `ports`).
+
 ## Optional Docker mounts
 
 Use a different export directory for each product. The source mount can be shared.

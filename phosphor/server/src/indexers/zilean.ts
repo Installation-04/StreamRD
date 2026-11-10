@@ -3,7 +3,7 @@ import { logEvent } from "../logger";
 import { clearIndexerSearchCache } from "./searchCache";
 
 /**
- * When the operator runs Zilean next to this server (get.sh --zilean sets ZILEAN_URL), register it as a Torznab
+ * When the operator runs Zilean next to this server (install.sh --zilean sets ZILEAN_URL), register it as a Torznab
  * indexer once. It never overwrites an existing entry, so an administrator can rename, disable or delete it.
  */
 export async function ensureZileanIndexer(env: NodeJS.ProcessEnv = process.env): Promise<"created" | "exists" | "skipped"> {

@@ -197,7 +197,7 @@ optional richer metadata and reviewed provider-to-mount mapping. See
 
 ## Server-managed access foundation
 
-The `plex-style-access` work adds expiring invitations, configurable registration,
+The access work adds expiring invitations, configurable registration,
 admin session revocation and explicit named sharing of an administrator's imported
 account library. Viewer playback uses server credentials, with grant/session/source
 checks before and after provider work. Original private imports remain private.

@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Installer script (files, ports, media server add-ons)
+        run: bash infra/test-install-script.sh
       - name: Build all-in-one image
         run: docker build -t streamrd-all-in-one:local .
       - uses: actions/setup-node@v6
