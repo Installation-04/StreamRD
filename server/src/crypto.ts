@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { config } from "./config";
+import { PRODUCT } from "./product";
 
 /**
  * Encryption of stored credentials (debrid keys and similar) with AES-256-GCM.
@@ -9,14 +10,13 @@ import { config } from "./config";
  * otherwise it is derived from JWT_SECRET, so a split install gets protection without new settings.
  */
 const PREFIX = "enc:v1:";
-const INFO = "streamrd-data-v1";
 let cached: Buffer | null = null;
 function key(): Buffer {
   if (cached) return cached;
   const supplied = process.env.DATA_ENCRYPTION_KEY?.trim();
   cached = supplied
     ? crypto.createHash("sha256").update(supplied).digest()
-    : Buffer.from(crypto.hkdfSync("sha256", config.jwtSecret, "", INFO, 32));
+    : Buffer.from(crypto.hkdfSync("sha256", config.jwtSecret, "", PRODUCT.dataKeyInfo, 32));
   return cached;
 }
 export function isEncrypted(value: string): boolean { return value.startsWith(PREFIX); }

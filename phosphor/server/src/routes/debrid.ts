@@ -20,7 +20,8 @@ debridRouter.get("/account", asyncHandler(async (req, res) => {
     return;
   }
   const q = req.query.provider as string | undefined;
-  const provider = q && PROVIDER_IDS.includes(q as ProviderId) ? (q as ProviderId) : undefined;
+  const provider =
+    q && PROVIDER_IDS.includes(q as ProviderId) ? (q as ProviderId) : undefined;
   try {
     const info = await debridManager.getUserInfo(cfg, provider);
     res.json({ account: info });

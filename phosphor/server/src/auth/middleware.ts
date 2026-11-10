@@ -61,7 +61,11 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
 }
 
 /** Rejects unauthenticated requests, and requests from deactivated accounts. */
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   if (!req.session) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -74,6 +78,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "Session is no longer active" });
     return;
   }
+  // Role changes take effect immediately, not at token refresh.
   req.session.email = user.email;
   req.session.role = user.role === "admin" ? "admin" : "user";
   next();

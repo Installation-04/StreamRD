@@ -54,3 +54,15 @@ checkpoint metadata. See [database-upgrades.md](docs/database-upgrades.md). Run 
 checkpoint generator with `--check` and the migration tests before changing models.
 `db push` is restricted to disposable development/test workflows, never a release
 upgrade shortcut.
+
+## Shared source between StreamRD and Phosphor
+
+About a hundred files (server code, database scripts, tests and web components) are identical in both products and are listed in
+`shared-manifest.json`. **Edit the StreamRD copy**, then run `node scripts/sync-shared.cjs` to copy it into Phosphor; CI runs
+`node scripts/sync-shared.cjs --check` and fails if a shared file has drifted. Anything that has to differ lives in
+`src/product.ts` (identity, cookie name, encrypted columns), which each product keeps for itself, so a shared file reads
+`PRODUCT.id` instead of a hard-coded name.
+
+- Share another identical file: `node scripts/sync-shared.cjs --add server/src/example.ts` (it refuses to overwrite a Phosphor file that differs).
+- Stop sharing a file that must diverge: `node scripts/sync-shared.cjs --remove server/src/example.ts`; the Phosphor copy then lives on as its own file.
+- See what could be shared: `node scripts/sync-shared.cjs --candidates`.

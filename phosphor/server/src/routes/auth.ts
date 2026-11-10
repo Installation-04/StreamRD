@@ -92,7 +92,12 @@ authRouter.post("/login", authRateLimit, asyncHandler(async (req, res) => {
     return;
   }
   await logEvent("info", "login", `Login ${user.email}`, { userId: user.id });
-  const token = signSession({ sub: user.id, email: user.email, role: user.role === "admin" ? "admin" : "user", version: user.sessionVersion });
+  const token = signSession({
+    sub: user.id,
+    email: user.email,
+    role: user.role === "admin" ? "admin" : "user",
+    version: user.sessionVersion,
+  });
   res.json({ ...issueSession(req, res, token), user: publicUser(user) });
 }));
 
