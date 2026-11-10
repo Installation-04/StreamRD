@@ -1,6 +1,6 @@
 "use client";
 
-import HomeLibraryRow from "@/components/HomeLibraryRow";
+import HomeSections from "@/components/HomeSections";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
@@ -188,7 +188,7 @@ export default function HomePage() {
         <div className="discovery-hero-art" aria-hidden="true">{featured.posterUrl ? <img src={featured.posterUrl} alt="" onError={event => { event.currentTarget.style.display = "none"; }} /> : <><span className="feature-orbit feature-orbit-one" /><span className="feature-orbit feature-orbit-two" /><span className="feature-monogram">{featured.name.trim().slice(0, 1)}</span><Icon name="play" size={32} /></>}</div>
         <span className="feature-corner-label">YOUR SCREEN. YOUR STORY.</span>
       </section>}
-      {user && view === "all" && <HomeLibraryRow onLoaded={setLibraryTotal} />}
+      {user && view === "all" && <HomeSections onLoaded={setLibraryTotal} />}
       {collectionIsEmpty && <section className="collection-empty"><span className="empty-icon"><Icon name="film" size={28} /></span><p className="eyebrow">THE FIRST SCENE IS YOURS</p><h2>Let’s build your collection.</h2><p>{user?.role === "admin" ? "Connect a debrid service, add the titles you love, and make this space your own." : "Your collection is waiting for its first titles. Connect a debrid service while your administrator gets things ready."}</p><div className="feature-actions"><Link href="/setup" className="btn">Get started<Icon name="arrow" size={18} /></Link>{user?.role === "admin" && <Link href="/admin/catalog" className="btn btn-secondary"><Icon name="plus" size={18} />Add a title</Link>}</div><div className="empty-steps"><span><b>01</b> Connect your service</span><span><b>02</b> Curate your collection</span><span><b>03</b> Settle in & watch</span></div></section>}
       {hasCollection && <>
         <div className="collection-toolbar"><div className="collection-filters" role="group" aria-label="Browse collection">{filters.map(filter => <button key={filter.id} type="button" className={view === filter.id ? "collection-filter active" : "collection-filter"} aria-pressed={view === filter.id} onClick={() => setView(filter.id)}><Icon name={filter.icon} size={16} />{filter.label}</button>)}</div><Link href="/setup" className="collection-help">Make it yours<Icon name="arrow" size={14} /></Link></div>

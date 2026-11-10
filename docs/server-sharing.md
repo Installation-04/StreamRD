@@ -21,6 +21,19 @@ shows the administrator's imported media of its type, including titles imported 
 `/api/admin/shared-libraries` (create and update) and the library list a viewer receives. Existing libraries keep their exact
 access: the new setting starts off.
 
+## The home page (StreamRD)
+
+The home page has Plex-style rows, from top to bottom: **Continue watching**, **Recently added**, **Popular on this server**,
+**Trending now**, **Popular movies** and **Popular TV shows**, followed by the older catalogue rows.
+
+- *Recently added* and *Popular on this server* come from the libraries the signed-in person can see (administrators also see
+  what they imported themselves). *Popular* ranks titles by how many viewers resumed or finished them in the last 30 days; only the
+  ranking is shown, never who watched.
+- *Trending* and *Popular* come from the public Cinemeta catalogues (no account or key). The server fetches them, caches them for six
+  hours and keeps the last good copy for a week if the service is down, so browsers never contact it and nothing about a viewer
+  is sent. Opening one of these titles leads to its page, where it can be requested.
+- Operators can turn the outside lists off with `HOME_EXTERNAL_LISTS=false`; the library rows keep working.
+
 ## Account administration
 
 The first account is an administrator unless `ADMIN_EMAIL` designates a specific
