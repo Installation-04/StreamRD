@@ -208,3 +208,18 @@ enforced maturity/label restrictions across every browse/play route, named shari
 for the legacy curated catalog, device inventories/concurrency controls and watch
 progress for shared imports. These require common authorization rather than merely
 hiding UI controls. No such restrictions are claimed by the current type filters.
+
+## Measured in v0.10: what is and is not worth optimizing
+
+A code audit suggested three performance items. They were measured before any change (Node 22, one core,
+SQLite in WAL mode, the production build of StreamRD with a freshly created database):
+
+| Suspect | Measurement | Decision |
+|---|---|---|
+| Background workers poll the database every 1.5–2 s even when idle | **0.43 % of one core** over 30 s idle (13 CPU ticks), 82 MB resident | Leave as is. Backing off would add up to several seconds of latency to every new scan, request or match for no measurable saving. |
+| The home view loads the whole catalog | With **20,000 titles**: the web app's compact `/api/catalog/browse` answers in 24 ms with 11 KB per page; the legacy `/api/catalog/rows` (kept for the mobile and TV apps) takes 58 ms but returns 3.4 MB. | The web app already pages. `/rows` is capped at the newest 2,000 titles since v0.9.1. Move the native clients to `/browse` before shrinking it further. |
+| A database lookup on every authenticated request | Typical API calls complete in 5–10 ms in total. | Leave as is. A cache would delay role changes, deactivation and sign-out, which are deliberately immediate. |
+
+Not done, and not recommended without a need: server-rendering the catalog pages (large change, no measured problem) and an
+`arm64` image (the publish workflow cannot be exercised before a real tag, so it should be added together with a test release).
+Re-measure before optimizing: a library of this size on a small host is dominated by provider and metadata API latency, not by this server.
