@@ -222,3 +222,20 @@ it("upgrades a populated managed v0.5 account library without granting or publis
  expect(await db.invitation.count()).toBe(0);expect(await db.sharedLibrary.count()).toBe(0);expect(await db.sharedLibraryGrant.count()).toBe(0);
  expect(result.state).toMatchObject({state:"current",applied:names.length});
 },60000);
+
+it("upgrades a populated v0.6 server without creating or starting media requests", async () => {
+ const releasedCount=names.indexOf("20261109000000_media_requests");expect(releasedCount).toBe(6);
+ fs.writeFileSync(file,"");
+ for(const name of names.slice(0,releasedCount)) {
+  command(["db","execute","--url",url,"--file",path.join(root,"prisma/migrations",name,"migration.sql")]);
+  command(["migrate","resolve","--applied",name]);
+ }
+ const db=client();await seed(db,true);
+ await db.accountMedia.create({data:{id:"existing-import",userId:"user",provider:"realdebrid",providerRef:"private-existing-ref",credentialFingerprint:"existing-binding",name:"Existing media",phase:"finished",progress:100}});
+ await db.sharedLibrary.create({data:{id:"existing-library",name:"Movie night",sourceUserId:"user"}});
+ const before=await snapshot(db);const result=await migrateDatabase({root,url});
+ expect(result.backup).toBeTruthy();await preserved(db,before);
+ expect(await db.mediaRequest.count()).toBe(0);expect(await db.requestFollower.count()).toBe(0);expect(await db.requestEvent.count()).toBe(0);
+ expect(await db.setting.count()).toBe(before.Setting.length);
+ expect(result.state).toMatchObject({state:"current",applied:names.length});
+},60000);

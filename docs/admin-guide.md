@@ -59,6 +59,38 @@ settings, and the full catalog with sources, and can be re-imported on a
 fresh install. User accounts and keys live in the database file; back that up
 separately (see [deployment.md](deployment.md#backups)).
 
+## Updates, backups and restore (System page)
+
+**Admin → System** has two sections below the upgrade status.
+
+**Updates.** *Check for updates* compares the installed version with the latest
+GitHub release (set `UPDATE_CHECK=false` to turn the lookup off, or
+`UPDATE_REPOSITORY=owner/name` to follow a fork). The server never replaces itself.
+**Update to vX.Y.Z** appears only when the operator configures `UPDATE_WEBHOOK_URL`
+(and optionally `UPDATE_WEBHOOK_TOKEN`, sent as a bearer token): the server takes a
+verified `pre-update-*` backup, then POSTs `{product, from, to}` to that URL and
+reports success only if it accepts. The hook is yours to provide, for example a
+small host-side script or an updater such as Watchtower; its address comes from the
+environment, never from the admin page. If the hook refuses, the backup is kept and
+nothing changes. After the update the new image starts, applies database upgrades
+(with another verified snapshot when needed) and the page shows the new version.
+
+**Backups & restore.** *Create backup* writes a consistent, integrity- and
+foreign-key-checked SQLite snapshot into `backups/` beside the database (at most 20
+manual backups). You can download, verify and delete backups. Backups contain
+accounts, provider credentials and settings: keep downloaded copies private and
+off the host.
+
+*Restore* needs you to type `RESTORE`. The server re-verifies the backup, takes a
+`pre-restore-*` safety backup of the current data, and **stages** the restore. The
+database file is swapped at the next start, before anything opens it, so a running
+server is never changed underneath. If the service is under a restart policy and
+`ADMIN_RESTART=true` (set in the provided Compose files), the page restarts it for
+you; otherwise restart it yourself. An older backup is migrated forward on startup
+with its own snapshot. You can cancel a staged restore before restarting.
+Sessions are checked against the restored data, so accounts created after the
+backup no longer exist and must sign up again. A restore never deletes backups.
+
 ## Server-managed user access
 
 Admin → Users controls registration, invitations, roles, account status and signing

@@ -38,6 +38,24 @@ access removal and administrative session revocation, then restore open signup a
 remove their shared-library fixture. Provider HTTP transport is intercepted only
 inside disposable QA volumes; these checks do not establish live-account playback.
 
+The media-request journeys add authenticated external metadata discovery, canonical
+request deduplication, follower privacy and administrator approval. They exercise
+real worker submissions against test-only Real-Debrid and qBittorrent protocol
+fixtures, observing measured 37% cloud / 42% local progress before completion.
+Cloud readiness requires an imported item in an accessible shared library; local
+completion remains awaiting library import and has no fabricated Play link. A show
+request verifies selected-release wording and stopping tracking without deleting
+upstream content. New provider mutations occur only after the old read-only account
+scan assertions and explicit administrator approval.
+
+The request fixture starts with two existing account items. Approved fixture
+magnets use a forty-character `1` info hash for cloud and `2` for local. The runner
+sets `/app/data/request-qa-override.json` in its disposable volume to finish
+transfers; this file and the protocol preload are never shipped in production
+images. The qBittorrent hostname is `qbit.fixture.invalid`, with synthetic
+credentials and no external network access. These are transport/UX checks, not
+proof of real provider accounts, torrent payload downloads or filesystem import.
+
 CI pins the browser/Docker jobs to Ubuntu 24.04, which supports the pinned
 Playwright 1.57.0 browser packages. Do not switch those jobs to a newer runner OS
 until its browser support has been verified.

@@ -61,6 +61,11 @@ another snapshot. A failed operation can leave an incomplete newly reserved back
 file; the name alone is not proof of verification. Keep failure evidence and test
 recovery before trusting any snapshot.
 
+From v0.8.0, **Admin → System** can also create, download, verify, restore and delete
+backups and request an update through an operator-configured hook; see the
+[admin guide](admin-guide.md#updates-backups-and-restore-system-page). A restore is
+applied at the next start, before the database is opened.
+
 ## Controlled startup
 
 `APPLY_SCHEMA_ON_START=true` remains the default. Startup validates production JWT

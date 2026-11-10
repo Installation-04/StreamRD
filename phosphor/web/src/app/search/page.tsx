@@ -68,6 +68,7 @@ export default function SearchPage() {
   }
   const options = { query: q, minSeeders, maxSizeGb, sort };
   return <main className="container workspace">
+      <nav aria-label="Search scope" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:22}}><span className="btn btn-secondary" aria-current="page">Search indexers</span><Link className="btn btn-secondary" href={`/discover${q.trim()?`?q=${encodeURIComponent(q.trim())}`:""}`}>Find movies & shows to request →</Link></nav>
     <header className="page-heading"><div><p className="eyebrow">DISCOVERY / INDEXER SEARCH</p><h1>Find your next signal<span className="accent">.</span></h1><p className="page-description">Search your indexers. Send it to debrid. Make it movie night.</p></div><Link href="/downloads" className="btn btn-quiet">Open queue <span aria-hidden="true">↗</span></Link></header>
     <section className="search-console" aria-label="Search your indexers">
       <form className="search-bar" onSubmit={e => { e.preventDefault(); void runSearch(options); }}>

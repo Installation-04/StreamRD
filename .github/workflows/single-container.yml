@@ -1,0 +1,30 @@
+name: Single container
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  bundle:
+    name: Build and exercise the complete container
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all-in-one image
+        run: docker build -t streamrd-all-in-one:local .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix qa
+      - name: Install Chromium
+        run: cd qa && npx playwright install --with-deps chromium
+      - name: Validate real bundled services and browser routing
+        env:
+          QA_SINGLE_BROWSER: "1"
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/single-container-qa
+        run: bash infra/smoke-single-container.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: single-container-browser-qa
+          path: ${{ runner.temp }}/single-container-qa
+          if-no-files-found: ignore

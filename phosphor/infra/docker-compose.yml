@@ -14,6 +14,11 @@ services:
       PORT: "61337"
       DATABASE_URL: "file:/app/data/phosphor.db"
       JWT_SECRET: ${JWT_SECRET:?Set a stable JWT_SECRET of at least 32 bytes}
+      # The restart policy above brings the service back, so the admin panel may restart it to apply a restore.
+      ADMIN_RESTART: "true"
+      # Optional one-click updates: a host-side updater endpoint (see docs/admin-guide.md).
+      UPDATE_WEBHOOK_URL: ${UPDATE_WEBHOOK_URL:-}
+      UPDATE_WEBHOOK_TOKEN: ${UPDATE_WEBHOOK_TOKEN:-}
       API_BASE_URL: ${API_BASE_URL:-http://localhost:61337}
       LAN_URL: ${LAN_URL:-}
       PUBLIC_URL: ${PUBLIC_URL:-}

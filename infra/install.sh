@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# StreamRD installer for Debian/Ubuntu.
+# Legacy split-service installer for Debian/Ubuntu.
+# For the recommended single container, run docker compose up -d --build at the repository root.
 #
 # Installs Docker Engine + the Compose plugin if not already present, picks
 # host ports that aren't already in use (so it won't collide with anything

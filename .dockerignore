@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/.next
+**/dist
+**/.env*
+**/*.db
+**/*.db-*
+**/*.log
+**/.DS_Store
+qa
+mobile
+android-tv
+apple-tv
+docs/screenshots

@@ -1,0 +1,33 @@
+services:
+  streamrd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: streamrd-all-in-one:local
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${STREAMRD_PORT:-8080}:8080"
+      - "${PHOSPHOR_PORT:-8081}:8081"
+      - "${TORRENT_PORT:-6881}:6881/tcp"
+      - "${TORRENT_PORT:-6881}:6881/udp"
+    environment:
+      ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-true}
+      ENABLE_QBITTORRENT: ${ENABLE_QBITTORRENT:-true}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      STREAMRD_ADMIN_EMAIL: ${STREAMRD_ADMIN_EMAIL:-}
+      PHOSPHOR_ADMIN_EMAIL: ${PHOSPHOR_ADMIN_EMAIL:-}
+      STREAMRD_JWT_SECRET: ${STREAMRD_JWT_SECRET:-}
+      PHOSPHOR_JWT_SECRET: ${PHOSPHOR_JWT_SECRET:-}
+      # The restart policy above brings the service back, so the admin panel may restart it to apply a restore.
+      ADMIN_RESTART: "true"
+      # Optional one-click updates: a host-side updater endpoint (see docs/admin-guide.md).
+      UPDATE_WEBHOOK_URL: ${UPDATE_WEBHOOK_URL:-}
+      UPDATE_WEBHOOK_TOKEN: ${UPDATE_WEBHOOK_TOKEN:-}
+      QBIT_USERNAME: ${QBIT_USERNAME:-admin}
+      QBIT_PASSWORD: ${QBIT_PASSWORD:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    volumes:
+      - streamrd-data:/data
+volumes:
+  streamrd-data:

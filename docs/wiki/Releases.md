@@ -37,7 +37,8 @@ require the operator's credentials; release checks use local protocol fixtures.
 
 Release downloads include GitHub source archives plus screenshots, wiki and
 Project HQ/Notion-importable tracker bundles with SHA-256 checksums. Dockerfiles
-build runtime images from source; registry images and native installers are not
+build runtime images from source. From v0.8.0 a tag also publishes the all-in-one
+image to the repository's container registry (amd64); native installers are not
 published. A live Notion workspace is not connected.
 
 Follow [RELEASING.md](https://github.com/Installation-04/StreamRD/blob/main/RELEASING.md):

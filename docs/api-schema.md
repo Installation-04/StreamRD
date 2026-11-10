@@ -507,3 +507,18 @@ All routes require an active session and current access to the library.
   95% watched marks the file complete and resets the resume position.
 - `GET /api/shared-libraries/continue?limit=12` → `{items:[{libraryId,item,positionSeconds,durationSeconds,updatedAt}]}`
   for incomplete, currently accessible items, newest first, one per item.
+
+## System maintenance (administrators only)
+
+All routes require a live administrator session, are `no-store`, and are rate limited.
+
+- `GET /api/admin/system/maintenance` → `{backups:[{name,kind,sizeBytes,createdAt}], pendingRestore, restartSupported}`.
+- `POST /api/admin/system/backups` → 201 `{backup}`; a verified snapshot (max 20 manual).
+- `GET /api/admin/system/backups/:name/download`; `POST …/verify` → `{ok,schema}` or `{ok:false,reason}`; `DELETE …/:name`.
+  Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.db$`; anything else is 404.
+- `POST /api/admin/system/backups/:name/restore` `{confirm:"RESTORE", restart?:boolean}` → 202
+  `{preRestoreBackup, restartRequired:true, restarting}`. Stages the swap for the next start.
+  `DELETE /api/admin/system/restore` cancels it. `POST /api/admin/system/restart` requires `ADMIN_RESTART=true`.
+- `GET /api/admin/system/update[?refresh=1]` → `{current, latest, updateAvailable, publishedAt, url, checkEnabled, checkedAt, error, canApply}`.
+- `POST /api/admin/system/update` `{version}` → 202 `{requested, backup}`. Requires `UPDATE_WEBHOOK_URL`,
+  a matching newer release, and takes a `pre-update-*` backup first; hook failures return 502.

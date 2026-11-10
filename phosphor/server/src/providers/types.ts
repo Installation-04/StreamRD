@@ -77,9 +77,29 @@ export async function providerFetch(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
-    const body = response.body === null ? null : await response.arrayBuffer();
+    let body: ArrayBuffer | null = null;
+    if (response.body) {
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 8 * 1024 * 1024) {
+          await reader.cancel();
+          throw new ProviderError(provider, "Provider response exceeded the allowed size", 502);
+        }
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      body = bytes.buffer;
+    }
     return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
   } catch (err) {
+    if (err instanceof ProviderError) throw err;
     if ((err as Error).name === "AbortError") {
       throw new ProviderError(provider, `Request timed out after ${timeoutMs}ms`);
     }
