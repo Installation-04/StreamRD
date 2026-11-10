@@ -194,6 +194,16 @@ genres, cast, runtimeMinutes, rating/ratingSource, contentRating, imdbId/tmdbId,
 providerUrl and fetchedAt. Record views add status, revision, locks, attempts and
 sanitized error. Internal field-ownership bookkeeping is omitted.
 
+## My List (any signed-in viewer)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/shared-libraries/favorites` | `{ items: [{ libraryId, item }] }`: the viewer's list, newest first, one entry per title (the version a library shows), only from libraries and within the viewing limit the viewer has now. |
+| PUT | `/api/shared-libraries/:id/items/:itemId/favorite` | Adds the title → `{ favorite: true }`; 404 if the item is not visible to the viewer; 409 when the list holds 500 titles. |
+| DELETE | `/api/shared-libraries/:id/items/:itemId/favorite` | Removes it → `{ favorite: false }`. |
+
+Library item views (a library's items, one item, and `GET /api/home` rows) carry `favorite: boolean`, and `GET /api/home` has a `myList` row (StreamRD). Entries name a title by owner and group, so every version of a title shares one entry.
+
 ## Link health (administrators only, v0.19.0)
 
 | Method | Path | Description |

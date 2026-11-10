@@ -138,7 +138,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 - One card per title: copies of the same film (1080p, 4K) or show share a card, with the versions on its page.
 - A full-page player with resume, Up next, keyboard shortcuts and a VLC/mpv hand-off for files a browser cannot play.
 - A home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
-- Per-viewer resume across all libraries.
+- Per-viewer resume across all libraries, and **My List**: a heart on any title saves it to your own list.
 - Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
 - Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.
 

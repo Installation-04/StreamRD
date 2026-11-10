@@ -55,6 +55,7 @@ export function Nav() {
           {user && !limited && link("/discover", "Find media", "search")}
           {user && !limited && link("/requests", "Requests", "film")}
           {user && link("/shared-libraries", "Library", "film")}
+          {user && link("/my-list", "My List", "heart")}
           {user?.role === "admin" && link("/library", "Imports", "grid")}
           {user && !limited && link("/setup", "Setup", "settings")}
           {user && link("/account/profile", t("nav.account"), "user")}
