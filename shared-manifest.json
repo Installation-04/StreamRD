@@ -68,6 +68,7 @@
         "media-filter.test.ts",
         "metadata-automation.test.ts",
         "metadata-free.test.ts",
+        "metadata-project-key.test.ts",
         "metadata-providers.test.ts",
         "provider-transport.test.ts",
         "request-worker.test.ts",

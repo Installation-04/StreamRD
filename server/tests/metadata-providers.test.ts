@@ -18,7 +18,7 @@ describe("private metadata settings", () => {
     const defaults = await getMetadataSettings(); expect(defaults).toEqual(DEFAULT_METADATA_SETTINGS);
     await saveMetadataSettings({ tmdbApiKey: "Bearer fixture-private-token", omdbApiKey: "private-omdb-token" });
     const current = await getMetadataSettings(); expect(current.tmdbApiKey).toBe("fixture-private-token");
-    expect(publicMetadataSettings(current)).toEqual({ provider: "tmdb", activeProvider: "tmdb", automatic: false, language: "en-US", refreshDays: 30, tmdbConfigured: true, omdbConfigured: true });
+    expect(publicMetadataSettings(current)).toEqual({ provider: "tmdb", activeProvider: "tmdb", projectTmdbKey: false, automatic: false, language: "en-US", refreshDays: 30, tmdbConfigured: true, omdbConfigured: true });
     expect(JSON.stringify(publicMetadataSettings(current))).not.toContain("private"); expect(fetch).not.toHaveBeenCalled();
   });
   it("preserves omitted or blank keys and clears credentials only explicitly", async () => {

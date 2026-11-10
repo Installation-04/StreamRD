@@ -109,7 +109,7 @@ async function main() {
   const environments = {};
   for (const product of products) {
     const directory = path.join(configRoot, product); fs.mkdirSync(directory, { recursive: true });
-    environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '', CORS_ORIGINS: process.env.CORS_ORIGINS || '', DATA_ENCRYPTION_KEY: secret(product + '-data-key', process.env[product.toUpperCase() + '_DATA_KEY']) };
+    environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '', CORS_ORIGINS: process.env.CORS_ORIGINS || '', DATA_ENCRYPTION_KEY: secret(product + '-data-key', process.env[product.toUpperCase() + '_DATA_KEY']), TMDB_DEFAULT_API_KEY: process.env.TMDB_DEFAULT_API_KEY || '' };
     await migrate('/opt/' + product + '/server', environments[product]);
   }
   if (qbitEnabled) launch('qbittorrent', 'qbittorrent-nox', prepareQbit(), configRoot);

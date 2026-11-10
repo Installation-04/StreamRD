@@ -19,9 +19,17 @@ export const metadataSettingsPatchSchema = z.object({
 }).strict();
 export type MetadataSettingsPatch = z.input<typeof metadataSettingsPatchSchema>;
 
-/** The credential a provider is called with; the built-in source needs none, so it is always "configured". */
+/**
+ * A TMDB key supplied by the project at build or deploy time (TMDB_DEFAULT_API_KEY). It is used only when the administrator
+ * has saved no key of their own, is never stored in the database, and is never returned to a browser.
+ */
+export function projectTmdbKey(): string {
+  const value = (process.env.TMDB_DEFAULT_API_KEY ?? "").trim().replace(/^Bearer\s+/i, "");
+  return /^[\x21-\x7e]{16,1024}$/.test(value) ? value : "";
+}
+/** The credential a provider is called with: the administrator's own key first; the built-in source needs none. */
 export function providerCredential(settings: MetadataSettings, provider: MetadataProvider): string {
-  return provider === "tmdb" ? settings.tmdbApiKey : provider === "omdb" ? settings.omdbApiKey : "built-in";
+  return provider === "tmdb" ? settings.tmdbApiKey || projectTmdbKey() : provider === "omdb" ? settings.omdbApiKey : "built-in";
 }
 export function providerConfigured(settings: MetadataSettings, provider: MetadataProvider = settings.provider): boolean {
   return Boolean(providerCredential(settings, provider));
@@ -54,7 +62,7 @@ export async function getMetadataSettings(): Promise<MetadataSettings> {
 export function publicMetadataSettings(settings: MetadataSettings): PublicMetadataSettings {
   return {
     provider: settings.provider, language: settings.language, automatic: settings.automatic,
-    refreshDays: settings.refreshDays, activeProvider: activeProvider(settings), tmdbConfigured: Boolean(settings.tmdbApiKey),
+    refreshDays: settings.refreshDays, activeProvider: activeProvider(settings), projectTmdbKey: Boolean(projectTmdbKey()), tmdbConfigured: Boolean(settings.tmdbApiKey),
     omdbConfigured: Boolean(settings.omdbApiKey),
   };
 }

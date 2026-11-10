@@ -28,6 +28,8 @@ export interface MetadataSettings {
   provider: MetadataProvider;
   /** The source actually used: the chosen provider when it has a key, otherwise the built-in one. */
   activeProvider: MetadataProvider;
+  /** True when this server was deployed with a shared TMDB key (never exposed). */
+  projectTmdbKey: boolean;
   language: string;
   automatic: boolean;
   refreshDays: number;

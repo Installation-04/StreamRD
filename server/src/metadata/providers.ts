@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { PRODUCT } from "../product";
-import { activeProvider, getMetadataSettings } from "./settings";
+import { activeProvider, getMetadataSettings, providerCredential } from "./settings";
 import { MediaType, MetadataCandidate, MetadataDetails, MetadataError, MetadataProvider, MetadataSettings } from "./types";
 export { MetadataError } from "./types";
 
@@ -35,7 +35,7 @@ function failure(code = "metadata-unavailable", status = 503): MetadataError {
 }
 function configured(settings: MetadataSettings, provider: MetadataProvider): string {
   if (provider === "free") return "built-in"; // needs no account or key
-  const key = provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey;
+  const key = providerCredential(settings, provider); // the administrator's key, or the project's shared TMDB key
   if (!key) throw new MetadataError("metadata-not-configured", 503, `Configure ${provider === "tmdb" ? "TMDB" : "OMDb"} in Metadata settings before looking up titles.`);
   return key;
 }
