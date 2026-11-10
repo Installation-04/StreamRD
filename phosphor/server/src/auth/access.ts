@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { Invitation, Prisma } from "@prisma/client";
 import { config } from "../config";
 import { db } from "../db";
+import { LIMIT_AGES } from "../ratings";
 
 export type RegistrationMode = "open" | "invite" | "closed";
 export const REGISTRATION_KEY = "auth.registration";
@@ -41,16 +42,16 @@ export async function inspectInvitation(token: string, client: AccessDb = db): P
   return invitation;
 }
 
-/** Rechecked under a SQLite write lock immediately before creating the user. */
-export async function checkSignupAccess(email: string, token: string | undefined, client: AccessDb = db, consume = false): Promise<void> {
+/** Rechecked under a SQLite write lock immediately before creating the user. Returns the invitation it consumed, if any. */
+export async function checkSignupAccess(email: string, token: string | undefined, client: AccessDb = db, consume = false): Promise<Invitation | null> {
   const count = await client.user.count();
   const bootstrap = count === 0 && (!config.adminEmail || email === config.adminEmail.toLowerCase());
   const mode = await registrationMode(client);
-  if (bootstrap && !token) return;
+  if (bootstrap && !token) return null;
   if (mode === "closed") throw new AccessError(403, "New account registration is closed");
   if (!token) {
     if (mode === "invite") throw new AccessError(403, "An invitation is required to create an account");
-    return;
+    return null;
   }
   const invitation = await inspectInvitation(token, client);
   if (invitation.email !== email) throw new AccessError(400, "Use the email address assigned to this invitation");
@@ -61,15 +62,33 @@ export async function checkSignupAccess(email: string, token: string | undefined
     });
     if (used.count !== 1) throw new AccessError(400, "This invitation is invalid, expired or no longer available");
   }
+  return invitation;
+}
+
+export const invitationLibraryIds = (invitation: Pick<Invitation, "libraryIds">): string[] => {
+  try { const ids = JSON.parse(invitation.libraryIds); return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []; } catch { return []; }
+};
+/** Gives a new account what its invitation promised: the listed libraries (that still exist) and the viewing limit. */
+export async function applyInvitationAccess(tx: Prisma.TransactionClient, userId: string, invitation: Invitation | null): Promise<void> {
+  if (!invitation) return;
+  const libraries = await tx.sharedLibrary.findMany({ where: { id: { in: invitationLibraryIds(invitation) } }, select: { id: true } });
+  if (libraries.length) await tx.sharedLibraryGrant.createMany({ data: libraries.map(library => ({ libraryId: library.id, userId })) });
+  if (invitation.maxAge !== null && LIMIT_AGES.includes(invitation.maxAge)) await tx.user.update({ where: { id: userId }, data: { maxAge: invitation.maxAge } });
+}
+/** What the invited person is told before they sign up: the names of the libraries they will get. */
+export async function invitationPreview(invitation: Invitation) {
+  const libraries = await db.sharedLibrary.findMany({ where: { id: { in: invitationLibraryIds(invitation) }, enabled: true }, select: { name: true }, orderBy: { name: "asc" }, take: 20 });
+  return { libraries: libraries.map(library => library.name), limited: invitation.maxAge !== null };
 }
 
 export function publicInvitation(invitation: Invitation) {
-  const { id, email, createdAt, expiresAt, acceptedAt, revokedAt } = invitation;
+  const { id, email, createdAt, expiresAt, acceptedAt, revokedAt, maxAge } = invitation;
   const status = acceptedAt ? "accepted" : revokedAt ? "revoked" : expiresAt <= new Date() ? "expired" : "pending";
-  return { id, email, createdAt, expiresAt, acceptedAt, revokedAt, status };
+  return { id, email, createdAt, expiresAt, acceptedAt, revokedAt, status, libraryIds: invitationLibraryIds(invitation), maxAge };
 }
 
-export async function createInvitation(email: string, createdById: string, expiresInDays: number) {
+export interface InvitationAccess { libraryIds: string[]; maxAge: number | null }
+export async function createInvitation(email: string, createdById: string, expiresInDays: number, access: InvitationAccess = { libraryIds: [], maxAge: null }) {
   const inviteToken = randomBytes(32).toString("base64url");
   const invitation = await db.$transaction(async tx => {
     await lockRegistration(tx);
@@ -77,7 +96,11 @@ export async function createInvitation(email: string, createdById: string, expir
     if (await tx.user.findUnique({ where: { email } })) throw new AccessError(409, "This email already has an account; ask the user to sign in");
     // Issuing a replacement invalidates older unaccepted links for this address.
     await tx.invitation.updateMany({ where: { email, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
-    return tx.invitation.create({ data: { email, createdById, tokenHash: invitationHash(inviteToken), expiresAt: new Date(Date.now() + expiresInDays * 86400000) } });
+    // An administrator can only hand out libraries they manage, and only the offered viewing limits.
+    const libraryIds = [...new Set(access.libraryIds)];
+    if (libraryIds.length && await tx.sharedLibrary.count({ where: { id: { in: libraryIds }, sourceUserId: createdById } }) !== libraryIds.length) throw new AccessError(400, "Choose libraries that you manage");
+    if (access.maxAge !== null && !LIMIT_AGES.includes(access.maxAge)) throw new AccessError(400, "Choose one of the offered viewing limits");
+    return tx.invitation.create({ data: { email, createdById, tokenHash: invitationHash(inviteToken), expiresAt: new Date(Date.now() + expiresInDays * 86400000), libraryIds: JSON.stringify(libraryIds), maxAge: access.maxAge } });
   }, { maxWait: 10000, timeout: 10000 });
   return { invitation: publicInvitation(invitation), inviteToken };
 }

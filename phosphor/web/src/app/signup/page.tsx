@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { get, post } from "@/lib/api";
 
 type Registration = { mode: "open" | "invite" | "closed"; bootstrapAvailable: boolean };
-type Invitation = { email: string; expiresAt: string };
+type Invitation = { email: string; expiresAt: string; libraries?: string[]; limited?: boolean };
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -123,6 +123,7 @@ export default function SignupPage() {
         {allowed && <>
           {invitation && <p className="dim" style={{ fontSize: 12, lineHeight: 1.7, marginBottom: 20 }}>
             Invited as <strong>{invitation.email}</strong>. This link expires {new Date(invitation.expiresAt).toLocaleDateString()} and can be used once.
+            {invitation.libraries && invitation.libraries.length > 0 && <> You will be able to watch: <strong>{invitation.libraries.join(", ")}</strong>.</>}{invitation.limited && <> This account will have a viewing limit set by the server administrator.</>}
           </p>}
           <div className="field">
             <label htmlFor="signup-displayName">Display name</label>

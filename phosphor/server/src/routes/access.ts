@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import { LIMIT_AGES } from "../ratings";
 import { AccessError, createInvitation, lockRegistration, publicInvitation, registrationMode, REGISTRATION_KEY } from "../auth/access";
 import { db } from "../db";
 import { asyncHandler } from "../http";
@@ -33,11 +34,38 @@ accessRouter.get("/invitations", action(async (_req, res) => {
   res.json({ invitations: invitations.map(publicInvitation) });
 }));
 accessRouter.post("/invitations", mutationLimit, action(async (req, res) => {
-  const body = parseBody(z.object({ email: z.string().trim().email().max(254), expiresInDays: z.number().int().min(1).max(30).default(7) }), req.body, res);
+  const body = parseBody(z.object({
+    email: z.string().trim().email().max(254), expiresInDays: z.number().int().min(1).max(30).default(7),
+    // What the new account gets when it is created: these libraries and this viewing limit (7, 8, 14, 17 or none).
+    libraryIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,100}$/)).max(20).default([]),
+    maxAge: z.number().int().refine(age => LIMIT_AGES.includes(age)).nullable().default(null),
+  }), req.body, res);
   if (!body) return;
-  const result = await createInvitation(body.email.toLowerCase(), req.session!.sub, body.expiresInDays);
-  await logEvent("info", "admin_action", "Created an account invitation", { userId: req.session!.sub, meta: { invitationId: result.invitation.id } });
+  const result = await createInvitation(body.email.toLowerCase(), req.session!.sub, body.expiresInDays, { libraryIds: body.libraryIds, maxAge: body.maxAge });
+  await logEvent("info", "admin_action", "Created an account invitation", { userId: req.session!.sub, meta: { invitationId: result.invitation.id, libraries: body.libraryIds.length, limited: body.maxAge !== null } });
   res.status(201).json(result);
+}));
+/** The address put in invitation links: how invited people reach this server (a LAN address, a Tailscale name, a domain). */
+const INVITE_ADDRESS_KEY = "server.inviteAddress";
+accessRouter.get("/invite-address", action(async (_req, res) => {
+  const row = await db.setting.findUnique({ where: { key: INVITE_ADDRESS_KEY } });
+  res.json({ url: row?.value || null });
+}));
+accessRouter.put("/invite-address", mutationLimit, action(async (req, res) => {
+  const body = parseBody(z.object({ url: z.string().trim().max(200).nullable() }), req.body, res);
+  if (!body) return;
+  let url: string | null = null;
+  if (body.url) {
+    try {
+      const parsed = new URL(body.url);
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || !["", "/"].includes(parsed.pathname)) throw new Error("shape");
+      url = parsed.origin;
+    } catch { throw new AccessError(400, "Enter an address such as http://192.168.1.20:8080 or https://media.example.com (no path)"); }
+  }
+  if (url) await db.setting.upsert({ where: { key: INVITE_ADDRESS_KEY }, create: { key: INVITE_ADDRESS_KEY, value: url }, update: { value: url } });
+  else await db.setting.deleteMany({ where: { key: INVITE_ADDRESS_KEY } });
+  await logEvent("info", "admin_action", "Updated the address used in invitation links", { userId: req.session!.sub });
+  res.json({ url });
 }));
 accessRouter.post("/invitations/:id/revoke", mutationLimit, action(async (req, res) => {
   const invitation = await db.$transaction(async tx => {

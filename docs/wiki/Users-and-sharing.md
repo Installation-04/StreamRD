@@ -10,9 +10,10 @@ own debrid key; playback uses the administrator's connected account.
 2. **Libraries.** In **Admin → Libraries**, create the libraries you want. Pick a content type (movies, TV shows, or both)
    and either tick **Visible to everyone** or add chosen people under *Who can watch*. A library always shows the
    imported media of its type, including titles imported later. **Paused** hides it without losing its access list.
-3. **People.** In **Admin → Users**, choose invitation-only registration and create email-bound invitation links.
-   Send the link by any means; it works wherever the server can be reached, on your local network or over a private network
-   such as Tailscale.
+3. **People.** In **Admin → Users**, choose invitation-only registration and create email-bound invitation links. In the same form,
+   tick the **libraries** the person should get and optionally set a **viewing limit** (a kids account starts safe). Save the
+   **address for invitation links** (your local network address, Tailscale name or domain) so links work for the person you send them to.
+   Send the link by any means; it works wherever the server can be reached.
 4. **Watching.** Everyone opens **Library** in the navigation. They see only the libraries they may see, with their
    own *Continue watching* and resume positions.
 
@@ -28,6 +29,6 @@ shows only their libraries. See the [full guide](https://github.com/Installation
 
 ## What is and is not included
 
-This is a server-managed sharing model, not full Plex Home parity. PIN-protected managed users, invitations that carry library access, device inventories and concurrency limits are
+This is a server-managed sharing model, not full Plex Home parity. PIN-protected managed users, device inventories and concurrency limits are
 planned; see the [roadmap](https://github.com/Installation-04/StreamRD/blob/main/docs/roadmap.md). Removing a person's access blocks
 new playback requests at once; direct provider links already issued may work until the provider expires them.

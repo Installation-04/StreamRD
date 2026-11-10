@@ -218,6 +218,8 @@ model Invitation {
   expiresAt DateTime
   acceptedAt DateTime?
   revokedAt DateTime?
+  libraryIds String @default("[]") // JSON array of library ids the new account is given
+  maxAge Int? // viewing limit the new account starts with; null = none
   @@index([email, createdAt])
   @@index([expiresAt])
 }

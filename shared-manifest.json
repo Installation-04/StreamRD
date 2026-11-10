@@ -66,6 +66,7 @@
         "admin-mutations.test.ts",
         "age-limits.test.ts",
         "api-hardening.test.ts",
+        "invitation-access.test.ts",
         "library-community.test.ts",
         "library.test.ts",
         "media-filter.test.ts",

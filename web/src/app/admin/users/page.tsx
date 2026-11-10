@@ -11,7 +11,9 @@ type Invitation = {
   id: string; email: string; createdAt: string; expiresAt: string;
   acceptedAt: string | null; revokedAt: string | null;
   status: "pending" | "accepted" | "revoked" | "expired";
+  libraryIds: string[]; maxAge: number | null;
 };
+const LIMIT_NAMES: Record<number, string> = { 7: "Kids", 8: "Pre-teens", 14: "Teens", 17: "Mature" };
 const MODE_COPY: Record<RegistrationMode, { title: string; description: string }> = {
   open: { title: "Open registration", description: "Anyone who can reach this server can create an account. Library access is managed separately." },
   invite: { title: "Invitation only", description: "New members need a one-use invitation addressed to their email. Existing members can sign in normally." },
@@ -27,6 +29,11 @@ export default function AdminUsersPage() {
   const [filter, setFilter] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(7);
+  const [libraries, setLibraries] = useState<{ id: string; name: string }[]>([]);
+  const [inviteLibraries, setInviteLibraries] = useState<string[]>([]);
+  const [inviteLimit, setInviteLimit] = useState("");
+  const [address, setAddress] = useState("");
+  const [savedAddress, setSavedAddress] = useState<string | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,11 +45,17 @@ export default function AdminUsersPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [accounts, access, invites] = await Promise.all([
+      const [accounts, access, invites, managed, where] = await Promise.all([
         get<{ users: User[] }>("/api/admin/users"),
         get<{ mode: RegistrationMode }>("/api/admin/access"),
         get<{ invitations: Invitation[] }>("/api/admin/invitations"),
+        get<{ libraries: { id: string; name: string }[] }>("/api/admin/shared-libraries"),
+        get<{ url: string | null }>("/api/admin/invite-address"),
       ]);
+      setLibraries(managed.libraries);
+      setInviteLibraries((current) => current.length ? current : managed.libraries.map((library) => library.id));
+      setSavedAddress(where.url);
+      setAddress(where.url ?? "");
       setUsers(accounts.users);
       setMode(access.mode);
       setDraftMode(access.mode);
@@ -92,9 +105,10 @@ export default function AdminUsersPage() {
     event.preventDefault();
     void action("invite", async () => {
       const result = await post<{ invitation: Invitation; inviteToken: string }>("/api/admin/invitations", {
-        email: inviteEmail.trim(), expiresInDays,
+        email: inviteEmail.trim(), expiresInDays, libraryIds: inviteLibraries, maxAge: inviteLimit === "" ? null : Number(inviteLimit),
       });
-      const link = new URL("/signup", window.location.origin);
+      // The link points at the address saved below (a LAN address, a Tailscale name or a domain), else at the page you are on.
+      const link = new URL("/signup", savedAddress ?? window.location.origin);
       link.hash = new URLSearchParams({ invite: result.inviteToken }).toString();
       setShareLink(link.toString());
       setShareEmail(result.invitation.email);
@@ -104,6 +118,15 @@ export default function AdminUsersPage() {
       // Replacements revoke older links for this email on the server.
       const latest = await get<{ invitations: Invitation[] }>("/api/admin/invitations");
       setInvitations(latest.invitations);
+    });
+  };
+
+  const saveAddress = (event: React.FormEvent) => {
+    event.preventDefault();
+    void action("address", async () => {
+      const result = await put<{ url: string | null }>("/api/admin/invite-address", { url: address.trim() || null });
+      setSavedAddress(result.url); setAddress(result.url ?? "");
+      setNotice(result.url ? `Invitation links will use ${result.url}.` : "Invitation links will use the address of this page.");
     });
   };
 
@@ -161,6 +184,14 @@ export default function AdminUsersPage() {
             <div className="field"><label htmlFor="invite-email">Invitation email</label>
               <input id="invite-email" type="email" autoComplete="off" required maxLength={254} value={inviteEmail} disabled={disabled || mode === "closed"} onChange={(event) => setInviteEmail(event.target.value)} />
             </div>
+            {libraries.length > 0 && <fieldset style={{ border: 0, padding: 0, margin: "0 0 16px" }}><legend style={{ fontSize: 13, marginBottom: 8, padding: 0 }}>Libraries they can watch</legend>
+              {libraries.map((library) => <label key={library.id} style={{ display: "flex", flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "flex-start", fontSize: 13, margin: "6px 0", color: "inherit" }}><input type="checkbox" style={{ width: 16, height: 16, minHeight: 0, margin: 0, flexShrink: 0, accentColor: "var(--accent, var(--fg))" }} checked={inviteLibraries.includes(library.id)} disabled={disabled || mode === "closed"} onChange={(event) => setInviteLibraries((current) => event.target.checked ? [...current, library.id] : current.filter((id) => id !== library.id))} />{library.name}</label>)}
+            </fieldset>}
+            <div className="field"><label htmlFor="invite-limit">Viewing limit</label>
+              <select id="invite-limit" value={inviteLimit} disabled={disabled || mode === "closed"} onChange={(event) => setInviteLimit(event.target.value)}>
+                <option value="">No limit</option><option value="7">Kids (G, TV-Y, TV-Y7)</option><option value="8">Pre-teens (up to PG)</option><option value="14">Teens (up to PG-13, TV-14)</option><option value="17">Mature (up to R, TV-MA)</option>
+              </select>
+            </div>
             <div className="access-invite-controls">
               <div className="field"><label htmlFor="invite-expiry">Link expires in</label>
                 <select id="invite-expiry" value={expiresInDays} disabled={disabled || mode === "closed"} onChange={(event) => setExpiresInDays(Number(event.target.value))}>
@@ -171,6 +202,13 @@ export default function AdminUsersPage() {
             </div>
           </form>
           {mode === "closed" && <p className="dim access-description">Switch to invitation-only or open registration before inviting someone.</p>}
+          <form onSubmit={saveAddress} style={{ marginTop: 18 }}>
+            <div className="field"><label htmlFor="invite-address">Address for invitation links</label>
+              <input id="invite-address" type="text" inputMode="url" autoComplete="off" maxLength={200} placeholder={typeof window === "undefined" ? "" : window.location.origin} value={address} disabled={disabled} onChange={(event) => setAddress(event.target.value)} />
+            </div>
+            <p className="dim access-description">Use how the invited person will reach this server: your local network address (for example http://192.168.1.20:8080), its Tailscale name, or a domain. Leave it empty to use the address of this page.</p>
+            <button className="btn btn-secondary btn-sm" disabled={disabled || address.trim() === (savedAddress ?? "")}>{busy === "address" ? "Saving…" : "Save address"}</button>
+          </form>
           {shareLink && <div className="access-share" role="region" aria-label="New invitation link">
             <strong>Ready for {shareEmail}</strong>
             <p className="dim access-description">Copy this link now. It cannot be retrieved after you leave this page.</p>
@@ -217,7 +255,7 @@ export default function AdminUsersPage() {
           {invitations.map((invitation) => {
             const status = invitation.status === "pending" && new Date(invitation.expiresAt).getTime() <= Date.now() ? "expired" : invitation.status;
             return <article className="access-member" key={invitation.id}>
-              <div><strong>{invitation.email}</strong><p className="dim access-small">Created {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</p></div>
+              <div><strong>{invitation.email}</strong><p className="dim access-small">Created {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</p><p className="dim access-small">{invitation.libraryIds.length ? invitation.libraryIds.map((id) => libraries.find((library) => library.id === id)?.name ?? "a removed library").join(", ") : "No libraries yet"}{invitation.maxAge !== null ? ` · ${LIMIT_NAMES[invitation.maxAge] ?? "Limited"} viewing limit` : ""}</p></div>
               <div className="access-actions"><span className={`pill ${status === "accepted" ? "pill-ok" : "pill-dim"}`}>{status}</span>
                 {status === "pending" && <button className="btn btn-secondary btn-sm" disabled={disabled} onClick={() => { void revokeInvitation(invitation); }}>Revoke invitation</button>}
               </div>

@@ -68,7 +68,7 @@ it("issues a hashed, email-bound invitation and consumes it exactly once",async(
   const inspect=await request(app).post("/api/auth/invitation").send({inviteToken:link.inviteToken});
   expect(inspect.status).toBe(200);expect(inspect.body.email).toBe("invited@access.test");
   expect(inspect.headers["cache-control"]).toContain("no-store");
-  expect(Object.keys(inspect.body).sort()).toEqual(["email","expiresAt"]);
+  expect(Object.keys(inspect.body).sort()).toEqual(["email","expiresAt","libraries","limited"]);
   const wrong=await request(app).post("/api/auth/signup").send(signupBody("wrong@access.test",link.inviteToken));
   expect(wrong.status).toBe(400);expect((await db.invitation.findUniqueOrThrow({where:{id:stored.id}})).acceptedAt).toBeNull();
   const accepted=await request(app).post("/api/auth/signup").send({...signupBody("invited@access.test",link.inviteToken),role:"admin"});
