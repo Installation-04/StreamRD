@@ -8,7 +8,7 @@ what is missing. Members do not need debrid keys of their own.
 
 The home page shows a featured carousel (trailers are optional and per viewer), then Continue watching, New in your libraries,
 Popular on this server, Trending now, Popular movies and Popular TV shows (the last three are public lists). **Library** lists the
-libraries you can see; a title shown once may offer several **versions** (for example 1080p and 4K). **Find media** searches TMDB and
+libraries you can see; the heart on any title saves it to **My List** (your own list, in the menu and as a row on the home page); a title shown once may offer several **versions** (for example 1080p and 4K). **Find media** searches TMDB and
 lets you request a title; **Requests** follows each request.
 
 ## Watch and resume

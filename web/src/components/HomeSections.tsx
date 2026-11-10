@@ -46,6 +46,7 @@ export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: 
   return <div className={styles.sections}>
     {home && <HomeCarousel slides={home.featured} trailersEnabled={home.trailersEnabled} />}
     <Row title="Continue watching" tiles={continueTiles} label="Resume" />
+    <Row title="My List" note="Saved by you" tiles={(home?.myList ?? []).map(libraryTile)} label="Open" />
     <Row title="New in your libraries" note="Newest on this server" tiles={(home?.recentlyAdded ?? []).map(libraryTile)} label="Open" />
     <Row title="Popular on this server" note="Most watched in the last 30 days" tiles={(home?.popularHere ?? []).map(libraryTile)} label="Open" />
     <Row title="Trending now" note="Across movies and TV shows" tiles={(home?.trending ?? []).map(externalTile)} label="See" />

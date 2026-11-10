@@ -12,6 +12,7 @@ import { accountMediaViews } from "./account-library";
 import { rateLimit } from "../util/rateLimit";
 import { viewingLimit } from "../restrictions";
 import { versionViews } from "../versions";
+import { favoriteIds, favoriteItems, MAX_FAVORITES, setFavorite } from "../favorites";
 import { ageForRating, syncAccountRating } from "../ratings";
 
 export const sharedLibrariesRouter = Router();
@@ -135,6 +136,27 @@ sharedLibrariesRouter.get("/continue", action(async (req, res) => {
   items.sort((a, b) => b.progress.updatedAt.getTime() - a.progress.updatedAt.getTime() || (a.progress.id < b.progress.id ? 1 : -1));
   res.json({ items: items.slice(0, limit).map(({ progress, libraryId, media }) => ({ libraryId, item: media, positionSeconds: progress.positionSeconds, durationSeconds: progress.durationSeconds, updatedAt: progress.updatedAt.toISOString() })) });
 }));
+/** My List: the viewer's own list of titles, newest first. */
+sharedLibrariesRouter.get("/favorites", action(async (req, res) => {
+  const { limit } = parse(z.object({ limit: z.coerce.number().int().min(1).max(100).default(100) }).strict(), req.query);
+  const ageLimit = await viewingLimit(req.session!.sub), rows = await favoriteItems(req.session!.sub, ageLimit, limit);
+  const views = await accountMediaViews(rows.map(row => row.item));
+  await assertActiveSharedViewer(req.session!);
+  res.json({ items: rows.map((row, index) => ({ libraryId: row.libraryId, item: { ...views[index], favorite: true } })) });
+}));
+for (const method of ["put", "delete"] as const) {
+  sharedLibrariesRouter[method]("/:id/items/:itemId/favorite", rateLimit({ windowMs: 60_000, max: 120 }), action(async (req, res) => {
+    const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
+    const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
+    const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
+    if (!item) throw new AccountLibraryError("Library item not found.", 404);
+    await assertUnchangedSharedViewer(req.session!, library);
+    const result = await setFavorite(req.session!.sub, item, method === "put");
+    if (result === "full") throw new AccountLibraryError(`Your list is full (${MAX_FAVORITES} titles). Remove one first.`, 409);
+    if (result === "ungrouped") throw new AccountLibraryError("This title is still being prepared. Try again in a moment.", 409);
+    res.json({ favorite: result });
+  }));
+}
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type } = parse(list, req.query);
@@ -148,7 +170,7 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   }
   const where: Prisma.AccountMediaWhereInput = after ? { AND: [filters, { OR: [{ createdAt: { lt: new Date(after.at) } }, { createdAt: new Date(after.at), id: { lt: after.id } }] }] } : filters;
   const [items, total] = await Promise.all([db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 }), db.accountMedia.count({ where: filters })]);
-  const page = items.slice(0, limit), last = page.at(-1), views = await accountMediaViews(page);
+  const page = items.slice(0, limit), last = page.at(-1), listed = await favoriteIds(req.session!.sub, page), views = (await accountMediaViews(page)).map((view, index) => ({ ...view, favorite: listed.has(page[index].id) }));
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit);
   res.json({ items: views, total, nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
@@ -158,7 +180,7 @@ sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
   const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
-  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library, ageLimit), versions: await versionViews(sourceWhere, item) };
+  const result = { item: { ...(await accountMediaViews([item]))[0], favorite: (await favoriteIds(req.session!.sub, [item])).has(item.id) }, library: await sharedLibraryView(library, ageLimit), versions: await versionViews(sourceWhere, item) };
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, [item.id], ageLimit);
   res.json(result);
