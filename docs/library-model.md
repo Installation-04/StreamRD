@@ -25,6 +25,21 @@ is the *primary*, which lists and counts show; the title page offers the rest as
 (`groupKey`, `isPrimary`, `releaseName`). Setting every `isPrimary` back to 1 restores the old lists exactly. Existing rows are named
 when the server starts. Grouping never crosses accounts.
 
+## Decisions (recorded)
+
+- **The curated catalogue is retired.** The libraries are the product; the hand-added link and magnet shelf goes away, and so do the surfaces
+  that only existed for it (its search page, title and watch pages, favourites, My List and viewing profiles, and *Admin → Catalog*).
+  Retiring is not deleting: the tables stay in the database (nothing is dropped), the API answers "gone" instead of removing rows, and
+  *Admin → System* shows what is kept, so an upgrade is reversible and a later clean-up is an explicit, backed-up administrator action.
+- **Links need health checks.** Nothing is offered as playable just because a provider once listed it. A background check confirms each
+  library version still resolves and answers; a version that stops doing so is marked *Link needs attention*, is never chosen as the card
+  shown for its title while a healthy version exists, and is reported to the administrator. This ships as its own release after the retirement.
+- **Only the administrator imports.** Members do not import from their own accounts; they **request** content, and the administrator's
+  libraries are what everyone sees. Members' earlier personal imports stay stored and hidden (no deletion), and manual import endpoints
+  answer "forbidden" for non-administrators.
+
+Release order: v0.17.0 (versions, in review) → v0.18.0 (retire the catalogue and member imports) → v0.19.0 (link health checks).
+
 ## What is left, and what each step needs from you
 
 1. **Merging the old surfaces into libraries** (the roadmap's phases B, D and E). Two surfaces still sit beside the libraries:
