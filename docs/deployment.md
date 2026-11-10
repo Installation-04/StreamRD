@@ -74,11 +74,9 @@ docker compose exec backend node dist/prisma/seed.js   # or: npm run db:seed in 
 Skip the proxy (comment it out of `docker-compose.yml`). Clients use:
 
 - Web: `http://<lan-ip>:3000` (build web with `API_BASE_URL=http://<lan-ip>:47821`)
-- Mobile/TV: set Server URL to `http://<lan-ip>:47821` in the app settings
+- Other API clients: use `http://<lan-ip>:47821`
 
-Remember `CORS_ORIGINS` should include the web origin (or stay `*`), and
-plain-HTTP LAN URLs may need cleartext/ATS exceptions in production mobile
-builds (dev builds and Expo Go are fine).
+Remember `CORS_ORIGINS` should include the web origin (or stay `*`).
 
 ## 3. Reverse proxy + HTTPS
 
@@ -88,8 +86,7 @@ Caddy provisions Let's Encrypt certificates automatically and routes
 `/api/*` → backend, everything else → web.
 
 Set `API_BASE_URL=https://media.example.com` so the web build calls the API
-through the same origin (no CORS involved), and use that URL in mobile/TV
-settings.
+through the same origin (no CORS involved); API clients use that URL too.
 
 **Nginx**: use `infra/reverse-proxy/nginx.conf` as a starting point together
 with certbot for certificates. Keep `proxy_buffering off` for the API — it

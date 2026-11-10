@@ -3,13 +3,13 @@
 [Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases)
 
 Self-hosted, Netflix-style streaming for your own **debrid** accounts.
-One backend, every screen: web, iOS/Android, Android TV / Fire TV, Apple TV.
+One backend and a responsive web app for every screen that has a browser.
 
 ```text
-   Web (Next.js) ──────┐                ┌──────────────────────────────────┐
-   Mobile (Expo RN) ───┤   HTTPS/HTTP   │ StreamRD backend (Node/TS)       │
-   Android/Fire TV ────┼───────────────▶│  REST API · JWT + RBAC · Prisma  │
-   Apple TV (SwiftUI) ─┘  LAN/proxy/VPN │  DebridManager ─┬─ Real-Debrid   │
+   Web (Next.js) ──────┐   HTTPS/HTTP   ┌──────────────────────────────────┐
+   Scripts / API ──────┴───────────────▶│ StreamRD backend (Node/TS)       │
+                          LAN/proxy/VPN │  REST API · JWT + RBAC · Prisma  │
+                                        │  DebridManager ─┬─ Real-Debrid   │
                                         │   (fallback)    ├─ AllDebrid     │
                                         │                 └─ Premiumize.me │
                                         └──────────────────────────────────┘
@@ -68,11 +68,10 @@ and **Shared libraries** shows a Continue watching row ([notes](docs/releases/v0
 - **Admin dashboard** — users, catalog CRUD with debrid source mappings,
   global provider order/toggles, timeouts & retry caps, access toggles,
   connectivity tests, health stats, structured logs, config export/import.
-- **Every screen** — Netflix-style web UI (dark/light/system theme, i18n-ready),
-  Expo mobile app, remote-first Android TV / Fire TV app, SwiftUI Apple TV app.
+- **Every screen with a browser** — Netflix-style, responsive web UI
+  (dark/light/system theme, i18n-ready).
 - **Deploy anywhere** — Dockerized backend + web, Caddy/Nginx reverse-proxy
-  examples with HTTPS, works identically over LAN or VPN; every client has a
-  server-URL setting with a connectivity test.
+  examples with HTTPS, works identically over LAN or VPN.
 - **Operable** — structured event log (stdout + queryable via admin API),
   playback metrics per provider, `/api/health` for probes, JSON config backup,
   per-IP rate limiting on signup/login.
@@ -83,8 +82,6 @@ and **Shared libraries** shows a Continue watching row ([notes](docs/releases/v0
 |---|---|
 | Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, Vitest + Supertest |
 | Web (`/web`) | Next.js (App Router), React, TypeScript, cookie session + middleware RBAC gates |
-| Mobile (`/mobile`) | Expo / React Native (iOS + Android), expo-av playback |
-| TV (`/tv`) | react-native-tvos (Android TV / Fire TV), SwiftUI + AVKit (tvOS) |
 | Infra (`/infra`) | Docker, docker-compose, Caddy & Nginx configs, GitHub Actions CI |
 
 ## Quick start
@@ -116,11 +113,6 @@ cd server && npm install && npx prisma generate && npx prisma db push && npm run
 
 # Web on :3000
 cd web && npm install && npm run dev
-
-# Mobile (Expo) — see mobile/README.md
-cd mobile && npm install && npm start
-
-# TV — see tv/android-tv/README.md and tv/apple-tv/README.md
 ```
 
 ## Configuration

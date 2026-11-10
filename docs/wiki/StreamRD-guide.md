@@ -37,8 +37,8 @@ control. Deactivating an account revokes its older sessions; password changes
 revoke other sessions while retaining the initiating web session.
 
 Resolution success does not guarantee browser codec support. StreamRD does not
-transcode video. Mobile/TV projects remain in the repository, but the new web file
-chooser and profile-progress flow have not yet been propagated to those clients.
+transcode video. Playback runs in your browser or in any player you hand the stream
+link to; the repository no longer ships native apps.
 
 See [Screenshots](https://github.com/Installation-04/StreamRD/wiki/Screenshots) and the
 [API schema](https://github.com/Installation-04/StreamRD/blob/main/docs/api-schema.md).

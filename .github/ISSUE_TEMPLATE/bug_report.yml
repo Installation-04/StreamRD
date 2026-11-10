@@ -5,7 +5,7 @@ body:
     id: product
     attributes:
       label: Affected product
-      options: [StreamRD, Phosphor, Shared deployment, Native client]
+      options: [StreamRD, Phosphor, Shared deployment]
     validations:
       required: true
   - type: input

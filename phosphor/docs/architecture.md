@@ -7,11 +7,11 @@
                                 │              Phosphor backend               │
    Web (Next.js) ──────┐        │  ┌───────────┐   ┌───────────────────────┐  │
                        │  HTTPS │  │ Express   │   │ DebridManager         │  │
-   Android/Fire TV ────┼──/─────┼─▶│ REST API  │──▶│  ├─ Real-Debrid       │──┼──▶ api.real-debrid.com
+   Scripts / API ──────┼──/─────┼─▶│ REST API  │──▶│  ├─ Real-Debrid       │──┼──▶ api.real-debrid.com
                        │  HTTP  │  │ JWT+RBAC  │   │  ├─ AllDebrid         │──┼──▶ api.alldebrid.com
-   Apple TV (SwiftUI) ─┤        │  └─────┬─────┘   │  ├─ Premiumize        │──┼──▶ premiumize.me/api
+                       │        │  └─────┬─────┘   │  ├─ Premiumize        │──┼──▶ premiumize.me/api
                        │        │        │         │  └─ Torbox            │──┼──▶ api.torbox.app
-   Desktop (Tauri) ────┘        │        │         └───────────────────────┘  │
+                       ┘        │        │         └───────────────────────┘  │
                                 │  ┌─────▼─────┐   ┌───────────────────────┐  │
                                 │  │  Prisma   │   │ Torznab search client │──┼──▶ your Jackett / Prowlarr
                                 │  │  SQLite   │   └───────────────────────┘  │
@@ -97,15 +97,9 @@ green phosphor text, scanline overlay, monospace font, glow effects — see
 `src/app/globals.css`. Middleware gates `/admin`, `/account`, `/downloads`
 for a nicer UX; the API enforces the real RBAC regardless.
 
-## TV (`/phosphor/tv`) and Desktop (`/phosphor/desktop`)
+## Other clients
 
-- `tv/android-tv` — react-native-tvos, remote-first focus navigation, same
-  retro theme, same screens (settings, login, search, queue, player).
-- `tv/apple-tv` — SwiftUI + AVKit, same screens and theme.
-- `desktop` — a thin Tauri wrapper: on first launch it asks for the URL
-  where your Phosphor **web app** is reachable, then loads it directly in a
-  native window. It does not reimplement the UI — the web app already runs
-  natively inside the wrapper.
+The repository no longer ships native apps: the Expo mobile app, the Android TV / Fire TV and Apple TV apps and the Phosphor desktop wrapper were unmaintained, not built in CI and targeted an older API, so they were removed after v0.10.1 (they remain in git history, for example at the `v0.8.1` tag). The REST API in [api-schema.md](api-schema.md) is unchanged, so any client that sends a Bearer token can still use it.
 
 ## Networking modes
 

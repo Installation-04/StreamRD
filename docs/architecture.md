@@ -7,11 +7,11 @@
                                 │              StreamRD backend             │
    Web (Next.js) ──────┐        │  ┌───────────┐   ┌─────────────────────┐  │
                        │  HTTPS │  │ Express   │   │ DebridManager       │  │
-   Mobile (Expo RN) ───┼──/─────┼─▶│ REST API  │──▶│  ├─ Real-Debrid     │──┼──▶ api.real-debrid.com
+   Scripts / API ──────┼──/─────┼─▶│ REST API  │──▶│  ├─ Real-Debrid     │──┼──▶ api.real-debrid.com
                        │  HTTP  │  │ JWT+RBAC  │   │  ├─ AllDebrid       │──┼──▶ api.alldebrid.com
-   Android/Fire TV ────┤        │  └─────┬─────┘   │  └─ Premiumize      │──┼──▶ premiumize.me/api
+                       │        │  └─────┬─────┘   │  └─ Premiumize      │──┼──▶ premiumize.me/api
                        │        │        │         └─────────────────────┘  │
-   Apple TV (SwiftUI) ─┘        │  ┌─────▼─────┐                            │
+                       ┘        │  ┌─────▼─────┐                            │
                                 │  │  Prisma   │──▶ SQLite (or PostgreSQL)  │
                                 │  └───────────┘                            │
                                 └───────────────────────────────────────────┘
@@ -90,13 +90,9 @@ off `/admin/*` — a UX convenience; the API enforces the real RBAC. Dark theme
 is default with a light toggle, and UI strings route through a minimal i18n
 dictionary (`src/lib/i18n.ts`) ready for more locales.
 
-## Mobile (`/mobile`) and TV (`/tv`)
+## Other clients
 
-Expo React Native (phones), react-native-tvos (Android TV / Fire TV) and
-SwiftUI (Apple TV). All three persist a user-editable **server URL** and the
-JWT locally, probe `/api/health` for connectivity tests, and use the same
-endpoints as the web app. Admin surface on these devices is intentionally
-minimal (a read-only health view on mobile, none on TV).
+The repository no longer ships native apps: the Expo mobile app, the Android TV / Fire TV and Apple TV apps and the Phosphor desktop wrapper were unmaintained, not built in CI and targeted an older API, so they were removed after v0.10.1 (they remain in git history, for example at the `v0.8.1` tag). The REST API in [api-schema.md](api-schema.md) is unchanged, so any client that sends a Bearer token can still use it.
 
 ## Networking modes
 

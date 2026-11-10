@@ -20,14 +20,5 @@ phosphor/server/data/
 *.tsbuildinfo
 next-env.d.ts
 
-# Mobile/TV native artifacts
-mobile/.expo/
-tv/android-tv/android/
-tv/android-tv/ios/
-phosphor/tv/android-tv/android/
-phosphor/tv/android-tv/ios/
 *.xcodeproj
 *.xcworkspace
-
-# Tauri desktop build artifacts
-phosphor/desktop/src-tauri/target/

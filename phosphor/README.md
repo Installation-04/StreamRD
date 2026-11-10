@@ -7,10 +7,10 @@ No admin-curated catalog — you search your own torrent indexers, one-click
 add results to your own debrid account, and stream once resolved.
 
 ```text
-   Web (Next.js) ──────┐                ┌──────────────────────────────────┐
-   Android/Fire TV ────┤   HTTPS/HTTP   │ Phosphor backend (Node/TS)       │
-   Apple TV (SwiftUI) ─┼───────────────▶│  REST API · JWT + RBAC · Prisma  │
-   Desktop (Tauri) ─────┘  LAN/proxy/VPN │  DebridManager ─┬─ Real-Debrid  │
+   Web (Next.js) ──────┐   HTTPS/HTTP   ┌──────────────────────────────────┐
+   Scripts / API ──────┴───────────────▶│ Phosphor backend (Node/TS)       │
+                          LAN/proxy/VPN │  REST API · JWT + RBAC · Prisma  │
+                                        │  DebridManager ─┬─ Real-Debrid  │
                                         │                  ├─ AllDebrid    │
                                         │                  ├─ Premiumize   │
                                         │                  └─ Torbox       │
@@ -39,8 +39,7 @@ Use it within the providers' terms of service and your local law.
   only as `****abcd` hints).
 - **Admin dashboard** — users, indexers (add/test/enable), global provider
   order & toggles, health stats, structured logs, config export/import.
-- **Every screen** — web, Android TV / Fire TV, Apple TV, and a thin Tauri
-  desktop wrapper — all retro terminal / CRT themed (scanlines, monospace,
+- **Every screen with a browser** — the web UI, retro terminal / CRT themed (scanlines, monospace,
   blinking cursor; an original design, not copied from anywhere), with
   three classic monitor color variants — green, amber, and white phosphor.
 - **Deploy anywhere** — Dockerized backend + web, Caddy/Nginx reverse-proxy
@@ -53,8 +52,6 @@ Use it within the providers' terms of service and your local law.
 |---|---|
 | Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, `fast-xml-parser` (Torznab), Vitest + Supertest |
 | Web (`/web`) | Next.js (App Router), React, TypeScript |
-| TV (`/tv`) | react-native-tvos (Android TV / Fire TV), SwiftUI + AVKit (tvOS) |
-| Desktop (`/desktop`) | Tauri — native window embedding the web app |
 | Infra (`/infra`) | Docker, docker-compose, Caddy & Nginx configs |
 
 ## Quick start
@@ -89,9 +86,6 @@ cd server && npm install && npx prisma generate && npx prisma db push && npm run
 
 # Web on :3100
 cd web && npm install && npm run dev
-
-# TV — see tv/android-tv/README.md and tv/apple-tv/README.md
-# Desktop — see desktop/README.md
 ```
 
 ## Configuration
