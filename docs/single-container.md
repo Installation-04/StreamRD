@@ -55,7 +55,7 @@ docker compose pull && docker compose up -d
 That is all: the new image replaces the old container, and `config/` and `data/` are not modified. On start the
 server snapshots each database (verified) before applying any migration. You can also just re-run `get.sh`, which
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
-`docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database.
+`docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
 Updates are never applied by the app itself, as with Radarr and Sonarr in Docker. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
@@ -109,8 +109,15 @@ start with `CONFIG_DIR=/config`. Back the volume up first.
 | `/config/streamrd` | StreamRD SQLite database, `backups/` and migration snapshots, scanner exports |
 | `/config/phosphor` | Phosphor database, snapshots and exports |
 | `/config/qbittorrent` | qBittorrent configuration, resume data and transfer state |
-| `/config/secrets` | Stable session signing keys and the local client's generated password |
+| `/config/secrets` | Stable session signing keys, the keys that encrypt stored credentials, and the local client's generated password |
 | `/data/downloads` | Default local download location |
+
+**Credentials are encrypted in the databases.** Debrid keys (both products), Phosphor's indexer API keys and the qBittorrent
+connection password are stored with AES-256-GCM, using a key generated into `config/secrets/streamrd-data-key` and
+`phosphor-data-key` (or `STREAMRD_DATA_KEY` / `PHOSPHOR_DATA_KEY`; split installs set `DATA_ENCRYPTION_KEY`, or the key is derived
+from `JWT_SECRET`). A database backup alone no longer exposes those credentials, but it also cannot be read without the key:
+**keep `config/secrets` with your backups.** If the key is lost or changed, the affected credentials read as "not configured" and
+you enter them again. Plaintext values from earlier versions are encrypted automatically the first time version 0.10 starts.
 
 Back up `config/` (with the container stopped for a copy that includes the downloader's state, or use the
 **Admin → System** backup for the databases). `docker compose down` keeps both folders. Generated secrets are private
@@ -155,6 +162,7 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `QBIT_PASSWORD` | Optional explicit password of at least 16 characters; otherwise generated and persisted |
 | `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
+| `STREAMRD_DATA_KEY`, `PHOSPHOR_DATA_KEY` | Optional explicit keys (at least 16 characters) for encrypting stored credentials; otherwise generated under `/config/secrets` |
 | `CORS_ORIGINS` | Empty (same-origin only); comma-separated origins if another web app calls the APIs |
 | `SQLITE_WAL` | `true`; set `false` only if the data folder is on a network file system |
 | `TRUST_PROXY` | `false`; enable only behind your own trusted HTTPS reverse proxy to honor its protocol header |

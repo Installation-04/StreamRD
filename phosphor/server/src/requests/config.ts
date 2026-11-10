@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
+import { decryptSecret, encryptSecret } from "../crypto";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 import { asyncHandler } from "../http";
 import { parseBody } from "../routes/helpers";
@@ -11,11 +12,14 @@ import { normalizeQbitUrl, QbitClient, QbitSettings, RequestClientError } from "
 
 const KEY = "requests.qbit";
 const empty = (): QbitSettings => ({ enabled: false, baseUrl: "", username: "", password: "", ownerId: "" });
-const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(500), ownerId: z.string() });
+const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(1500), ownerId: z.string() });
+/** The password is stored encrypted (see crypto.ts); callers always see it in clear. */
+const readStored = (value: string | undefined): QbitSettings => { const stored = storedSchema.parse(JSON.parse(value ?? "null")); return { ...stored, password: decryptSecret(stored.password) ?? "" }; };
+const serialize = (value: QbitSettings): string => JSON.stringify({ ...value, password: encryptSecret(value.password) });
 type SettingsDb = Pick<Prisma.TransactionClient, "setting" | "user">;
 export async function getRequestSettings(client: SettingsDb = db): Promise<{ qbit: QbitSettings }> {
   const row = await client.setting.findUnique({ where: { key: KEY } });
-  try { return { qbit: storedSchema.parse(JSON.parse(row?.value ?? "null")) }; } catch { return { qbit: empty() }; }
+  try { return { qbit: readStored(row?.value) }; } catch { return { qbit: empty() }; }
 }
 export async function qbitContext(userId: string, client: SettingsDb = db) {
   const [{ qbit }, user] = await Promise.all([getRequestSettings(client), client.user.findFirst({ where: { id: userId, active: true, role: "admin" }, select: { id: true } })]);
@@ -45,14 +49,14 @@ requestSettingsRouter.put("/", limit, asyncHandler(async (req, res) => {
       if (!actor || req.session!.exp * 1000 <= Date.now()) throw new RequestClientError("Your administrator session is no longer active.", 401);
       const row = await tx.setting.findUnique({ where: { key: KEY } });
       let current = empty();
-      try { current = storedSchema.parse(JSON.parse(row?.value ?? "null")); } catch { /* malformed configuration stays disabled */ }
+      try { current = readStored(row?.value); } catch { /* malformed configuration stays disabled */ }
       if (current.ownerId && current.ownerId !== actor.id) throw new RequestClientError("This qBittorrent connection belongs to another administrator.");
       const input = body.qbit;
       const value: QbitSettings = { ...current, enabled: input.enabled ?? current.enabled, baseUrl: input.baseUrl === undefined ? current.baseUrl : input.baseUrl ? normalizeQbitUrl(input.baseUrl) : "", username: input.username ?? current.username, password: input.clearPassword ? "" : input.password || current.password, ownerId: actor.id };
       if (input.clearPassword) value.enabled = false;
       if (value.enabled && (!value.baseUrl || !value.username || !value.password)) throw new RequestClientError("A URL, username and password are required to enable qBittorrent.", 400);
       if (!value.password || !value.baseUrl) value.enabled = false;
-      await tx.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: JSON.stringify(value) }, update: { value: JSON.stringify(value) } });
+      await tx.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: serialize(value) }, update: { value: serialize(value) } });
       return value;
     }, { maxWait: 10000, timeout: 10000 });
     res.json({ settings: publicSettings(saved, req.session!.sub) });
