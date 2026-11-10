@@ -1,27 +1,27 @@
-# Users and server sharing
+# Users and libraries
 
-Administrators can manage accounts, change registration policy, create expiring
-invitation links and sign other users out of all devices. Named shared libraries
-allow selected users to watch through the source administrator's connected debrid
-account, with no provider key required from the viewer.
+StreamRD works like Plex: the server has **libraries** (for example *Movies* and *TV Shows*), the administrator
+decides who can see each one, and everyone signs in with a local account on this server. Nobody needs their
+own debrid key; playback uses the administrator's connected account.
 
-1. Import your server account's media into My library.
-2. In Admin → Users, choose invitation-only registration and create email-bound links.
-3. After recipients join, create a named collection in Admin → Shared libraries and
-   select the users who may watch it.
-4. Viewers open Shared libraries. Removing a grant blocks new playback requests.
+## Set up libraries and people
 
-The collection contains present and future imports matching its all/movie/series
-filter. Only the source administrator can publish or change that collection.
-Original private collections and provider content are preserved when a share is removed.
-The legacy curated catalog/search retain their existing server-wide rules.
+1. **Imports.** The administrator imports their debrid account's media (navigation → *Imports*, or the setup page).
+2. **Libraries.** In **Admin → Libraries**, create the libraries you want. Pick a content type (movies, TV shows, or both)
+   and either tick **Visible to everyone** or add chosen people under *Who can watch*. A library always shows the
+   imported media of its type, including titles imported later. **Paused** hides it without losing its access list.
+3. **People.** In **Admin → Users**, choose invitation-only registration and create email-bound invitation links.
+   Send the link by any means; it works wherever the server can be reached, on your local network or over a private network
+   such as Tailscale.
+4. **Watching.** Everyone opens **Library** in the navigation. They see only the libraries they may see, with their
+   own *Continue watching* and resume positions.
 
-This is the core server sharing model, not full Plex Home parity. PIN-protected
-managed users, parental restrictions, device inventories, concurrency limits and
-per-profile progress for shared imports remain future work. Each viewer account
-resumes shared titles where it stopped, and **Shared libraries** shows a Continue
-watching row (StreamRD; Phosphor does not yet record shared progress). Direct provider URLs already
-issued may work until the provider expires them.
+The **home page** shows Continue watching, New in your libraries, Popular on this server, and public Trending and
+Popular lists (see the [full guide](https://github.com/Installation-04/StreamRD/blob/main/docs/server-sharing.md)).
 
-See the [full guide](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/server-sharing.md)
-for the v0.6.0 implementation and API contract.
+## What is and is not included
+
+This is a server-managed sharing model, not full Plex Home parity. Age-rating limits (for example a kids account),
+PIN-protected managed users, invitations that carry library access, device inventories and concurrency limits are
+planned; see the [roadmap](https://github.com/Installation-04/StreamRD/blob/main/docs/roadmap.md). Removing a person's access blocks
+new playback requests at once; direct provider links already issued may work until the provider expires them.
