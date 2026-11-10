@@ -16,10 +16,10 @@ Admin → Logs with search, date filters, paging, copy and downloads. No migrati
 **v0.8.0** (shipped in v0.8.1; not tagged separately) adds media discovery and requests (TMDB/OMDb search, deduplicated requests, admin approval to a cloud provider or local
 qBittorrent), the all-in-one container, and Admin → System update checks, verified backups and restore. From v0.8.1 a tag also publishes
 the all-in-one image to the repository's container registry (amd64). One additive migration per product.
-[Notes](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/releases/v0.8.0.md).
+[Notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.8.0.md).
 
 **v0.7.0** (shipped in v0.8.1; not tagged separately) lets each viewer of a StreamRD shared library resume where they stopped and adds a Continue watching row; one additive
-migration, no provider links or credentials stored. [Notes](https://github.com/Installation-04/StreamRD/blob/v0.8.1/docs/releases/v0.7.0.md).
+migration, no provider links or credentials stored. [Notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.7.0.md).
 
 ## Previous: v0.6.0 Server Sharing
 
