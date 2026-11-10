@@ -5,7 +5,7 @@ import { verifySession } from "./jwt";
 /**
  * Browser sessions: when the web app and the API share an origin (the single container), the web app
  * asks for a cookie session with "X-Session: cookie". The token then lives only in an HttpOnly cookie, so
- * page scripts can never read it, and the response body omits it. Other clients (mobile, TV, split
+ * page scripts can never read it, and the response body omits it. Other clients (scripts, split
  * installs that use another origin) keep receiving the token in the body and sending it as a Bearer header.
  */
 export const SESSION_COOKIE = PRODUCT.sessionCookie;
