@@ -39,7 +39,8 @@
         "routes/system.ts",
         "shared-libraries.ts",
         "system.ts",
-        "util/rateLimit.ts"
+        "util/rateLimit.ts",
+        "versions.ts"
       ]
     },
     {
@@ -78,7 +79,8 @@
         "request-worker.test.ts",
         "requests.test.ts",
         "session-cookie.test.ts",
-        "system.test.ts"
+        "system.test.ts",
+        "title-versions.test.ts"
       ]
     },
     {

@@ -36,6 +36,11 @@ The home page has rows, from top to bottom: **Continue watching**, **New in your
 - The banner at the top is a **carousel** of featured titles (your own matched titles first, then what is trending). Trailers are optional
   per viewer: nothing is loaded from YouTube until a viewer presses *Watch trailer* or ticks *Autoplay trailers*, and `HOME_TRAILERS=false` removes the option.
 
+## One card per title
+
+Copies of one title (for example 1080p and 4K, or several season packs of a show) share a card in the library; the title page offers the
+versions, labelled from the release name. Nothing is merged or deleted: see [the library model notes](library-model.md).
+
 ## The player
 
 **Play from server** opens a full-page player (`/play/<library>/<title>`): black, with a title bar that fades while you watch, resume, a searchable

@@ -5,6 +5,7 @@ import { startMetadataWorker } from "./metadata/automation";
 import { ensureZileanIndexer } from "./indexers/zilean";
 import { createApp } from "./app";
 import { backfillRatings } from "./ratings";
+import { backfillGroups } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
@@ -25,6 +26,7 @@ async function main() {
     startAccountLibraryWorker();
     startMetadataWorker();
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
+    void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
     void ensureZileanIndexer().catch(() => undefined);
     void logEvent("info", "system", `Phosphor server listening on :${config.port}`);

@@ -3,6 +3,7 @@ import { AccountMedia, AccountScan, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { DEFAULT_SERVER_SETTINGS } from "./settings";
 import { classifyTitle } from "./media-filter";
+import { refreshPrimaries, titleKey } from "./versions";
 import { PROVIDER_IDS, ProviderCredentials, ProviderError, ProviderId } from "./providers/types";
 import { ExistingAccountItem, playAccountItem, scanAccountPage } from "./providers/account-library";
 
@@ -114,7 +115,7 @@ export function mediaHint(item: ExistingAccountItem) {
   const name = (cleaned || filename || original).slice(0, 240);
   const phase = ["queued", "downloading", "finished", "error"].includes(item.phase) ? item.phase : "queued";
   const progress = Number.isFinite(item.progress) ? Math.round(Math.max(0, Math.min(item.progress, 100))) : 0;
-  return { name, type: episode ? "series" : "movie", year: yearMatch ? Number(yearMatch[1]) : null, phase, progress };
+  return { name, type: episode ? "series" : "movie", year: yearMatch ? Number(yearMatch[1]) : null, phase, progress, releaseName: original.slice(0, 300) };
 }
 /** Process at most one bounded provider page, with a durable exclusive claim. */
 export async function runAccountLibraryJob(): Promise<boolean> {
@@ -141,17 +142,19 @@ export async function runAccountLibraryJob(): Promise<boolean> {
         await tx.accountScan.updateMany({ where: owned, data: { status: "cancelled", leaseUntil: null, error: "Scan stopped because account or provider configuration changed." } }); return [];
       }
       let imported = 0, skipped = 0;
-      const importedItems: AccountMedia[] = [];
+      const importedItems: AccountMedia[] = [], touchedGroups: Array<string | null | undefined> = [];
       for (const item of page.items) {
         const hint = mediaHint(item); if (!hint) { skipped++; continue; }
         const key = { userId: scan.userId, provider, providerRef: item.providerRef };
         const existing = await tx.accountMedia.findUnique({ where: { userId_provider_providerRef: key } });
         const sameSource = existing?.credentialFingerprint === scan.credentialFingerprint;
         if (existing && !sameSource) await tx.metadataRecord.deleteMany({ where: { targetType: "account", targetId: existing.id, ownerId: scan.userId } });
-        const update = sameSource ? { phase: hint.phase, progress: hint.progress, credentialFingerprint: scan.credentialFingerprint } : { ...hint, credentialFingerprint: scan.credentialFingerprint };
-        const saved = await tx.accountMedia.upsert({ where: { userId_provider_providerRef: key }, create: { ...key, ...hint, credentialFingerprint: scan.credentialFingerprint }, update });
-        importedItems.push(saved); if (existing) skipped++; else imported++;
+        const groupKey = titleKey(hint.name, hint.year, hint.type);
+        const update = sameSource ? { phase: hint.phase, progress: hint.progress, credentialFingerprint: scan.credentialFingerprint, ...(existing?.releaseName ? {} : { releaseName: hint.releaseName }) } : { ...hint, groupKey, credentialFingerprint: scan.credentialFingerprint };
+        const saved = await tx.accountMedia.upsert({ where: { userId_provider_providerRef: key }, create: { ...key, ...hint, groupKey, credentialFingerprint: scan.credentialFingerprint }, update });
+        touchedGroups.push(saved.groupKey, existing?.groupKey); importedItems.push(saved); if (existing) skipped++; else imported++;
       }
+      await refreshPrimaries(tx, scan.userId, touchedGroups);
       const incomplete = Boolean(page.warning) || (page.nextCursor !== null && (page.nextCursor === scan.cursor || scan.pages + 1 >= MAX_PAGES));
       await tx.accountScan.updateMany({ where: owned, data: { status: incomplete ? "error" : page.nextCursor ? "queued" : "complete", cursor: page.nextCursor, leaseUntil: null, nextAttemptAt: new Date(), failures: 0, pages: { increment: 1 }, scanned: { increment: page.items.length }, imported: { increment: imported }, skipped: { increment: skipped }, error: incomplete ? "The provider scan could not establish a complete library. Imported items were kept; review the connection and rescan." : null } });
       return importedItems;
@@ -195,6 +198,6 @@ export async function playImportedMedia(userId: string, id: string, fileToken?: 
   const stillOwned = await db.accountMedia.findFirst({ where: { id, userId, credentialFingerprint: item.credentialFingerprint } });
   if (!stillOwned || !fresh.active || !fresh.enabled || !fresh.configured || fresh.fingerprint !== item.credentialFingerprint) throw new AccountLibraryError("The account changed while resolving playback. Refresh your library and retry.", 409);
   if (authorize) await authorize();
-  if (result.stream) await db.accountMedia.updateMany({ where: { id, userId, credentialFingerprint: item.credentialFingerprint }, data: { phase: "finished", progress: 100 } });
+  if (result.stream) { await db.accountMedia.updateMany({ where: { id, userId, credentialFingerprint: item.credentialFingerprint }, data: { phase: "finished", progress: 100 } }); await refreshPrimaries(db, userId, [(await db.accountMedia.findUnique({ where: { id }, select: { groupKey: true } }))?.groupKey]); }
   return result;
 }

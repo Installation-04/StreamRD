@@ -4,6 +4,7 @@ import { setAccountImportHook, startAccountLibraryWorker } from "./account-libra
 import { startMetadataWorker } from "./metadata/automation";
 import { createApp } from "./app";
 import { backfillRatings } from "./ratings";
+import { backfillGroups } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
@@ -25,6 +26,7 @@ async function main() {
     startAccountLibraryWorker();
     startMetadataWorker();
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
+    void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);
   });

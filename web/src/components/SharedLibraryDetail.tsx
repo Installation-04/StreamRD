@@ -7,19 +7,20 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { imdbLink, metadataSourceLink, PROVIDER_LABELS } from "@/lib/metadata";
-import { SharedLibrary } from "@/lib/shared-libraries";
+import { SharedLibrary, TitleVersion } from "@/lib/shared-libraries";
 import styles from "@/app/library/[id]/detail.module.css";
 
 export default function SharedLibraryDetail() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [library, setLibrary] = useState<SharedLibrary | null>(null);
+  const [versions, setVersions] = useState<TitleVersion[]>([]);
   const [item, setItem] = useState<AccountMedia | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const mounted = useRef(false), request = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
     try {
-      const response = await api<{ item: AccountMedia; library: SharedLibrary }>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, { signal: controller.signal });
-      if (controller.signal.aborted || !mounted.current) return; setItem(response.item); setLibrary(response.library); setError("");
+      const response = await api<{ item: AccountMedia; library: SharedLibrary; versions?: TitleVersion[] }>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, { signal: controller.signal });
+      if (controller.signal.aborted || !mounted.current) return; setItem(response.item); setLibrary(response.library); setVersions(response.versions ?? []); setError("");
     } catch (reason) { if (!controller.signal.aborted && mounted.current) { setItem(null); setLibrary(null); setError(reason instanceof Error ? reason.message : "This title could not be loaded."); } }
     finally { if (!controller.signal.aborted && mounted.current) setLoading(false); }
   }, [id, itemId]);
@@ -51,6 +52,9 @@ export default function SharedLibraryDetail() {
         {metadata?.genres.length ? <p className={styles.genres}>{metadata.genres.join(" · ")}</p> : null}
         <p className={styles.overview}>{metadata?.description || "This title is part of a collection shared with you by the server. Your server handles the connection when you press Play."}</p>
         <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" onClick={() => router.push(`/play/${encodeURIComponent(id)}/${encodeURIComponent(item.id)}`)}>▶ Play from server</button></div>
+        {versions.length > 1 && <label className={styles.availability} style={{ display: "block" }}>This title has {versions.length} versions:{" "}<select aria-label="Version" value={item.id} onChange={event => router.push(`/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(event.target.value)}`)}>
+          {versions.map(version => <option key={version.id} value={version.id}>{version.quality ?? version.release ?? "Version"}{version.phase === "finished" ? "" : ` (${version.phase})`} · added {new Date(version.createdAt).toLocaleDateString()}</option>)}
+        </select></label>}
         {user?.role === "admin" && <label className={styles.availability} style={{ display: "block" }}>Age rating (administrators only):{" "}<select aria-label="Age rating" value={item.ratingManual ? item.ratingLabel ?? "" : ""} onChange={event => { void api(`/api/admin/shared-libraries/items/${encodeURIComponent(item.id)}/rating`, { method: "PUT", body: JSON.stringify({ rating: event.target.value || null }) }).then(() => load()).catch(reason => setError(reason instanceof Error ? reason.message : "The rating could not be saved.")); }}>
           <option value="">{!item.ratingManual && item.ratingLabel ? `From metadata: ${item.ratingLabel}` : "Not rated: hidden from limited accounts"}</option>
           {["G", "TV-Y", "TV-Y7", "PG", "TV-PG", "PG-13", "TV-14", "R", "TV-MA"].map(label => <option key={label} value={label}>{label}</option>)}

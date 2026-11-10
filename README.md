@@ -135,6 +135,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 
 **Watch**
 - A streaming-style web UI in black and orange (dark, light or system theme), responsive, with up to five viewing profiles per account.
+- One card per title: copies of the same film (1080p, 4K) or show share a card, with the versions on its page.
 - A full-page player with resume, Up next, keyboard shortcuts and a VLC/mpv hand-off for files a browser cannot play.
 - A home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
 - My List and per-viewer resume across all libraries.

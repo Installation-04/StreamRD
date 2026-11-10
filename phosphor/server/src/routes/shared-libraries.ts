@@ -11,6 +11,7 @@ import { assertActiveSharedViewer, assertSharedViewer, assertUnchangedSharedView
 import { accountMediaViews } from "./account-library";
 import { rateLimit } from "../util/rateLimit";
 import { viewingLimit } from "../restrictions";
+import { versionViews } from "../versions";
 import { ageForRating, syncAccountRating } from "../ratings";
 
 export const sharedLibrariesRouter = Router();
@@ -120,7 +121,7 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type } = parse(list, req.query);
   const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
-  const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : [])] };
+  const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, { isPrimary: true }, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : [])] };
   const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
   let after: z.infer<typeof cursorSchema> | undefined;
   if (cursor) {
@@ -139,7 +140,7 @@ sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
   const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
-  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library, ageLimit) };
+  const result = { item: (await accountMediaViews([item]))[0], library: await sharedLibraryView(library, ageLimit), versions: await versionViews(sourceWhere, item) };
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, [item.id], ageLimit);
   res.json(result);
