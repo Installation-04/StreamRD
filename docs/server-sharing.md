@@ -33,6 +33,8 @@ The home page has Plex-style rows, from top to bottom: **Continue watching**, **
   hours and keeps the last good copy for a week if the service is down, so browsers never contact it and nothing about a viewer
   is sent. Opening one of these titles leads to its page, where it can be requested.
 - Operators can turn the outside lists off with `HOME_EXTERNAL_LISTS=false`; the library rows keep working.
+- The banner at the top is a **carousel** of featured titles (your own matched titles first, then what is trending). Trailers are optional
+  per viewer: nothing is loaded from YouTube until a viewer presses *Watch trailer* or ticks *Autoplay trailers*, and `HOME_TRAILERS=false` removes the option.
 
 ## Account administration
 

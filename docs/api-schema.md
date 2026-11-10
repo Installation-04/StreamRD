@@ -505,7 +505,7 @@ All routes require an active session and current access to the library.
   `{accepted:false, reason:"out-of-order"}`. Unknown/superseded sessions and
   inaccessible items return 404; positions past the duration are rejected (400).
   95% watched marks the file complete and resets the resume position.
-- `GET /api/home` → `{externalEnabled, recentlyAdded:[{libraryId|null,item}], popularHere:[…], trending:[card], popularMovies:[card], popularSeries:[card]}`; a card is `{provider:"free",id,type,name,year,posterUrl,rating}`.
+- `GET /api/home` → `{externalEnabled, trailersEnabled, featured:[slide], recentlyAdded:[{libraryId|null,item}], popularHere:[…], trending:[card], popularMovies:[card], popularSeries:[card]}`; a card is `{provider:"free",id,type,name,year,posterUrl,rating}`; a slide is `{kind:"library"|"external",id,href,title,year,rating,genres,description,backdropUrl,trailer,label}` where `trailer` is a YouTube id or null.
 - Administrators can set `everyone: true` when creating or updating a library (`/api/admin/shared-libraries`) to make it visible to every active user without per-user grants.
 - `GET /api/shared-libraries/continue?limit=12` → `{items:[{libraryId,item,positionSeconds,durationSeconds,updatedAt}]}`
   for incomplete, currently accessible items, newest first, one per item.

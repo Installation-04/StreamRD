@@ -121,7 +121,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 
 **Watch**
 - A streaming-style web UI in black and orange (dark, light or system theme), responsive, with up to five viewing profiles per account.
-- A Plex-style home page: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
+- A Plex-style home page with a featured carousel (optional trailers) and rows: Continue watching, New in your libraries, Popular on this server, and public Trending and Popular lists.
 - My List and per-viewer resume across all libraries.
 - Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
 - Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.

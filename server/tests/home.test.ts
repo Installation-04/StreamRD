@@ -25,7 +25,8 @@ async function imports(owner: User) {
   return db.accountMedia.findMany({ where: { userId: owner.id }, orderBy: { name: "asc" } });
 }
 const poster = (id: string) => `https://images.metahub.space/poster/small/${id}/img`;
-const meta = (n: number, name: string, extra: Record<string, unknown> = {}) => ({ imdb_id: `tt${String(1000000 + n)}`, name, year: "2024", poster: poster(`tt${1000000 + n}`), imdbRating: "7.5", popularities: { trakt: 10 * n }, type: "movie", ...extra });
+const backdrop = (id: string) => `https://images.metahub.space/background/medium/${id}/img`;
+const meta = (n: number, name: string, extra: Record<string, unknown> = {}) => ({ imdb_id: `tt${String(1000000 + n)}`, name, year: "2024", poster: poster(`tt${1000000 + n}`), background: backdrop(`tt${1000000 + n}`), description: `About ${name}.`, genres: ["Drama", "Mystery", "Comedy", "Extra"], trailers: [{ source: "abcDEF12345", type: "Trailer" }], imdbRating: "7.5", popularities: { trakt: 10 * n }, type: "movie", ...extra });
 let calls: URL[];
 function catalogues(handler?: (url: URL) => Response | undefined) {
   calls = [];
@@ -34,12 +35,12 @@ function catalogues(handler?: (url: URL) => Response | undefined) {
     const custom = handler?.(url); if (custom) return custom;
     // The real service redirects catalogue requests to a second host.
     if (url.hostname === "v3-cinemeta.strem.io") return new Response(null, { status: 307, headers: { Location: `https://cinemeta-catalogs.strem.io/top/catalog${url.pathname}` } });
-    if (url.hostname === "cinemeta-catalogs.strem.io" && url.pathname.includes("/movie/")) return Response.json({ metas: [meta(1, "Movie One"), meta(5, "Movie Five"), meta(1, "Movie One again"), { id: "kitsu:1", name: "Not IMDb" }, meta(2, "Bad Poster", { poster: "https://evil.example/p.jpg" })] });
+    if (url.hostname === "cinemeta-catalogs.strem.io" && url.pathname.includes("/movie/")) return Response.json({ metas: [meta(1, "Movie One"), meta(5, "Movie Five"), meta(1, "Movie One again"), { id: "kitsu:1", name: "Not IMDb" }, meta(2, "Bad Poster", { poster: "https://evil.example/p.jpg", background: "https://evil.example/b.jpg", trailers: [{ source: "not a video id", type: "Trailer" }], trailerStreams: [{ ytId: "../../etc/pw" }] })] });
     if (url.hostname === "cinemeta-catalogs.strem.io") return Response.json({ metas: [meta(9, "Show Nine", { type: "series", year: "2019–2022" }), meta(3, "Show Three", { type: "series" })] });
     throw new Error(`Unexpected host ${url.hostname}`);
   }));
 }
-beforeEach(async () => { await resetDb(); vi.clearAllMocks(); setAccountImportHook(null); resetHomeCache(); delete process.env.HOME_EXTERNAL_LISTS; catalogues(); });
+beforeEach(async () => { await resetDb(); vi.clearAllMocks(); setAccountImportHook(null); resetHomeCache(); delete process.env.HOME_EXTERNAL_LISTS; delete process.env.HOME_TRAILERS; catalogues(); });
 afterEach(() => { vi.unstubAllGlobals(); delete process.env.HOME_EXTERNAL_LISTS; });
 
 it("requires authentication", async () => { expect((await request(app).get("/api/home")).status).toBe(401); });
@@ -53,6 +54,11 @@ it("builds trending and popular rows from the public catalogues, with sanitized 
   expect(res.body.popularSeries[0]).toMatchObject({ id: "tt1000009", type: "series", year: 2019 });
   expect(res.body.trending.map((c: { name: string }) => c.name)).toEqual(["Show Nine", "Movie Five", "Show Three", "Bad Poster", "Movie One"]);
   expect(JSON.stringify(res.body)).not.toContain("trakt");
+  // The banner: trending titles with a backdrop and synopsis, a valid trailer id only, safe images only.
+  expect(res.body.trailersEnabled).toBe(true);
+  expect(res.body.featured.map((slide: { title: string }) => slide.title)).toEqual(["Show Nine", "Movie Five", "Show Three", "Movie One"]);
+  expect(res.body.featured[0]).toEqual({ kind: "external", id: "tt1000009", href: "/discover/free/series/tt1000009", title: "Show Nine", year: 2019, rating: 7.5, genres: ["Drama", "Mystery", "Comedy"],
+    description: "About Show Nine.", backdropUrl: backdrop("tt1000009"), trailer: "abcDEF12345", label: "TRENDING NOW" });
   expect(calls.every(url => ["v3-cinemeta.strem.io", "cinemeta-catalogs.strem.io"].includes(url.hostname) && url.search === "")).toBe(true);
 });
 it("caches the lists, serves the last good copy when a refresh fails, and shows nothing when it never worked", async () => {
@@ -69,6 +75,13 @@ it("caches the lists, serves the last good copy when a refresh fails, and shows 
     expect(none.status).toBe(200); expect(none.body.trending).toEqual([]);
   } finally { vi.useRealTimers(); }
 });
+it("keeps trailers out of the banner when an operator turns them off, but keeps the slides", async () => {
+  process.env.HOME_TRAILERS = "false";
+  try {
+    const home = await request(app).get("/api/home").set(auth((await user()).token));
+    expect(home.body.trailersEnabled).toBe(false); expect(home.body.featured.length).toBe(4); expect(home.body.featured.every((slide: { trailer: string | null }) => slide.trailer === null)).toBe(true);
+  } finally { delete process.env.HOME_TRAILERS; }
+});
 it("refuses a redirect to any other host and can be switched off", async () => {
   const member = await user();
   catalogues(url => url.hostname === "v3-cinemeta.strem.io" ? new Response(null, { status: 307, headers: { Location: "https://evil.example/steal.json" } }) : undefined);
@@ -76,7 +89,7 @@ it("refuses a redirect to any other host and can be switched off", async () => {
   expect(blocked.body.trending).toEqual([]); expect(calls.some(url => url.hostname === "evil.example")).toBe(false);
   resetHomeCache(); process.env.HOME_EXTERNAL_LISTS = "false"; catalogues();
   const off = await request(app).get("/api/home").set(auth(member.token));
-  expect(off.body).toMatchObject({ externalEnabled: false, trending: [], popularMovies: [], popularSeries: [] }); expect(calls).toHaveLength(0);
+  expect(off.body).toMatchObject({ externalEnabled: false, trailersEnabled: false, trending: [], popularMovies: [], popularSeries: [], featured: [] }); expect(calls).toHaveLength(0);
 });
 it("shows recently added and popular-on-this-server titles only from libraries the viewer can see", async () => {
   const owner = await user("admin"), member = await user(), other = await user(), items = await imports(owner);
@@ -103,4 +116,16 @@ it("shows recently added and popular-on-this-server titles only from libraries t
   await request(app).patch(`/api/admin/shared-libraries/${libraryId}`).set(auth(owner.token)).send({ enabled: false });
   const hidden = await request(app).get("/api/home").set(auth(member.token));
   expect(hidden.body.recentlyAdded).toEqual([]); expect(hidden.body.popularHere).toEqual([]);
+});
+
+it("leads the banner with matched titles from the viewer's own libraries that have a backdrop and a synopsis", async () => {
+  const owner = await user("admin"), [film, show] = await imports(owner);
+  const data = (item: { id: string; name: string }, extra: Record<string, unknown>) => JSON.stringify({ provider: "free", id: "tt7654321", name: item.name, type: "movie", year: 2020, genres: ["Animation", "Short", "Fantasy", "Extra"], cast: [], rating: 8.1, fetchedAt: new Date().toISOString(), description: `${item.name} synopsis.`, ...extra });
+  await db.metadataRecord.create({ data: { targetType: "account", targetId: film.id, ownerId: owner.id, name: film.name, mediaType: "movie", status: "matched", data: data(film, { backdropUrl: "https://image.tmdb.org/t/p/w1280/backdrop.jpg" }) } });
+  await db.metadataRecord.create({ data: { targetType: "account", targetId: show.id, ownerId: owner.id, name: show.name, mediaType: "series", status: "matched", data: data(show, {}) } }); // no backdrop: left out
+  const home = await request(app).get("/api/home").set(auth(owner.token));
+  const first = home.body.featured[0];
+  expect(first).toMatchObject({ kind: "library", id: film.id, href: `/library/${film.id}`, rating: 8.1, genres: ["Animation", "Short", "Fantasy"], trailer: null, label: "NEW IN YOUR LIBRARIES", backdropUrl: "https://image.tmdb.org/t/p/w1280/backdrop.jpg" });
+  expect(home.body.featured.filter((slide: { kind: string }) => slide.kind === "library")).toHaveLength(1);
+  expect(home.body.featured.length).toBeLessThanOrEqual(6);
 });

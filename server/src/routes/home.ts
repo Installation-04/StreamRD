@@ -12,6 +12,7 @@ homeRouter.get("/", rateLimit({ windowMs: 60_000, max: 60 }), asyncHandler(async
   try {
     const [library, external] = await Promise.all([librarySections(req.session!.sub, req.session!.role), externalSections()]);
     await assertActiveSharedViewer(req.session!);
-    res.json({ ...library, ...external });
+    const { libraryFeatured, ...rest } = library, { featured: outside, ...others } = external;
+    res.json({ ...rest, ...others, featured: [...libraryFeatured, ...outside].slice(0, 6) });
   } catch (error) { if (error instanceof AccountLibraryError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
 }));

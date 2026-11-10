@@ -12,10 +12,12 @@ import { currentAccountMediaFilter } from "./account-library";
 const HOSTS = new Set(["v3-cinemeta.strem.io", "cinemeta-catalogs.strem.io"]), POSTER_HOST = "images.metahub.space";
 const FRESH_MS = 6 * 3600_000, STALE_MS = 7 * 86400_000, TIMEOUT_MS = 8000, MAX_BYTES = 4 * 1024 * 1024, ROW = 20;
 export interface ExternalCard { provider: "free"; id: string; type: "movie" | "series"; name: string; year: number | null; posterUrl: string | null; rating: number | null }
-type Ranked = ExternalCard & { trakt: number };
+type Ranked = ExternalCard & { trakt: number; backdrop: string | null; description: string; genres: string[]; trailer: string | null };
 const cache = new Map<string, { at: number; cards: Ranked[] }>(), flights = new Map<string, Promise<Ranked[]>>();
 export function resetHomeCache() { cache.clear(); flights.clear(); }
 export const externalListsEnabled = () => process.env.HOME_EXTERNAL_LISTS?.trim().toLowerCase() !== "false";
+/** Trailers are played by the viewer's browser from YouTube, and only after that viewer opts in; an operator can remove the option. */
+export const trailersAvailable = () => externalListsEnabled() && process.env.HOME_TRAILERS?.trim().toLowerCase() !== "false";
 
 async function getJson(href: string, hops = 2): Promise<unknown> {
   const url = new URL(href);
@@ -40,6 +42,15 @@ const text = (value: unknown, max: number) => typeof value === "string" ? value.
 function poster(value: unknown): string | null {
   try { const url = new URL(text(value, 2000)); return url.protocol === "https:" && url.hostname === POSTER_HOST && !url.username && !url.password && !url.port && !url.search && !url.hash ? url.href : null; } catch { return null; }
 }
+const youtubeId = (value: unknown): string | null => typeof value === "string" && /^[A-Za-z0-9_-]{11}$/.test(value) ? value : null;
+function trailerOf(meta: Record<string, unknown>): string | null {
+  for (const entry of Array.isArray(meta.trailers) ? meta.trailers : []) {
+    const item = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+    const id = item.type === undefined || item.type === "Trailer" ? youtubeId(item.source) : null; if (id) return id;
+  }
+  for (const entry of Array.isArray(meta.trailerStreams) ? meta.trailerStreams : []) { const id = youtubeId(entry && typeof entry === "object" ? (entry as Record<string, unknown>).ytId : null); if (id) return id; }
+  return null;
+}
 function card(value: unknown, type: "movie" | "series"): Ranked | null {
   const meta = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const id = [meta.imdb_id, meta.id].find((candidate): candidate is string => typeof candidate === "string" && /^tt\d{7,10}$/.test(candidate)), name = text(meta.name, 300);
@@ -47,7 +58,9 @@ function card(value: unknown, type: "movie" | "series"): Ranked | null {
   const yearMatch = /^(\d{4})/.exec(String(meta.year ?? meta.releaseInfo ?? "")), year = yearMatch && +yearMatch[1] >= 1800 && +yearMatch[1] <= 2200 ? +yearMatch[1] : null;
   const rating = /^(?:\d(?:\.\d+)?|10(?:\.0+)?)$/.test(text(meta.imdbRating, 10)) ? Number(meta.imdbRating) : null;
   const popularity = meta.popularities && typeof meta.popularities === "object" ? Number((meta.popularities as Record<string, unknown>).trakt) : 0;
-  return { provider: "free", id, type, name, year, posterUrl: poster(meta.poster), rating, trakt: Number.isFinite(popularity) ? popularity : 0 };
+  const genres = Array.isArray(meta.genres) ? [...new Set(meta.genres.map(genre => text(genre, 40)).filter(Boolean))].slice(0, 3) : [];
+  return { provider: "free", id, type, name, year, posterUrl: poster(meta.poster), rating, trakt: Number.isFinite(popularity) ? popularity : 0,
+    backdrop: poster(meta.background), description: text(meta.description, 280), genres, trailer: trailerOf(meta) };
 }
 /** One catalogue, cached; a failed refresh serves the last good copy for up to a week and otherwise nothing. */
 async function catalogue(type: "movie" | "series"): Promise<Ranked[]> {
@@ -67,19 +80,23 @@ async function catalogue(type: "movie" | "series"): Promise<Ranked[]> {
   })();
   flights.set(key, work); return work;
 }
-const strip = ({ trakt: _trakt, ...rest }: Ranked): ExternalCard => rest;
+const strip = ({ trakt: _trakt, backdrop: _backdrop, description: _description, genres: _genres, trailer: _trailer, ...rest }: Ranked): ExternalCard => rest;
+/** One slide of the home banner carousel. `trailer` is a YouTube video id or null. */
+export interface Slide { kind: "library" | "external"; id: string; href: string; title: string; year: number | null; rating: number | null; genres: string[]; description: string; backdropUrl: string; trailer: string | null; label: string }
 export async function externalSections() {
-  if (!externalListsEnabled()) return { externalEnabled: false, trending: [] as ExternalCard[], popularMovies: [] as ExternalCard[], popularSeries: [] as ExternalCard[] };
+  if (!externalListsEnabled()) return { externalEnabled: false, trailersEnabled: false, trending: [] as ExternalCard[], popularMovies: [] as ExternalCard[], popularSeries: [] as ExternalCard[], featured: [] as Slide[] };
   const [movies, series] = await Promise.all([catalogue("movie"), catalogue("series")]);
   const trending = [...movies, ...series].sort((a, b) => b.trakt - a.trakt).slice(0, ROW);
-  return { externalEnabled: true, trending: trending.map(strip), popularMovies: movies.slice(0, ROW).map(strip), popularSeries: series.slice(0, ROW).map(strip) };
+  const featured = trending.filter(card => card.backdrop && card.description).slice(0, 6).map((card): Slide => ({ kind: "external", id: card.id, href: `/discover/free/${card.type}/${encodeURIComponent(card.id)}`, title: card.name, year: card.year, rating: card.rating,
+    genres: card.genres, description: card.description, backdropUrl: card.backdrop!, trailer: trailersAvailable() ? card.trailer : null, label: "TRENDING NOW" }));
+  return { externalEnabled: true, trailersEnabled: trailersAvailable(), trending: trending.map(strip), popularMovies: movies.slice(0, ROW).map(strip), popularSeries: series.slice(0, ROW).map(strip), featured };
 }
 
 /** Administrators also see what they imported themselves, even before they put it in a library. */
 export async function librarySections(userId: string, role: string) {
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
   const own = role === "admin" ? [{ AND: [{ userId }, await currentAccountMediaFilter(userId)] }] : [];
-  if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [] };
+  if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], libraryFeatured: [] as Slide[] };
   const where = { phase: "finished", OR: [...await Promise.all(libraries.map(sharedMediaWhere)), ...own] };
   const libraryOf = (item: { userId: string; type: string }) => libraries.find(library => library.sourceUserId === item.userId && (library.mediaType === "all" || library.mediaType === item.type))?.id ?? null;
   const recent = await db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: ROW });
@@ -88,5 +105,13 @@ export async function librarySections(userId: string, role: string) {
   const found = groups.length ? await db.accountMedia.findMany({ where: { AND: [where, { id: { in: groups.map(group => group.itemId) } }] } }) : [];
   const rank = new Map(groups.map((group, index) => [group.itemId, index])), popular = found.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!).slice(0, 12);
   const [recentViews, popularViews] = await Promise.all([accountMediaViews(recent), accountMediaViews(popular)]);
-  return { recentlyAdded: recent.map((item, index) => ({ libraryId: libraryOf(item), item: recentViews[index] })), popularHere: popular.map((item, index) => ({ libraryId: libraryOf(item), item: popularViews[index] })) };
+  const recentlyAdded = recent.map((item, index) => ({ libraryId: libraryOf(item), item: recentViews[index] }));
+  // Titles of the viewer's own libraries that have a backdrop and a synopsis lead the banner.
+  const featured = recentlyAdded.flatMap(({ libraryId, item }): Slide[] => {
+    const details = item.metadata, backdrop = details?.backdropUrl;
+    if (!details || !backdrop || !details.description) return [];
+    return [{ kind: "library", id: item.id, href: libraryId ? `/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}` : `/library/${encodeURIComponent(item.id)}`, title: details.name || item.name, year: details.year ?? item.year,
+      rating: details.rating ?? null, genres: (details.genres ?? []).slice(0, 3), description: details.description.slice(0, 280), backdropUrl: backdrop, trailer: null, label: "NEW IN YOUR LIBRARIES" }];
+  }).slice(0, 2);
+  return { recentlyAdded, popularHere: popular.map((item, index) => ({ libraryId: libraryOf(item), item: popularViews[index] })), libraryFeatured: featured };
 }
