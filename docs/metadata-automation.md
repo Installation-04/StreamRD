@@ -44,8 +44,11 @@ built-in source instead, and switches to your key the moment you save one. You c
   matching pauses for five minutes and tries again.
 - **Search coverage, measured:** in a spot check of 15 titles, all 8 mainstream films and all 3 series were found by name; the 4 misses
   were obscure short films (the Blender open movies, such as *Big Buck Bunny*), which this service does not return for name searches.
-  The matcher only accepts unambiguous results and sends the rest to review. For a title it cannot find by name, paste its IMDb ID
-  (for example `tt1254207`) into the search box: an ID lookup works for any title.
+  Since v0.10.3, when no result is named as you typed it, the title is also looked up in **Wikidata** (a free public database, no account;
+  only the title text is sent) for its IMDb ID, which is then read from the same source. In a live check this found *Sintel*, which
+  the name search alone answered with unrelated films; it did not find *Cosmos Laundromat* (Wikidata lists it under another title).
+  If Wikidata is unreachable the search simply returns what it had. The matcher only accepts unambiguous results and sends the rest to
+  review. For a title it still cannot find, paste its IMDb ID (for example `tt1254207`) into the search box: an ID lookup works for any title.
 - **Best results:** add your own TMDB key (free for non-commercial use) for richer artwork and more reliable search.
 - **Attribution:** title pages state that metadata comes from Cinemeta (IMDb-linked data).
 
