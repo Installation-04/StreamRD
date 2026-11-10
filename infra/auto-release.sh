@@ -5,7 +5,7 @@
 # Inputs (environment): RELEASE_SHA (commit to release), GITHUB_REPOSITORY, GH_TOKEN (for gh),
 #   RELEASE_MODE=auto|manual (manual turns "not ready" outcomes into failures), DRY_RUN=true (report only),
 #   SELF_CHECK_NAME (this job's own check run, ignored when looking at the commit's checks),
-#   MIN_CHECKS (fewest check runs that must have reported, default 5), RELEASE_ROOT (repository root, for tests).
+#   MIN_CHECKS (fewest check runs that must have reported, default 3: StreamRD-only changes run four), RELEASE_ROOT (repository root, for tests).
 set -euo pipefail
 root="${RELEASE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 sha="${RELEASE_SHA:?RELEASE_SHA is required}"
@@ -13,7 +13,7 @@ repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 mode="${RELEASE_MODE:-auto}"
 dry="${DRY_RUN:-false}"
 self="${SELF_CHECK_NAME:-Tag and publish release}"
-min_checks="${MIN_CHECKS:-5}"
+min_checks="${MIN_CHECKS:-3}"
 
 say() { echo "$*"; if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then echo "$*" >> "$GITHUB_STEP_SUMMARY"; fi; }
 fail() { echo "::error::$1"; if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then echo "**Failed:** $1" >> "$GITHUB_STEP_SUMMARY"; fi; exit 1; }

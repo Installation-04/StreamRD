@@ -57,8 +57,9 @@ it("does not release when a check failed, or when too few checks have reported",
   const failed = run({ checks: [...GREEN, ["broken job", "completed", "failure"]] });
   expect(failed.code).toBe(0); expect(failed.out).toContain("broken job (failure)"); expect(failed.tagged).toBe(false);
   const few = run({ checks: GREEN.slice(0, 2) });
-  expect(few.code).toBe(0); expect(few.out).toContain("only 2 checks have reported"); expect(few.tagged).toBe(false);
+  expect(few.code).toBe(0); expect(few.out).toContain("only 2 checks have reported (expected at least 3)"); expect(few.tagged).toBe(false);
   expect(run({ checks: [...GREEN, ["optional", "completed", "skipped"], ["note", "completed", "neutral"]] }).tagged).toBe(true);
+  expect(run({ checks: GREEN.slice(0, 4) }).tagged).toBe(true); // a StreamRD-only commit runs four checks
 });
 it("reports 'not ready' as a failure when someone asked for the release by hand", () => {
   const notReady: Array<{ checks: Check[] }> = [{ checks: [...GREEN, ["slow job", "in_progress", ""]] }, { checks: [...GREEN, ["broken job", "completed", "failure"]] }, { checks: GREEN.slice(0, 1) }];
