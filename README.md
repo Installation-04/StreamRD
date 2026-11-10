@@ -25,7 +25,7 @@
 
 **StreamRD** is a self-hosted, streaming-style web app for your own **debrid** accounts
 (Real-Debrid, AllDebrid, Premiumize.me). Connect an account and StreamRD finds the movies and shows already
-in it, matches artwork and details, and gives you and the people you invite a private place to browse and watch.
+in it, matches artwork and details, and gives you, your family and friends a private place to browse and watch.
 You decide who joins and what they can see, and nobody else needs a debrid subscription.
 
 - 🎬 **Your collection, nicely browsed.** Imports only movies and shows (games, software and music are skipped), with posters and details that work with no account or API key (add your own TMDB or OMDb key for richer results).
@@ -179,7 +179,7 @@ More in [`phosphor/README.md`](phosphor/README.md).
 
 ```mermaid
 flowchart LR
-  subgraph you["You and your people"]
+  subgraph you["You, family and friends"]
     B["Browser: phone, tablet, desktop"]
   end
   subgraph box["One container"]

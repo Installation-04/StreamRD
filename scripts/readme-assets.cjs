@@ -71,7 +71,7 @@ const crops = {
     .fade{position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(transparent,#0a0a0a)}
   </style>
   <div class="brand">${logo.replace("<svg ", '<svg width="84" height="84" ')}<b>stream<i>rd</i></b></div>
-  <div class="tag">Your debrid accounts, turned into a private streaming service for you and your people.</div>
+  <div class="tag">Your debrid accounts, turned into a private streaming service for you, your family and friends.</div>
   <div class="chips"><span>Self-hosted</span><span>Libraries</span><span>Requests</span><span>Multi-user</span><span>One container</span></div>
   <div class="win left"><img src="${url("streamrd-discover-light.png")}"></div>
   <div class="win right"><img src="${url("phosphor-discover.png")}"></div>
