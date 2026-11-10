@@ -20,7 +20,7 @@ the navbar for admin accounts). Non-admins are redirected away and every
 | **Catalog** | Full CRUD for titles: metadata (name, type, year, genres, artwork URLs) and **debrid sources** — hoster links or magnet URIs with optional quality/label. Sources are only visible to admins; users just see a source count. |
 | **Server** | Global provider order & per-provider global enable, provider timeout, max playback attempts, access toggles (public browse, login-required playback), config **export/import** |
 | **Providers** | Enable/disable each service globally and run a connectivity test. Tests use *your own* API keys from Account → Debrid services, so configure those first. |
-| **Logs** | Recent structured events with filters for type (signup/login/playback/provider_error/admin_action/system), level, and provider |
+| **Logs** | Structured events with search, filters (type, level, provider, date range), paging, copy and download (see [Logs](#logs)) |
 
 ## Typical workflows
 
@@ -58,6 +58,19 @@ Export config (Server page) regularly — it contains server settings, provider
 settings, and the full catalog with sources, and can be re-imported on a
 fresh install. User accounts and keys live in the database file; back that up
 separately (see [deployment.md](deployment.md#backups)).
+
+## Logs
+
+**Admin → Logs** is the structured event log (sign-ins, playback, provider errors,
+administrator actions). Search message text, filter by type, level, provider and a
+from/to date range, and page through as much history as you need (100–1000 per page,
+then **Load more**). **Copy shown** copies the entries on screen as plain text, each
+row has its own **Copy** and **Details** (its extra data), and **Download all
+matching…** saves every matching entry (up to 50,000) as a text log, JSON lines or
+CSV with the same filters. Turn on **Live** to refresh every 10 seconds. Spreadsheet
+exports neutralize cells that start with `=`, `+`, `-` or `@`. Downloading is itself
+recorded as an administrator action. Logs can contain user ids and provider names;
+share exports carefully.
 
 ## Updates, backups and restore (System page)
 

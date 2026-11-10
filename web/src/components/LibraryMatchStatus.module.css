@@ -1,0 +1,12 @@
+.panel { margin:0 0 22px;border:1px solid var(--border);border-radius:14px;background:var(--bg-raised);padding:16px 18px;color:var(--text,var(--fg)); }
+.top { display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap; }
+.title { font-size:13px;font-weight:650;margin:0; }
+.counts { display:flex;gap:8px 18px;flex-wrap:wrap;margin:10px 0 0;padding:0;list-style:none;font-size:11px;color:var(--text-dim,var(--fg-dim)); }
+.counts strong { color:var(--text,var(--fg));font-size:14px;margin-right:4px; }
+.bar { height:6px;border-radius:99px;background:var(--bg);overflow:hidden;margin-top:12px;border:1px solid var(--border); }
+.bar span { display:block;height:100%;background:var(--accent,var(--fg));transition:width .4s; }
+.note { font-size:11px;line-height:1.7;color:var(--text-dim,var(--fg-dim));margin:10px 0 0; }
+.warn { color:var(--warn,var(--fg)); }
+.err { color:var(--err,var(--fg));font-size:11px;margin:10px 0 0; }
+.panel button { min-height:38px;font:inherit;cursor:pointer; }
+.panel button:disabled { cursor:wait;opacity:.6; }

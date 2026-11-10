@@ -90,6 +90,31 @@ pages, while already queued manual jobs continue on the server. A scan does not
 force every current match to refresh. Use an entry's **Refresh metadata** action
 to queue an explicit refresh of its pinned match or retry an unsuccessful lookup.
 
+## How automatic matching reads a file name
+
+Release names put the title first, then the year, edition and quality tags, for
+example `Crank 2006 Director's Cut 1080p BluRay DTS x264-CtrlHD.mkv`. The matcher
+cuts the name where the title ends (at the year, or at the first quality, audio,
+codec, season/episode or edition tag such as DTS, HEVC, Extended or Director's Cut),
+searches for `Crank` with year 2006, and accepts a result only when it is
+unambiguous:
+
+- One result with exactly the same title and year is accepted.
+- If the year is off by one (festival versus release date) a single near result is accepted.
+- With no year in the name, a single exact title is accepted. Several exact titles
+  (remakes such as two films called *Dune*) are sent to review instead of guessed.
+- A name that could end in a number (*Wonder Woman 1984*) is also tried uncut.
+- Names with no readable title, such as a bare hash, find nothing and stay unmatched.
+
+Items already in **review**, **unmatched** or **failed** are not retried by the
+background pass on their own. In **My library**, the match panel shows your
+progress and **Retry matching** queues those titles again (and any never started),
+for example after improving the matcher or adding a provider key. It only touches
+your own library. The server works through the queue several titles at a time and
+scans up to 250 new titles every 20 seconds, so a large import takes minutes, not
+hours. Counts on Admin → Metadata cover the catalog and mounted library only;
+private libraries are never included in administrator totals.
+
 ## Keep editorial control
 
 Automatic catalog enrichment fills missing fields first. Later refreshes update

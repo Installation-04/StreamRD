@@ -86,19 +86,42 @@ export async function scanMetadata(type: TargetType, cursor = "", limit = 100, m
 function normalized(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
-export function metadataQuery(name: string, year?: number | null): string {
-  const clean = name.replace(/\.(mkv|mp4|m4v|avi|mov|webm)$/i, "")
-    .split(/(?:\bs\d{1,3}e\d{1,4}\b|\b\d{1,3}x\d{1,4}\b|\b(?:480p|720p|1080p|2160p|4k|web[ ._-]?dl|webrip|bluray|brrip|hdtv|x264|x265|h264|h265|hevc)\b)/i)[0]
-    .replace(/[._]+/g, " ").trim();
-  return (year ? clean.replace(new RegExp(`\\s*[([]${year}[)\\]]\\s*$`), "").replace(new RegExp(`\\s+${year}\\s*$`), "") : clean).trim().slice(0, 160);
+const RELEASE_TAG = /(?:^|\s)(?:480p|576p|720p|1080p|1080i|2160p|4k|uhd|web ?dl|webrip|bluray|blu ray|brrip|bdrip|dvdrip|hdrip|hdtv|remux|x264|x265|h ?264|h ?265|hevc|avc|xvid|10 ?bit|hdr10?|dts(?: ?hd(?: ?ma)?)?|truehd|atmos|ddp? ?\d(?: \d)?|ac3|eac3|flac|multi|dual|proper|repack|rerip|internal|limited|extended|unrated|uncut|remastered|directors? cut|theatrical|imax|criterion|s\d{1,3}e\d{1,4}|\d{1,3}x\d{1,4})(?=\s|$)/gi;
+export interface MatchPlan { query: string; year: number | null }
+/** Release names put the title first, then year, edition and quality tags; cut where the title ends. */
+export function matchPlans(name: string, hintYear?: number | null): MatchPlan[] {
+  const text = name.replace(/\.(mkv|mp4|m4v|avi|mov|webm)$/i, "").replace(/[._]+/g, " ").replace(/[\[\](){}]/g, " ").replace(/\s+/g, " ").trim();
+  let tag = -1;
+  for (const found of text.matchAll(RELEASE_TAG)) { const at = found.index + (found[0].startsWith(" ") ? 1 : 0); if (at > 0) { tag = at; break; } }
+  const beforeTag = text.slice(0, tag >= 0 ? tag : text.length).trim().slice(0, 160);
+  const limit = new Date().getFullYear() + 1;
+  const years = [...text.matchAll(/(?:^|\s)((?:19|20)\d{2})(?=\s|$)/g)]
+    .map(found => ({ at: found.index + (found[0].startsWith(" ") ? 1 : 0), value: Number(found[1]) }))
+    .filter(year => year.at > 0 && year.value <= limit && (tag < 0 || year.at < tag));
+  const chosen = hintYear != null ? years.filter(year => year.value === hintYear).pop() : years.pop();
+  const cut = chosen ? text.slice(0, chosen.at).trim().slice(0, 160) : "";
+  if (hintYear != null) return [{ query: cut || beforeTag, year: hintYear }];
+  const plans: MatchPlan[] = [];
+  if (chosen && cut) plans.push({ query: cut, year: chosen.value });
+  if (beforeTag && !plans.some(plan => plan.query === beforeTag)) plans.push({ query: beforeTag, year: null });
+  return plans.length ? plans : [{ query: beforeTag || text.slice(0, 160), year: null }];
 }
+export function metadataQuery(name: string, year?: number | null): string { return matchPlans(name, year)[0].query; }
 /** Ambiguity never becomes an arbitrary first-result match. */
-export function confidentMatch(target: MetadataTarget, candidates: MetadataCandidate[]) {
+export function confidentMatch(target: MetadataTarget, candidates: MetadataCandidate[], plan?: MatchPlan) {
   const typed = candidates.filter(candidate => candidate.type === target.mediaType);
   if (/^tt\d{7,10}$/.test(target.name.trim()) && typed.length === 1) return typed[0];
-  const exact = typed.filter(candidate => (target.year === null || candidate.year === target.year) && normalized(candidate.name) === normalized(metadataQuery(target.name, target.year)));
-  if (target.year === null && typed.length !== 1) return null; // Reboots/remakes need a year or review.
-  return exact.length === 1 ? exact[0] : null;
+  const query = plan?.query ?? metadataQuery(target.name, target.year), year = plan ? plan.year : target.year;
+  const same = typed.filter(candidate => normalized(candidate.name) === normalized(query));
+  if (year !== null) {
+    const exact = same.filter(candidate => candidate.year === year);
+    if (exact.length) return exact.length === 1 ? exact[0] : null;
+    // Files and databases often disagree by a year (festival vs. release date); accept only a single near match.
+    const near = same.filter(candidate => candidate.year !== null && Math.abs(candidate.year - year) <= 1);
+    return near.length === 1 ? near[0] : null;
+  }
+  // No year known: a single exact title is enough; remakes (several exact titles) still need review.
+  return same.length === 1 ? same[0] : null;
 }
 function keptLibraryFields(details: MetadataDetails, previous: MetadataDetails | null, locks: string[], target: MetadataTarget): MetadataDetails {
   const result = { ...details };
@@ -192,10 +215,15 @@ export async function runMetadataJob(now = new Date()) {
       return (job.requestedBy !== "automatic" || live.automatic) && (pinned || settings.provider === live.provider) && sameProviderSettings(settings, live, candidate?.provider ?? settings.provider);
     };
     if (!candidate) {
-      const candidates = await searchMetadata({ query: metadataQuery(target.name, target.year), type: target.mediaType, ...(target.year !== null ? { year: target.year } : {}) }, settings);
-      candidate = confidentMatch(target, candidates);
+      let found = 0;
+      for (const plan of matchPlans(target.name, target.year).slice(0, 2)) {
+        const candidates = await searchMetadata({ query: plan.query, type: target.mediaType, ...(plan.year !== null ? { year: plan.year } : {}) }, settings);
+        found += candidates.length;
+        candidate = confidentMatch(target, candidates, plan);
+        if (candidate) break;
+      }
       if (!candidate) {
-        await update({ status: candidates.length ? "review" : "unmatched", error: candidates.length ? "Review the possible matches before applying metadata." : "No matching metadata found. Try a different title or year.", leaseUntil: null, revision: { increment: 1 } });
+        await update({ status: found ? "review" : "unmatched", error: found ? "Review the possible matches before applying metadata." : "No matching metadata found. Try a different title or year.", leaseUntil: null, revision: { increment: 1 } });
         return true;
       }
     }
@@ -234,7 +262,7 @@ export function startMetadataWorker() {
     busy = true;
     try {
       const settings = await getMetadataSettings();
-      if (settings.automatic && configured(settings) && Date.now() - lastDiscovery >= 60000) {
+      if (settings.automatic && configured(settings) && Date.now() - lastDiscovery >= 20000) {
         lastDiscovery = Date.now();
         for (const type of TARGET_TYPES) {
           if (type === "library" && (!config.mediaSourceRoot || !config.mediaLibraryRoot)) continue;
@@ -242,12 +270,12 @@ export function startMetadataWorker() {
           const saved = await db.setting.findUnique({ where: { key } });
           const cursor = saved && /^[A-Za-z0-9_-]{0,128}$/.test(saved.value) ? saved.value : "";
           try {
-            const page = await scanMetadata(type, cursor, 100, false);
+            const page = await scanMetadata(type, cursor, 250, false);
             await db.setting.upsert({ where: { key }, create: { key, value: page.nextCursor ?? "" }, update: { value: page.nextCursor ?? "" } });
           } catch { /* An unavailable optional mount never blocks catalog jobs. */ }
         }
       }
-      await runMetadataJob();
+      for (let job = 0; job < 6; job++) if (!(await runMetadataJob())) break;
     } catch { /* No secret-bearing upstream/SQLite exceptions enter product logs. */ }
     finally { busy = false; }
   };

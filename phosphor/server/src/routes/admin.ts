@@ -2,7 +2,9 @@ import { AccessError } from "../auth/access";
 import { accessRouter } from "./access";
 import { asyncHandler } from "../http";
 import { clearIndexerSearchCache } from "../indexers/searchCache";
-import { Router } from "express";
+import { Prisma } from "@prisma/client";
+import { Request, Router } from "express";
+import { rateLimit } from "../util/rateLimit";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../auth/middleware";
 import { db } from "../db";
@@ -241,14 +243,85 @@ adminRouter.get("/health", asyncHandler(async (_req, res) => {
   });
 }));
 
+const LOG_LEVELS = new Set(["info", "warn", "error"]);
+const LOG_TYPE = /^[a-z_]{1,40}$/;
+function logFilters(query: Request["query"]): Prisma.LogEventWhereInput {
+  const where: Prisma.LogEventWhereInput = {};
+  const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+  const type = text(query.type, 40), level = text(query.level, 10), provider = text(query.provider, 40), userId = text(query.userId, 100), q = text(query.q, 200);
+  if (type) where.type = LOG_TYPE.test(type) ? type : "\u0000no-such-type";
+  if (level) where.level = LOG_LEVELS.has(level) ? level : "\u0000no-such-level";
+  if (provider) where.provider = provider;
+  if (userId) where.userId = userId;
+  if (q) where.message = { contains: q };
+  const range: Prisma.DateTimeFilter = {};
+  for (const [key, field] of [["from", "gte"], ["to", "lte"]] as const) {
+    const raw = text(query[key], 40);
+    if (!raw) continue;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) throw new BadLogRequest(`Invalid ${key} date.`);
+    range[field] = date;
+  }
+  if (range.gte || range.lte) where.createdAt = range;
+  return where;
+}
+class BadLogRequest extends Error {}
+const encodeCursor = (row: { createdAt: Date; id: string }) => Buffer.from(JSON.stringify([row.createdAt.getTime(), row.id])).toString("base64url");
+function decodeCursor(raw: unknown): Prisma.LogEventWhereInput | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const [at, id] = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!Number.isFinite(at) || typeof id !== "string" || id.length > 100) throw new Error();
+    const date = new Date(at);
+    return { OR: [{ createdAt: { lt: date } }, { createdAt: date, id: { lt: id } }] };
+  } catch { throw new BadLogRequest("Invalid page cursor."); }
+}
+async function logPage(where: Prisma.LogEventWhereInput, cursor: Prisma.LogEventWhereInput | null, take: number) {
+  const rows = await db.logEvent.findMany({ where: cursor ? { AND: [where, cursor] } : where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: take + 1 });
+  const page = rows.slice(0, take);
+  return { page, nextCursor: rows.length > take ? encodeCursor(page[page.length - 1]) : null };
+}
 adminRouter.get("/logs", asyncHandler(async (req, res) => {
-  const take = Math.min(parseInt(String(req.query.limit ?? "100"), 10) || 100, 500);
-  const where: Record<string, string> = {};
-  if (req.query.type) where.type = String(req.query.type);
-  if (req.query.provider) where.provider = String(req.query.provider);
-  if (req.query.level) where.level = String(req.query.level);
-  const logs = await db.logEvent.findMany({ where, orderBy: { createdAt: "desc" }, take });
-  res.json({ logs });
+  try {
+    const take = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 1000);
+    const { page, nextCursor } = await logPage(logFilters(req.query), decodeCursor(req.query.cursor), take);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ logs: page, nextCursor });
+  } catch (error) { if (error instanceof BadLogRequest) { res.status(400).json({ error: error.message }); return; } throw error; }
+}));
+const csvCell = (value: unknown) => {
+  let text = value === null || value === undefined ? "" : String(value);
+  // A leading = + - @ or control character would run as a formula in spreadsheet software.
+  if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+const EXPORT_FORMATS = { ndjson: { ext: "ndjson", type: "application/x-ndjson" }, csv: { ext: "csv", type: "text/csv" }, txt: { ext: "log", type: "text/plain" } } as const;
+adminRouter.get("/logs/export", rateLimit({ windowMs: 60_000, max: 10 }), asyncHandler(async (req, res) => {
+  const format = String(req.query.format ?? "ndjson") as keyof typeof EXPORT_FORMATS;
+  if (!Object.prototype.hasOwnProperty.call(EXPORT_FORMATS, format)) { res.status(400).json({ error: "Choose ndjson, csv or txt." }); return; }
+  let where: Prisma.LogEventWhereInput;
+  try { where = logFilters(req.query); } catch (error) { if (error instanceof BadLogRequest) { res.status(400).json({ error: error.message }); return; } throw error; }
+  const cap = Math.min(Math.max(parseInt(String(req.query.max ?? "10000"), 10) || 10000, 1), 50000);
+  const meta = (value: string | null) => { if (!value) return null; try { return JSON.parse(value); } catch { return value; } };
+  res.setHeader("Content-Type", `${EXPORT_FORMATS[format].type}; charset=utf-8`);
+  res.setHeader("Content-Disposition", `attachment; filename="phosphor-logs-${new Date().toISOString().replace(/[:.]/g, "-")}.${EXPORT_FORMATS[format].ext}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  if (format === "csv") res.write("time,level,type,provider,userId,message,meta\r\n");
+  let sent = 0, cursor: Prisma.LogEventWhereInput | null = null;
+  while (sent < cap) {
+    const { page, nextCursor } = await logPage(where, cursor, Math.min(1000, cap - sent));
+    for (const row of page) {
+      const when = row.createdAt.toISOString(), details = meta(row.meta);
+      if (format === "ndjson") res.write(JSON.stringify({ time: when, level: row.level, type: row.type, provider: row.provider, userId: row.userId, message: row.message, meta: details }) + "\n");
+      else if (format === "csv") res.write([when, row.level, row.type, row.provider, row.userId, row.message, details === null ? "" : JSON.stringify(details)].map(csvCell).join(",") + "\r\n");
+      else res.write(`${when} ${row.level.toUpperCase().padEnd(5)} ${row.type}${row.provider ? ` [${row.provider}]` : ""} ${row.message.replace(/\r?\n/g, " ")}${details === null ? "" : " " + JSON.stringify(details)}\n`);
+    }
+    sent += page.length;
+    if (!nextCursor || !page.length) break;
+    cursor = decodeCursor(nextCursor);
+  }
+  res.end();
+  void logEvent("info", "admin_action", "Exported logs", { userId: req.session?.sub, meta: { format, rows: sent } });
 }));
 
 /* --------------------------- export/import ------------------------- */
