@@ -1,7 +1,7 @@
 import { AccessError } from "../auth/access";
 import { accessRouter } from "./access";
 import { protectCatalogEdits } from "../metadata/automation";
-import { getMetadataSettings } from "../metadata/settings";
+import { getMetadataSettings, providerConfigured } from "../metadata/settings";
 import { metadataSelectionSchema } from "./metadata";
 import { asyncHandler } from "../http";
 import { Prisma } from "@prisma/client";
@@ -140,7 +140,7 @@ adminRouter.post("/catalog/create", asyncHandler(async (req, res) => {
   const body = parseBody(titleSchema.extend({ metadataMatch: metadataSelectionSchema.optional() }), req.body, res);
   if (!body) return;
   const preferences = await getMetadataSettings();
-  if (body.metadataMatch && (body.metadataMatch.type !== body.type || !(body.metadataMatch.provider === "tmdb" ? preferences.tmdbApiKey : preferences.omdbApiKey))) {
+  if (body.metadataMatch && (body.metadataMatch.type !== body.type || !providerConfigured(preferences, body.metadataMatch.provider))) {
     res.status(400).json({ error: "Configure the chosen metadata provider and use the same movie/series type before saving a match" }); return;
   }
   const metadataQueued = Boolean(body.metadataMatch || preferences.automatic);

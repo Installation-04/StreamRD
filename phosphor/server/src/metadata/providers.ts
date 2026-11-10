@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
-import { getMetadataSettings } from "./settings";
+import { PRODUCT } from "../product";
+import { activeProvider, getMetadataSettings } from "./settings";
 import { MediaType, MetadataCandidate, MetadataDetails, MetadataError, MetadataProvider, MetadataSettings } from "./types";
 export { MetadataError } from "./types";
 
-const TMDB = "https://api.themoviedb.org/3", OMDB = "https://www.omdbapi.com/";
-const MAX_BYTES = 1024 * 1024, MAX_CACHE = 200, TIMEOUT_MS = 8000;
+const TMDB = "https://api.themoviedb.org/3", OMDB = "https://www.omdbapi.com/", FREE = "https://v3-cinemeta.strem.io";
+/** Posters of the built-in source are served from this host only. */
+const FREE_IMAGE_HOST = "images.metahub.space";
+const MAX_BYTES = 1024 * 1024, FREE_MAX_BYTES = 4 * 1024 * 1024 /* a long series lists every episode */, MAX_CACHE = 200, TIMEOUT_MS = 8000;
 const cache = new Map<string, { expires: number; value: unknown }>();
 const flights = new Map<string, Promise<unknown>>();
 let active = 0;
@@ -31,6 +34,7 @@ function failure(code = "metadata-unavailable", status = 503): MetadataError {
   return new MetadataError(code, status, messages[code] ?? messages["metadata-unavailable"]);
 }
 function configured(settings: MetadataSettings, provider: MetadataProvider): string {
+  if (provider === "free") return "built-in"; // needs no account or key
   const key = provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey;
   if (!key) throw new MetadataError("metadata-not-configured", 503, `Configure ${provider === "tmdb" ? "TMDB" : "OMDb"} in Metadata settings before looking up titles.`);
   return key;
@@ -39,7 +43,7 @@ function validType(type: unknown): asserts type is MediaType {
   if (type !== "movie" && type !== "series") throw new MetadataError("metadata-input-invalid", 400, "Choose movie or series metadata.");
 }
 function validProvider(provider: unknown): asserts provider is MetadataProvider {
-  if (provider !== "tmdb" && provider !== "omdb") throw new MetadataError("metadata-input-invalid", 400, "Choose TMDB or OMDb as the metadata provider.");
+  if (provider !== "tmdb" && provider !== "omdb" && provider !== "free") throw new MetadataError("metadata-input-invalid", 400, "Choose TMDB, OMDb or the built-in source as the metadata provider.");
 }
 function image(value: unknown, width: "w500" | "w1280" = "w500"): string | null {
   const path = text(value, 1000);
@@ -61,12 +65,14 @@ function strings(value: unknown, limit: number, max: number): string[] {
   return Array.isArray(value) ? [...new Set(value.map(item => text(item, max)).filter(Boolean))].slice(0, limit) : [];
 }
 async function request(provider: MetadataProvider, path: string, parameters: Record<string, string>, settings: MetadataSettings): Promise<Record<string, unknown>> {
-  const credential = configured(settings, provider), url = new URL(provider === "tmdb" ? TMDB + path : OMDB);
+  const credential = configured(settings, provider), url = new URL(provider === "tmdb" ? TMDB + path : provider === "omdb" ? OMDB : FREE + path);
   const headers: Record<string, string> = { Accept: "application/json" };
   if (provider === "tmdb") {
     if (/^[a-f0-9]{32}$/i.test(credential)) url.searchParams.set("api_key", credential);
     else headers.Authorization = `Bearer ${credential}`;
-  } else url.searchParams.set("apikey", credential);
+  } else if (provider === "omdb") url.searchParams.set("apikey", credential);
+  else headers["User-Agent"] = `${PRODUCT.id}-metadata`;
+  const limit = provider === "free" ? FREE_MAX_BYTES : MAX_BYTES;
   for (const [key, value] of Object.entries(parameters)) url.searchParams.set(key, value);
   await acquire();
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), TIMEOUT_MS); timer.unref();
@@ -79,7 +85,7 @@ async function request(provider: MetadataProvider, path: string, parameters: Rec
       if (response.status === 404) throw failure("metadata-not-found", 404);
       throw failure();
     }
-    if (Number(response.headers.get("content-length")) > MAX_BYTES) { await response.body?.cancel().catch(() => {}); throw failure("metadata-invalid-response", 502); }
+    if (Number(response.headers.get("content-length")) > limit) { await response.body?.cancel().catch(() => {}); throw failure("metadata-invalid-response", 502); }
     const reader = response.body?.getReader();
     if (!reader) throw failure("metadata-invalid-response", 502);
     let bytes = 0; const chunks: Uint8Array[] = [];
@@ -87,7 +93,7 @@ async function request(provider: MetadataProvider, path: string, parameters: Rec
       while (true) {
         const next = await reader.read(); if (next.done) break;
         bytes += next.value.byteLength;
-        if (bytes > MAX_BYTES) throw failure("metadata-invalid-response", 502);
+        if (bytes > limit) throw failure("metadata-invalid-response", 502);
         chunks.push(next.value);
       }
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
@@ -140,14 +146,37 @@ function omdbCandidate(data: Record<string, unknown>, type: MediaType): Metadata
   if (!id || !name || data.Type !== type) return null;
   return { provider: "omdb", id, type, name, year: year(data.Year), posterUrl: poster(data.Poster), description: text(data.Plot) };
 }
+function freeImage(value: unknown): string | null {
+  try {
+    const url = new URL(text(value, 2000));
+    return url.protocol === "https:" && url.hostname === FREE_IMAGE_HOST && !url.username && !url.password && !url.port && !url.search && !url.hash ? url.href : null;
+  } catch { return null; }
+}
+function freeCandidate(data: Record<string, unknown>, type: MediaType): MetadataCandidate | null {
+  const id = imdbId(data.imdb_id) ?? imdbId(data.id), name = text(data.name, 300);
+  if (!id || !name || (data.type !== undefined && data.type !== type)) return null;
+  const released = typeof data.year === "number" ? String(data.year) : data.year ?? data.releaseInfo;
+  return { provider: "free", id, type, name, year: year(released), posterUrl: freeImage(data.poster), description: text(data.description) };
+}
 export interface MetadataSearchInput { query: string; type: MediaType; year?: number; provider?: MetadataProvider; refresh?: boolean }
 export async function searchMetadata(input: MetadataSearchInput, settings?: MetadataSettings): Promise<MetadataCandidate[]> {
   settings ??= await getMetadataSettings();
-  validType(input.type); const provider = input.provider ?? settings.provider; validProvider(provider);
+  validType(input.type); const provider = input.provider ?? activeProvider(settings); validProvider(provider);
   const query = typeof input.query === "string" ? input.query.trim() : "";
   if (!query || query.length > 200 || /[\x00-\x1f]/.test(query) || (input.year !== undefined && (!Number.isInteger(input.year) || input.year < 1800 || input.year > 2200))) throw new MetadataError("metadata-input-invalid", 400, "Supply a title or IMDb ID and a valid year.");
   return cached(provider, ["search", query, input.type, input.year], settings, 15 * 60 * 1000, input.refresh, async () => {
     const identity = imdbId(query);
+    if (provider === "free") {
+      try {
+        if (identity) {
+          const found = await request("free", `/meta/${input.type}/${identity}.json`, {}, settings), item = freeCandidate(object(found.meta), input.type);
+          return item ? [item] : [];
+        }
+        const data = await request("free", `/catalog/${input.type}/top/search=${encodeURIComponent(query)}.json`, {}, settings);
+        if (!Array.isArray(data.metas)) throw failure("metadata-invalid-response", 502);
+        return data.metas.slice(0, 20).map(value => freeCandidate(object(value), input.type)).filter((value): value is MetadataCandidate => value !== null);
+      } catch (error) { if (error instanceof MetadataError && error.code === "metadata-not-found") return []; throw error; }
+    }
     if (provider === "tmdb") {
       const path = identity ? `/find/${identity}` : `/search/${input.type === "movie" ? "movie" : "tv"}`;
       const parameters: Record<string, string> = identity ? { external_source: "imdb_id", language: settings.language } : { query, language: settings.language, include_adult: "false", page: "1" };
@@ -172,6 +201,17 @@ export async function fetchMetadata(input: MetadataFetchInput, settings?: Metada
   validProvider(input.provider); validType(input.type);
   if (!(input.provider === "tmdb" ? tmdbId(input.id) : imdbId(input.id))) throw new MetadataError("metadata-input-invalid", 400, "Choose a valid provider title ID.");
   return cached(input.provider, ["detail", input.id, input.type], settings, 60 * 60 * 1000, input.refresh, async () => {
+    if (input.provider === "free") {
+      const data = await request("free", `/meta/${input.type}/${input.id}.json`, {}, settings), meta = object(data.meta);
+      if (!Object.keys(meta).length) throw failure("metadata-not-found", 404);
+      const candidate = freeCandidate(meta, input.type);
+      if (!candidate || candidate.id !== input.id) throw failure("metadata-invalid-response", 502);
+      const runtimeMatch = /^(?:(\d{1,2})\s*h)?\s*(?:(\d{1,3})\s*min)?$/i.exec(text(meta.runtime, 30)), runtime = runtimeMatch ? Number(runtimeMatch[1] ?? 0) * 60 + Number(runtimeMatch[2] ?? 0) : 0;
+      const ratingText = text(meta.imdbRating, 10), rating = /^(?:\d(?:\.\d+)?|10(?:\.0+)?)$/.test(ratingText) ? Number(ratingText) : null;
+      return { ...candidate, genres: strings(meta.genres, 20, 80), backdropUrl: freeImage(meta.background), cast: strings(meta.cast, 16, 120),
+        runtimeMinutes: runtime > 0 && runtime <= 1440 ? runtime : null, rating: rating !== null && rating <= 10 ? rating : null, ratingSource: rating !== null && rating <= 10 ? "IMDb" : null,
+        contentRating: null, imdbId: candidate.id, tmdbId: null, providerUrl: `https://www.imdb.com/title/${candidate.id}/`, fetchedAt: new Date().toISOString() };
+    }
     if (input.provider === "tmdb") {
       const data = await request("tmdb", `/${input.type === "movie" ? "movie" : "tv"}/${input.id}`, { language: settings.language, append_to_response: input.type === "movie" ? "credits,external_ids,release_dates" : "credits,external_ids,content_ratings" }, settings);
       const candidate = tmdbCandidate(data, input.type);
@@ -202,10 +242,10 @@ export async function fetchMetadata(input: MetadataFetchInput, settings?: Metada
       providerUrl: `https://www.imdb.com/title/${candidate.id}/`, fetchedAt: new Date().toISOString() };
   });
 }
-/** OMDb has no authentication endpoint; its test uses one public title lookup. */
+/** OMDb has no authentication endpoint, and the built-in source has no key; both are tested with one public title lookup. */
 export async function testMetadataProvider(provider: MetadataProvider, settings?: MetadataSettings): Promise<void> {
   settings ??= await getMetadataSettings();
   validProvider(provider);
   if (provider === "tmdb") { const data = await request("tmdb", "/authentication", {}, settings); if (data.success !== true) throw failure("metadata-invalid-response", 502); }
-  else await fetchMetadata({ provider: "omdb", id: "tt0109830", type: "movie", refresh: true }, settings);
+  else await fetchMetadata({ provider, id: "tt0109830", type: "movie", refresh: true }, settings);
 }

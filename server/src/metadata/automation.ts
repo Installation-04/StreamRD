@@ -3,8 +3,8 @@ import { MetadataRecord, Prisma } from "@prisma/client";
 import { db } from "../db";
 import { config } from "../config";
 import { fetchMetadata, searchMetadata } from "./providers";
-import { getMetadataSettings } from "./settings";
-import { MetadataCandidate, MetadataDetails, MetadataError, MetadataSettings } from "./types";
+import { activeProvider, getMetadataSettings, providerConfigured, providerCredential } from "./settings";
+import { MetadataCandidate, MetadataDetails, MetadataError, MetadataProvider, MetadataSettings } from "./types";
 import { applyTargetMetadata, LOCK_FIELDS, metadataTarget, metadataTargets, MetadataTarget, TargetType, TARGET_TYPES } from "./targets";
 
 export class MetadataOperationError extends Error {
@@ -13,7 +13,7 @@ export class MetadataOperationError extends Error {
 export function storedMetadata(value: string): MetadataDetails | null {
   try {
     const data = JSON.parse(value);
-    return data && ["tmdb", "omdb"].includes(data.provider) && typeof data.id === "string" && typeof data.name === "string" &&
+    return data && ["tmdb", "omdb", "free"].includes(data.provider) && typeof data.id === "string" && typeof data.name === "string" &&
       ["movie", "series"].includes(data.type) && Array.isArray(data.genres) && Array.isArray(data.cast) && typeof data.fetchedAt === "string" ? Object.fromEntries([
         "provider", "id", "type", "name", "year", "posterUrl", "description", "genres", "backdropUrl", "cast", "runtimeMinutes", "rating", "ratingSource", "contentRating", "imdbId", "tmdbId", "providerUrl", "fetchedAt",
       ].map(key => [key, data[key]])) as unknown as MetadataDetails : null;
@@ -29,15 +29,16 @@ export function metadataView(record: MetadataRecord) {
     error: record.error, updatedAt: record.updatedAt.toISOString(), attempts: record.attempts };
 }
 export const recordFor = (type: TargetType, id: string) => db.metadataRecord.findUnique({ where: { targetType_targetId: { targetType: type, targetId: id } } });
-function configured(settings: MetadataSettings, provider = settings.provider) { return Boolean(provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey); }
-function sameProviderSettings(before: MetadataSettings, after: MetadataSettings, provider: "tmdb" | "omdb") {
-  return before.language === after.language && (provider === "tmdb" ? before.tmdbApiKey === after.tmdbApiKey : before.omdbApiKey === after.omdbApiKey);
+/** The chosen provider needs a key; the built-in source never does, so matching is available even with no account. */
+function configured(settings: MetadataSettings, provider: MetadataProvider = activeProvider(settings)) { return providerConfigured(settings, provider); }
+function sameProviderSettings(before: MetadataSettings, after: MetadataSettings, provider: MetadataProvider) {
+  return before.language === after.language && providerCredential(before, provider) === providerCredential(after, provider);
 }
 function selectedMatch(value: string): Pick<MetadataCandidate, "provider" | "id" | "type"> | null {
   try {
     const item = JSON.parse(value)?.selection;
     return item && ["movie", "series"].includes(item.type) &&
-      ((item.provider === "tmdb" && /^[1-9]\d{0,9}$/.test(item.id)) || (item.provider === "omdb" && /^tt\d{7,10}$/.test(item.id))) ? item : null;
+      ((item.provider === "tmdb" && /^[1-9]\d{0,9}$/.test(item.id)) || ((item.provider === "omdb" || item.provider === "free") && /^tt\d{7,10}$/.test(item.id))) ? item : null;
   } catch { return null; }
 }
 export async function requireTarget(type: TargetType, id: string) {
@@ -52,7 +53,7 @@ export async function queueTarget(target: MetadataTarget, manual: boolean, force
   if (!manual && (!preferences.automatic || !configured(preferences))) return null;
   const existing = await recordFor(target.targetType, target.targetId);
   const source = existing ? storedMetadata(existing.data) ?? selectedMatch(existing.data) : null;
-  if (manual && !configured(preferences, source?.provider ?? preferences.provider)) throw new MetadataOperationError("Configure the metadata provider before starting a scan or refresh");
+  if (manual && !configured(preferences, source?.provider ?? activeProvider(preferences))) throw new MetadataOperationError("Configure the metadata provider before starting a scan or refresh");
   if (existing && !force) {
     if (!manual && ["error", "unmatched", "review"].includes(existing.status)) return null;
     const refreshedAt = storedMetadata(existing.data)?.fetchedAt;
@@ -143,7 +144,7 @@ async function commitMatch(record: MetadataRecord, target: MetadataTarget, detai
       mediaType: target.mediaType, year: target.targetType !== "library" && !locks.includes("year") && typeof managed.year === "number" ? managed.year : target.year, error: null, leaseUntil: null, revision: { increment: 1 } } });
   });
 }
-export async function matchMetadata(type: TargetType, id: string, selection: { provider: "tmdb" | "omdb"; id: string; type: "movie" | "series"; expectedRevision?: number }) {
+export async function matchMetadata(type: TargetType, id: string, selection: { provider: MetadataProvider; id: string; type: "movie" | "series"; expectedRevision?: number }) {
   const target = await requireTarget(type, id);
   if (selection.type !== target.mediaType) throw new MetadataOperationError("Choose a match with the same movie/series type");
   let record = await recordFor(type, id);
@@ -186,21 +187,20 @@ export async function protectCatalogEdits(id: string, fields: string[], identity
 /** One leased, revision-guarded job per tick; callers can use this directly for deterministic tests. */
 export async function runMetadataJob(now = new Date()) {
   const settings = await getMetadataSettings();
-  if (!settings.tmdbApiKey && !settings.omdbApiKey) return false;
   const eligible = { AND: [settings.automatic ? {} : { requestedBy: "manual" }, { OR: [
     { status: "queued", nextAttemptAt: { lte: now } }, { status: "processing", leaseUntil: { lte: now } },
   ] }] };
-  const hash = (provider: "tmdb" | "omdb") => createHash("sha256").update(provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey).digest("hex");
-  const cooldowns = await db.setting.findMany({ where: { key: { in: ["metadata.cooldown.tmdb", "metadata.cooldown.omdb"] } } });
+  const hash = (provider: MetadataProvider) => createHash("sha256").update(providerCredential(settings, provider)).digest("hex");
+  const cooldowns = await db.setting.findMany({ where: { key: { in: ["metadata.cooldown.tmdb", "metadata.cooldown.omdb", "metadata.cooldown.free"] } } });
   const blocked = new Set<string>();
   for (const row of cooldowns) {
     try {
-      const provider = row.key.endsWith(".omdb") ? "omdb" : "tmdb", saved = JSON.parse(row.value);
+      const provider: MetadataProvider = row.key.endsWith(".omdb") ? "omdb" : row.key.endsWith(".free") ? "free" : "tmdb", saved = JSON.parse(row.value);
       if (saved.credentialHash === hash(provider) && Number.isFinite(saved.until) && saved.until > now.getTime() && saved.until <= now.getTime() + 86400000) blocked.add(provider);
     } catch {}
   }
   const candidates = await db.metadataRecord.findMany({ where: eligible, orderBy: [{ nextAttemptAt: "asc" }, { id: "asc" }], take: 100 });
-  const record = candidates.find(item => !blocked.has((storedMetadata(item.data) ?? selectedMatch(item.data))?.provider ?? settings.provider));
+  const record = candidates.find(item => !blocked.has((storedMetadata(item.data) ?? selectedMatch(item.data))?.provider ?? activeProvider(settings)));
   if (!record) return false;
   const claimed = await db.metadataRecord.updateMany({ where: { ...eligible, id: record.id, revision: record.revision }, data: { status: "processing", leaseUntil: new Date(now.getTime() + 90000), attempts: { increment: 1 }, revision: { increment: 1 } } });
   if (!claimed.count) return false;
@@ -213,7 +213,7 @@ export async function runMetadataJob(now = new Date()) {
     const pinned = Boolean(candidate);
     const stillCurrent = async () => {
       const live = await getMetadataSettings();
-      return (job.requestedBy !== "automatic" || live.automatic) && (pinned || settings.provider === live.provider) && sameProviderSettings(settings, live, candidate?.provider ?? settings.provider);
+      return (job.requestedBy !== "automatic" || live.automatic) && (pinned || activeProvider(settings) === activeProvider(live)) && sameProviderSettings(settings, live, candidate?.provider ?? activeProvider(settings));
     };
     if (!candidate) {
       let found = 0;
@@ -243,7 +243,7 @@ export async function runMetadataJob(now = new Date()) {
     if (!conflict) {
       let cooldownUntil = 0;
       if (error instanceof MetadataError && error.code === "metadata-rate-limited") {
-        const provider = (storedMetadata(job.data) ?? selectedMatch(job.data))?.provider ?? settings.provider;
+        const provider = (storedMetadata(job.data) ?? selectedMatch(job.data))?.provider ?? activeProvider(settings);
         cooldownUntil = now.getTime() + (provider === "omdb" ? 3600000 : 300000);
         const key = `metadata.cooldown.${provider}`, value = JSON.stringify({ until: cooldownUntil, credentialHash: hash(provider) });
         await db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });

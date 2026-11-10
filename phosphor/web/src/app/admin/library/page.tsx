@@ -28,7 +28,7 @@ function MetadataSummary({ metadata }: { metadata: MetadataDetails }) {
   const providerLink = metadataSourceLink(metadata);
   return <div className={styles.metadataSummary}>
     <div className={styles.metadataFacts}>
-      <span className={styles.metadataSource}>{metadata.provider === "tmdb" ? "TMDB" : "OMDb"}</span>
+      <span className={styles.metadataSource}>{metadata.provider === "tmdb" ? "TMDB" : metadata.provider === "free" ? "Built-in" : "OMDb"}</span>
       {metadata.year && <span>{metadata.year}</span>}
       {metadata.runtimeMinutes != null && metadata.runtimeMinutes > 0 && <span>{metadata.runtimeMinutes} min</span>}
       {metadata.contentRating && <span>{metadata.contentRating}</span>}

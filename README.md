@@ -1,221 +1,239 @@
-# StreamRD
+<p align="center">
+  <img src="docs/assets/readme/hero.jpg" alt="StreamRD on desktop in dark and light themes, on a phone, and next to Phosphor" width="100%">
+</p>
 
-[Wiki](https://github.com/Installation-04/StreamRD/wiki) · [Releases](https://github.com/Installation-04/StreamRD/releases)
+<p align="center">
+  <a href="https://github.com/Installation-04/StreamRD/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Installation-04/StreamRD?style=flat-square&color=e11d48"></a>
+  <a href="https://github.com/Installation-04/StreamRD/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Installation-04/StreamRD/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Installation-04/StreamRD?style=flat-square"></a>
+  <a href="https://github.com/Installation-04/StreamRD/pkgs/container/streamrd"><img alt="Container image" src="https://img.shields.io/badge/ghcr.io-streamrd-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
+</p>
 
-Self-hosted, Netflix-style streaming for your own **debrid** accounts.
-One backend and a responsive web app for every screen that has a browser.
+<p align="center">
+  <a href="#-quick-install">Quick install</a> ·
+  <a href="#-screenshots">Screenshots</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-documentation">Docs</a> ·
+  <a href="docs/roadmap.md">Roadmap</a> ·
+  <a href="https://github.com/Installation-04/StreamRD/wiki">Wiki</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
 
-```text
-   Web (Next.js) ──────┐   HTTPS/HTTP   ┌──────────────────────────────────┐
-   Scripts / API ──────┴───────────────▶│ StreamRD backend (Node/TS)       │
-                          LAN/proxy/VPN │  REST API · JWT + RBAC · Prisma  │
-                                        │  DebridManager ─┬─ Real-Debrid   │
-                                        │   (fallback)    ├─ AllDebrid     │
-                                        │                 └─ Premiumize.me │
-                                        └──────────────────────────────────┘
-```
+**StreamRD** is a self-hosted, streaming-style web app for your own **debrid** accounts
+(Real-Debrid, AllDebrid, Premiumize.me). Connect an account and StreamRD finds the movies and shows already
+in it, matches artwork and details, and gives you and the people you invite a private place to browse and watch.
+You decide who joins and what they can see, and nobody else needs a debrid subscription.
 
-You bring your own debrid subscriptions; StreamRD turns them into a private,
-multi-user streaming service with a curated catalog. Use it within the
-providers' terms of service and your local law.
+- 🎬 **Your collection, nicely browsed.** Imports only movies and shows (games, software and music are skipped), with posters and details that work with no account or API key (add your own TMDB or OMDb key for richer results).
+- 👥 **Share with family and friends.** Invitations, named shared libraries and per-viewer resume, with server-managed playback so viewers never see your keys.
+- 🔎 **Find and request more.** Search TMDB, request a title, and follow it from approval to download.
+- 🐳 **One container, Radarr-style.** Settings in `config/`, downloads in `data/`; updating is `docker compose pull && docker compose up -d`.
+- 🔒 **Careful with your secrets.** Stored keys are encrypted, sessions are HttpOnly, backups are verified.
 
-## Quick install
+## 🖼 Screenshots
 
-With Docker and the Compose plugin installed:
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/assets/readme/discover-dark.png" alt="Discover page in the dark theme"><br><sub><b>Discover</b>: your collection, My List and continue watching</sub></td>
+    <td align="center" width="50%"><img src="docs/assets/readme/discover-light.png" alt="Discover page in the light theme"><br><sub><b>Light, dark or system theme</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/find-media.png" alt="Searching TMDB for a movie to request"><br><sub><b>Find media</b>: search TMDB and request what you want</sub></td>
+    <td align="center"><img src="docs/assets/readme/requests.png" alt="Request list with measured download progress"><br><sub><b>Requests</b>: real download progress, cloud or local</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/my-library.png" alt="My library with artwork matching status"><br><sub><b>My library</b>: imported from your debrid account, matched automatically</sub></td>
+    <td align="center"><img src="docs/assets/readme/shared-library.png" alt="A shared library as seen by an invited viewer"><br><sub><b>Shared libraries</b>: what an invited viewer sees</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/people-access.png" alt="Admin page for members, invitations and registration policy"><br><sub><b>People &amp; access</b>: invitations, members, sign-out everywhere</sub></td>
+    <td align="center"><img src="docs/assets/readme/system.png" alt="Admin system page with updates and backups"><br><sub><b>System</b>: update checks, verified backups and restore</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/assets/readme/discover-mobile.png" alt="StreamRD on a phone" height="420">
+  &nbsp;&nbsp;
+  <sub>Responsive on phones and tablets.<br>More in the <a href="https://github.com/Installation-04/StreamRD/wiki/Screenshots">screenshot gallery</a>.<br>All screenshots use demo data.</sub>
+</p>
+
+## 🚀 Quick install
+
+You need Docker with the Compose plugin. Then run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/get.sh | bash
 ```
 
-One container (StreamRD on port 8080, Phosphor on 8081, qBittorrent), laid out like Radarr or Sonarr:
-`~/streamrd/config` holds all settings and databases, `~/streamrd/data` holds downloads. **To update:**
-`cd ~/streamrd && docker compose pull && docker compose up -d` (or re-run the script); your folders are never
-touched. Options go after `bash -s --`, for example `--port 3000 --admin-email you@example.com`; `--help` lists them,
-`--import-db` moves an existing install across and `--uninstall` removes the container (folders kept). It does not
-install Docker, set up HTTPS or open firewall ports. Read the [script](get.sh) before piping any script to a shell,
-and see the [single-container guide](docs/single-container.md).
+Open **http://YOUR_SERVER:8080**, create your account (the first one becomes the administrator), and follow the
+guided **Setup** page to connect a debrid account. That is all.
 
-## Server Sharing — v0.6.0
+The script creates `~/streamrd` with one `docker-compose.yml` and two folders, laid out like Radarr or Sonarr:
 
-Invite users, publish named libraries from your imported account collection, and
-choose who can watch. Shared viewers use server-managed playback and need no
-personal debrid key. Admin → Users controls signup policy, expiring invitations,
-account status and signing users out everywhere.
+| Folder | Holds |
+|---|---|
+| `config/` | all settings, both databases, backups and the keys that protect your credentials |
+| `data/` | downloads and media |
 
-Read the [users and sharing guide](docs/server-sharing.md) for setup and permissions.
-Named-library grants do not change the legacy curated catalog's access rules.
-Plex Home PINs and parental restrictions remain future work.
+**Update** any time with `cd ~/streamrd && docker compose pull && docker compose up -d` (or run the script again).
+Your folders are never touched. Options go after `bash -s --`, for example `--port 3000 --admin-email you@example.com`;
+`--help` lists them. `--import-db` moves an existing install across and `--uninstall` removes the container, keeping your folders.
+It does not install Docker, set up HTTPS or open firewall ports. Read [`get.sh`](get.sh) before piping any script to a shell.
 
-v0.8.0 adds media discovery/requests, an all-in-one container, and update/backup/restore
-controls in Admin → System ([notes](docs/releases/v0.8.0.md)).
+<details>
+<summary><b>Optional add-ons</b>: Zilean, Zurg, Plex and Jellyfin</summary>
 
-v0.7.0 adds per-viewer watch progress for StreamRD shared libraries: playback resumes
-and **Shared libraries** shows a Continue watching row ([notes](docs/releases/v0.7.0.md)).
+- `get.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
+- `get.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).
+- Admin → Plex / Jellyfin exports mounted files as symlink libraries for your media server:
+  [setup and scanning guide](docs/plex-jellyfin.md).
 
-## Features
+Details and honest limits of what has been tested: [Zilean and Zurg](docs/zilean-zurg.md).
+</details>
 
-- **Multiservice debrid** — Real-Debrid, AllDebrid and Premiumize.me behind
-  one pluggable `DebridProvider` interface, with per-user primary provider
-  and automatic fallback ordering (per-user or global).
-- **Accounts & RBAC** — invitations and signup policies, JWT login, `user`/`admin`
-  roles, named-library grants, administrator session revocation, per-user
-  debrid keys (stored server-side, returned only as redacted hints),
-  Netflix-style viewing profiles (up to 5 per account).
-- **My List** — one-click favorite/unfavorite from any title card or the
-  detail page; a "My List" row appears on the home page whenever it's non-empty.
-- **Continue Watching** — a row of previously-played titles (deduped, most
-  recent first) at the top of the home page.
-- **Admin dashboard** — users, catalog CRUD with debrid source mappings,
-  global provider order/toggles, timeouts & retry caps, access toggles,
-  connectivity tests, health stats, structured logs, config export/import.
-- **Every screen with a browser** — Netflix-style, responsive web UI
-  (dark/light/system theme, i18n-ready).
-- **Deploy anywhere** — Dockerized backend + web, Caddy/Nginx reverse-proxy
-  examples with HTTPS, works identically over LAN or VPN.
-- **Operable** — structured event log (stdout + queryable via admin API),
-  playback metrics per provider, `/api/health` for probes, JSON config backup,
-  per-IP rate limiting on signup/login.
+<details>
+<summary><b>Prefer to write the compose file yourself?</b></summary>
 
-## Tech stack
+```yaml
+services:
+  streamrd:
+    image: ghcr.io/installation-04/streamrd:latest
+    container_name: streamrd
+    restart: unless-stopped
+    ports: ["8080:8080", "8081:8081", "6881:6881/tcp", "6881:6881/udp"]
+    environment:
+      CONFIG_DIR: /config
+      TZ: UTC
+    volumes:
+      - ./config:/config
+      - ./data:/data
+```
+
+The container runs as UID/GID 1000. Full reference: [single-container guide](docs/single-container.md).
+Split deployments and the older Debian/Ubuntu installer are in [deployment.md](docs/deployment.md).
+</details>
+
+## ✨ Features
+
+**Watch**
+- Netflix-style web UI: dark, light or system theme, responsive, with up to five viewing profiles per account.
+- My List, Continue watching, and per-viewer resume in shared libraries.
+- Multiple debrid providers behind one interface, with per-user primary provider and automatic fallback.
+- Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.
+
+**Discover and request**
+- Search TMDB or OMDb, request a title, and track it from administrator approval to a finished download (debrid cloud or the bundled qBittorrent).
+- Automatic artwork and details matching for release-style file names, with manual correction and a *Retry matching* button. A built-in source works with no account or key; TMDB and OMDb keys are optional upgrades.
+
+**Share**
+- Invitation-only, open or closed registration; expiring one-use invitation links.
+- Named shared libraries with per-user access; viewers need no debrid account.
+- Administrators can deactivate accounts and sign someone out of every device.
+
+**Operate and secure**
+- Verified backups and typed-confirmation restore, update checks, readiness pages, and searchable, downloadable logs.
+- Debrid keys, indexer keys and the download-client password are encrypted at rest.
+- HttpOnly sessions, cross-site request guard, security headers, rate limiting, and an automatic safety snapshot before any database upgrade.
+- Automatic releases: merging a version bump tags and publishes the release and the container image.
+
+## 🧲 Also in the box: Phosphor
+
+**Phosphor** is the companion app for people who prefer to search. It queries your own Torznab indexers
+(Jackett, Prowlarr, Zilean), adds the result to your debrid account in one click, and streams it once resolved,
+all in a retro terminal look. It runs in the same container on port **8081** with its own accounts, and also supports TorBox.
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/assets/readme/phosphor-search.png" alt="Phosphor indexer search in green phosphor theme"><br><sub><b>Search your indexers</b></sub></td>
+    <td align="center" width="50%"><img src="docs/assets/readme/phosphor-queue.png" alt="Phosphor download queue"><br><sub><b>Queue and stream</b></sub></td>
+  </tr>
+</table>
+
+More in [`phosphor/README.md`](phosphor/README.md).
+
+## 🧭 How it works
+
+```mermaid
+flowchart LR
+  subgraph you["You and your people"]
+    B["Browser: phone, tablet, desktop"]
+  end
+  subgraph box["One container"]
+    W["Web app"] --> A["StreamRD API"]
+    A --> DB[("SQLite")]
+    A --> R["Request worker"]
+  end
+  A --> D["Real-Debrid / AllDebrid / Premiumize.me"]
+  A -.-> M["TMDB / OMDb artwork and details"]
+  R --> Q["qBittorrent or debrid cloud"]
+  B --> W
+```
+
+## 🗺 Where it is going
+
+The next big step is **one library managed by the administrator, like Plex**: one place to browse, with the
+administrator choosing who sees what, instead of separate catalog, private and shared sections.
+See the [roadmap](docs/roadmap.md) and the [release notes](https://github.com/Installation-04/StreamRD/releases).
+
+## 📚 Documentation
+
+| I want to… | Read |
+|---|---|
+| Install, update and back up | [Single container](docs/single-container.md) · [Admin guide](docs/admin-guide.md) |
+| Invite people and share libraries | [Users and sharing](docs/server-sharing.md) |
+| Request and track media | [Media requests](docs/media-requests.md) |
+| Import my debrid account and match artwork | [Account library](docs/account-library.md) · [Metadata](docs/metadata-automation.md) |
+| Set up debrid providers | [Providers](docs/providers.md) |
+| Put it behind HTTPS or a VPN | [Deployment](docs/deployment.md) |
+| Upgrade safely or recover | [Database upgrades](docs/database-upgrades.md) |
+| Understand the design or the API | [Architecture](docs/architecture.md) · [API](docs/api-schema.md) · [Auth hardening](docs/auth-hardening.md) |
+| Use Plex or Jellyfin | [Plex and Jellyfin](docs/plex-jellyfin.md) |
+| Cut a release | [RELEASING.md](RELEASING.md) |
+
+<details>
+<summary><b>Configuration, development and tech stack</b></summary>
+
+**Backend** (`server/.env`, see `.env.example`): `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`,
+`API_BASE_URL` / `LAN_URL` / `PUBLIC_URL`, `CORS_ORIGINS`, `ADMIN_EMAIL`. **Web**: `NEXT_PUBLIC_API_BASE_URL` is the
+URL the *browser* uses to reach the API. **Debrid providers**: each user pastes their own key in
+Account → Debrid services (Real-Debrid [apitoken](https://real-debrid.com/apitoken),
+AllDebrid [apikeys](https://alldebrid.com/apikeys), Premiumize [account](https://www.premiumize.me/account)).
+
+Run the pieces directly while developing (Node 22):
+
+```bash
+git clone https://github.com/Installation-04/StreamRD.git && cd StreamRD
+cd server && npm install && npx prisma generate && npx prisma db push && npm run dev   # API on :47821
+cd web && npm install && npm run dev                                                    # web on :3000
+cd server && npm test                                                                   # RBAC, providers, auth, catalog, playback
+```
 
 | Piece | Stack |
 |---|---|
 | Backend (`/server`) | Node.js 22, TypeScript, Express, Prisma + SQLite, JWT + bcrypt, Zod, Vitest + Supertest |
-| Web (`/web`) | Next.js (App Router), React, TypeScript, cookie session + middleware RBAC gates |
-| Infra (`/infra`) | Docker, docker-compose, Caddy & Nginx configs, GitHub Actions CI |
+| Web (`/web`) | Next.js (App Router), React, TypeScript |
+| Infra (`/infra`) | Docker, Compose, Caddy and Nginx examples, GitHub Actions |
 
-## Quick start
+CI type-checks and tests both servers, builds both web apps, builds the container images and runs real browser journeys.
+</details>
 
-Install Docker Engine with its Compose plugin, then run from the repository root:
+## 🤝 Community
 
-```bash
-git clone https://github.com/Installation-04/StreamRD.git
-cd StreamRD
-docker compose up -d --build
-```
+Contributions are welcome, and you do not have to write code: bug reports, usability notes, translations, accessibility
+checks and testing on different setups all help.
 
-This starts **one container** containing StreamRD, Phosphor, their APIs/workers and
-qBittorrent. Open StreamRD at http://localhost:8080 and Phosphor at
-http://localhost:8081. Sign up in each product you want to use; its first account
-becomes administrator. The data, downloads and generated secrets persist in one
-named volume.
+- **Found a bug or have an idea?** [Open an issue](https://github.com/Installation-04/StreamRD/issues/new/choose); the templates ask for what is needed.
+- **Want to contribute code?** Read [CONTRIBUTING.md](CONTRIBUTING.md) (small focused pull requests, tests for behavior changes) and the [roadmap](docs/roadmap.md) for where help is most useful.
+- **Adding a debrid provider?** Follow [docs/providers.md](docs/providers.md#adding-another-provider).
+- **Project tracking** lives in the [Project HQ](https://github.com/Installation-04/StreamRD/wiki/Project-HQ).
 
-[Single-container setup and local downloads](docs/single-container.md) ·
-[Discover, request and track media](docs/media-requests.md).
-Existing split deployments and the legacy Debian/Ubuntu installer remain described
-in [deployment.md](docs/deployment.md); their volumes are not migrated automatically.
+## ⚖️ Disclaimer
 
-Run pieces directly during development:
+StreamRD does not host, provide or index any media. It works with the debrid subscriptions and the files you already
+have, so use it within your providers' terms of service and your local law. It is not affiliated with or endorsed by
+Real-Debrid, AllDebrid, Premiumize, TMDB, OMDb, Plex, Jellyfin or Netflix. *This product uses the TMDB API but is not
+endorsed or certified by TMDB.*
 
-```bash
-# API on :47821
-cd server && npm install && npx prisma generate && npx prisma db push && npm run dev
-
-# Web on :3000
-cd web && npm install && npm run dev
-```
-
-## Configuration
-
-**Backend** (`server/.env`, see `.env.example`): `PORT`, `DATABASE_URL`,
-`JWT_SECRET`, `JWT_EXPIRES_IN`, `API_BASE_URL`/`LAN_URL`/`PUBLIC_URL`,
-`CORS_ORIGINS`, `ADMIN_EMAIL`.
-
-**Web**: `NEXT_PUBLIC_API_BASE_URL` — the URL the *browser* uses to reach the
-API (LAN IP, proxied domain, or VPN address).
-
-**Mobile & TV**: set the Server URL in each app's settings screen and hit
-*Test connection* (probes `/api/health`).
-
-**Debrid providers**: each user pastes their own keys in
-Account → Debrid services — Real-Debrid ([apitoken](https://real-debrid.com/apitoken)),
-AllDebrid ([apikeys](https://alldebrid.com/apikeys)),
-Premiumize ([account](https://www.premiumize.me/account)) — picks a primary
-provider, and can test each connection. Details: [docs/providers.md](docs/providers.md).
-
-## Admin guide
-
-The first account on an empty server is admin (or set `ADMIN_EMAIL`). Visit
-`/admin` on the web app for users, catalog, server settings, providers,
-logs, and config export/import. Full walkthrough:
-[docs/admin-guide.md](docs/admin-guide.md).
-
-## Architecture & API
-
-- [docs/architecture.md](docs/architecture.md) — system design, provider
-  layer, RBAC, client model
-- [docs/api-schema.md](docs/api-schema.md) — every endpoint with
-  request/response examples and role requirements
-
-## Deployment
-
-[docs/deployment.md](docs/deployment.md) covers the three reachability modes:
-
-- **LAN** — expose ports, point clients at `http://<lan-ip>:47821`
-- **Reverse proxy + HTTPS** — bundled Caddy (automatic Let's Encrypt) or the
-  Nginx example in `infra/reverse-proxy/`
-- **VPN** — WireGuard/Tailscale; treat tunnel IPs like LAN
-
-## Tests & CI
-
-```bash
-cd server && npm test    # RBAC, provider units (mocked HTTP), auth/catalog/playback integration
-```
-
-GitHub Actions (`.github/workflows/ci.yml`) typechecks + tests the server,
-builds the web app, and smoke-builds both Docker images.
-
-## Contributing
-
-PRs welcome. Keep it small and focused; match the surrounding code style
-(TypeScript strict, no default exports in the backend); add or update tests
-for behavior changes (`npm test` in `server/` must pass); run `npm run lint`
-in the workspace you touched. For a new debrid provider, follow
-[docs/providers.md](docs/providers.md#adding-another-provider).
-
-## Related projects
-
-This monorepo also hosts **[Phosphor](phosphor/README.md)** — a separate,
-retro terminal-styled debrid app: instead of an admin-curated catalog, you
-search your own Torznab indexers (Jackett/Prowlarr) and one-click add
-results to Real-Debrid, AllDebrid, Premiumize, or Torbox. Own server, own
-clients, own port (61337) — see `phosphor/README.md` to get started.
-
-## License
+## 📄 License
 
 [MIT](LICENSE).
-
-## Screenshots and external media libraries
-
-![Application screenshot](docs/screenshots/v0.5.0/streamrd-discover.png)
-
-See the [screenshot gallery](https://github.com/Installation-04/StreamRD/wiki/Screenshots) for both apps.
-Optional mounted-file symlink export for **Plex and Jellyfin** is available under
-Admin → Plex / Jellyfin. [Setup and scanning guide](https://github.com/Installation-04/StreamRD/blob/main/docs/plex-jellyfin.md).
-
-## Community development
-
-[Project HQ](https://github.com/Installation-04/StreamRD/wiki/Project-HQ) tracks delivery, acceptance checks, and upcoming work.
-The community edition adds guided `/setup`, reviewed mounted-file batches,
-and responsive discovery/search workflows. See [contributing](https://github.com/Installation-04/StreamRD/blob/main/CONTRIBUTING.md) to help.
-
-**v0.4.0 Safe Upgrades** adds versioned SQLite migrations, verified snapshots before
-existing database changes, and read-only **Admin → System** readiness pages in both
-apps. Follow the [upgrade and recovery guide](docs/database-upgrades.md) before
-upgrading an existing installation.
-
-## Automatic libraries — v0.5.0
-
-Connect your debrid account during onboarding to import existing torrents into
-**My library**, private to your account. Scans follow provider pages, skip duplicate
-references, and resolve temporary streams only when you press Play.
-[Account scanner and playback guide](docs/account-library.md).
-
-**Admin → Metadata** connects TMDB and OMDb for artwork, descriptions, cast, runtime,
-ratings and IMDb IDs. Automatic matching is opt-in; uncertain results can be reviewed
-and corrected, and manual edits are protected. Metadata enriches personal imports,
-mounted exports and StreamRD catalog titles.
-[Metadata setup and matching guide](docs/metadata-automation.md).
-
-User administration and server-managed playback are documented in the
-[users and sharing guide](docs/server-sharing.md).

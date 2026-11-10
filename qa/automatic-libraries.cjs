@@ -30,9 +30,10 @@ module.exports = async function automaticLibraries({ product, page, url, api, ad
   await page.getByText('Settings saved. Provider keys remain on the server. Saving does not test the connection.', { exact: true }).waitFor();
   assert.equal(await tmdb.inputValue(), ''); assert.equal(await omdb.inputValue(), '');
   assert.equal(requests('metadata').length, initialMetadataRequests, 'Saving keys must not imply a connection test');
-  await page.getByRole('button', { name: 'Test connection', exact: true }).nth(0).click();
-  await page.getByText('TMDB responded successfully to an explicit connection test.', { exact: true }).waitFor();
+  // The built-in source's card comes first (index 0); it is not clicked here because this fixture does not stub Cinemeta.
   await page.getByRole('button', { name: 'Test connection', exact: true }).nth(1).click();
+  await page.getByText('TMDB responded successfully to an explicit connection test.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Test connection', exact: true }).nth(2).click();
   await page.getByText('OMDb / IMDb responded successfully to an explicit connection test.', { exact: true }).waitFor();
   assert.ok(requests('metadata').length >= initialMetadataRequests + 2);
   const logo = await page.request.get(`${url}/metadata/tmdb.svg`); assert.equal(logo.status(), 200); assert.ok((await logo.text()).includes('viewBox'));

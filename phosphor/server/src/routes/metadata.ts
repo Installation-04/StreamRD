@@ -21,7 +21,7 @@ function action(run: (req: Request, res: Response) => Promise<void>) {
     }
   });
 }
-const provider = z.enum(["tmdb", "omdb"]), type = z.enum(["movie", "series"]);
+const provider = z.enum(["tmdb", "omdb", "free"]), type = z.enum(["movie", "series"]);
 export const metadataSelectionSchema = z.object({ provider, id: z.string().min(1).max(32), type }).strict().refine(value => value.provider === "tmdb" ? /^[1-9]\d{0,9}$/.test(value.id) : /^tt\d{7,10}$/.test(value.id), { message: "Use a valid provider title ID" });
 const searchSchema = z.object({ query: z.string().trim().min(1).max(160), type, year: z.number().int().min(1800).max(2200).optional(), provider: provider.optional() }).strict();
 const targetSchema = z.object({ targetType: z.enum(["catalog", "library"]), targetId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/) });

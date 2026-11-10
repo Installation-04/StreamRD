@@ -14,10 +14,11 @@ reviewed export workflow.
 
 | Provider | Connection | Available details |
 |---|---|---|
+| Built-in | Nothing to set up | Movie/series search by name or IMDb ID, posters, backdrops, synopsis, genres, cast, runtime and the IMDb rating, from Cinemeta (IMDb-linked data) |
 | TMDB | Your TMDB API key or API Read Access Token | Movie/TV search, posters, backdrops, synopsis, genres, cast, runtime, certifications, TMDB rating and external IMDb IDs when available |
 | OMDb | Your OMDb API key | Movie/series search, IMDb IDs and ratings, plot, genres, cast, runtime, certification and supported poster URLs when available |
 
-IMDb IDs such as `tt0133093` can be searched through either provider. OMDb is an
+IMDb IDs such as `tt0133093` can be searched through any provider. OMDb is an
 independent service supplying IMDb-linked information; this feature does not log
 in to an IMDb account or scrape IMDb pages. Ratings retain their source label:
 TMDB ratings and IMDb ratings are not interchangeable. Missing provider fields
@@ -28,6 +29,25 @@ or [OMDb API keys](https://www.omdbapi.com/apikey.aspx). A TMDB Read Access Toke
 can be pasted with or without its `Bearer` prefix. The selected provider is used
 for new searches; an existing confirmed match refreshes its own provider/ID.
 Changing the default provider does not silently replace previously chosen matches.
+
+### The built-in source (no account or key)
+
+New installs match titles with no setup. Whenever the chosen provider (TMDB or OMDb) has no saved key, StreamRD uses the
+built-in source instead, and switches to your key the moment you save one. You can also choose **Built-in** as the default provider.
+
+- **Service:** Cinemeta, the metadata service of the Stremio ecosystem (`v3-cinemeta.strem.io`). No account, key or login is used.
+  Titles are identified by IMDb ID; posters come from `images.metahub.space`.
+- **What is sent:** only the title text or IMDb ID being looked up. No accounts, keys, file paths or personal data. Nothing is sent until
+  something needs a lookup: searching in **Find media**, matching a title, or refreshing one. Automatic matching stays off until you turn it on.
+- **Limits:** it is a third-party service that publishes no terms or guarantees for this use, so it can change or go away. It is English
+  only (the language setting is ignored), has no content ratings, and its rate limits are unknown: if it answers "too many requests",
+  matching pauses for five minutes and tries again.
+- **Search coverage, measured:** in a spot check of 15 titles, all 8 mainstream films and all 3 series were found by name; the 4 misses
+  were obscure short films (the Blender open movies, such as *Big Buck Bunny*), which this service does not return for name searches.
+  The matcher only accepts unambiguous results and sends the rest to review. For a title it cannot find by name, paste its IMDb ID
+  (for example `tt1254207`) into the search box: an ID lookup works for any title.
+- **Best results:** add your own TMDB key (free for non-commercial use) for richer artwork and more reliable search.
+- **Attribution:** title pages state that metadata comes from Cinemeta (IMDb-linked data).
 
 ## First setup
 

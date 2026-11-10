@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { db } from "../db";
-import { MetadataError, MetadataSettings, PublicMetadataSettings } from "./types";
+import { MetadataError, MetadataProvider, MetadataSettings, PublicMetadataSettings } from "./types";
 
 export const METADATA_SETTINGS_KEY = "metadata.settings";
 export const DEFAULT_METADATA_SETTINGS: Readonly<MetadataSettings> = Object.freeze({
@@ -10,7 +10,7 @@ export const DEFAULT_METADATA_SETTINGS: Readonly<MetadataSettings> = Object.free
 const apiKey = z.string().trim().max(1024).refine(value => /^[\x21-\x7e]*$/.test(value), "Use a valid API key without spaces or control characters");
 const tmdbKey = z.string().trim().transform(value => value.replace(/^Bearer\s+/i, "")).pipe(apiKey);
 export const metadataSettingsPatchSchema = z.object({
-  provider: z.enum(["tmdb", "omdb"]).optional(),
+  provider: z.enum(["tmdb", "omdb", "free"]).optional(),
   language: z.string().regex(/^[a-z]{2}-[A-Z]{2}$/, "Use a language-region code such as en-US").optional(),
   automatic: z.boolean().optional(),
   refreshDays: z.number().int().min(1).max(90).optional(),
@@ -18,6 +18,18 @@ export const metadataSettingsPatchSchema = z.object({
   clearTmdb: z.boolean().optional(), clearOmdb: z.boolean().optional(),
 }).strict();
 export type MetadataSettingsPatch = z.input<typeof metadataSettingsPatchSchema>;
+
+/** The credential a provider is called with; the built-in source needs none, so it is always "configured". */
+export function providerCredential(settings: MetadataSettings, provider: MetadataProvider): string {
+  return provider === "tmdb" ? settings.tmdbApiKey : provider === "omdb" ? settings.omdbApiKey : "built-in";
+}
+export function providerConfigured(settings: MetadataSettings, provider: MetadataProvider = settings.provider): boolean {
+  return Boolean(providerCredential(settings, provider));
+}
+/** The chosen provider while it has a key; otherwise the built-in source, so matching works with no account at all. */
+export function activeProvider(settings: MetadataSettings): MetadataProvider {
+  return providerConfigured(settings) ? settings.provider : "free";
+}
 
 /** Whitelist stored fields, including on reads of older/malformed configuration. */
 function decodeMetadataSettings(row: { value: string } | null): MetadataSettings {
@@ -34,8 +46,6 @@ function decodeMetadataSettings(row: { value: string } | null): MetadataSettings
     provider: read("provider"), language: read("language"), automatic: read("automatic"),
     refreshDays: read("refreshDays"), tmdbApiKey: read("tmdbApiKey"), omdbApiKey: read("omdbApiKey"),
   };
-  // A corrupt or manually edited row cannot start automation without credentials.
-  if (!(settings.provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey)) settings.automatic = false;
   return settings;
 }
 export async function getMetadataSettings(): Promise<MetadataSettings> {
@@ -44,7 +54,7 @@ export async function getMetadataSettings(): Promise<MetadataSettings> {
 export function publicMetadataSettings(settings: MetadataSettings): PublicMetadataSettings {
   return {
     provider: settings.provider, language: settings.language, automatic: settings.automatic,
-    refreshDays: settings.refreshDays, tmdbConfigured: Boolean(settings.tmdbApiKey),
+    refreshDays: settings.refreshDays, activeProvider: activeProvider(settings), tmdbConfigured: Boolean(settings.tmdbApiKey),
     omdbConfigured: Boolean(settings.omdbApiKey),
   };
 }
@@ -64,9 +74,6 @@ export async function saveMetadataSettings(patch: MetadataSettingsPatch): Promis
       tmdbApiKey: input.clearTmdb ? "" : input.tmdbApiKey || current.tmdbApiKey,
       omdbApiKey: input.clearOmdb ? "" : input.omdbApiKey || current.omdbApiKey,
     };
-    if (settings.automatic && !(settings.provider === "tmdb" ? settings.tmdbApiKey : settings.omdbApiKey)) {
-      throw new MetadataError("metadata-not-configured", 400, "Configure the selected metadata provider before enabling automatic matching.");
-    }
     const value = JSON.stringify(settings);
     await transaction.setting.upsert({ where: { key: METADATA_SETTINGS_KEY }, create: { key: METADATA_SETTINGS_KEY, value }, update: { value } });
   });

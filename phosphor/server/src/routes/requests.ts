@@ -19,7 +19,7 @@ for (const router of [discoveryRouter, requestsRouter, adminRequestsRouter]) rou
 adminRequestsRouter.use(requireAdmin);
 const lookupLimit = rateLimit({ windowMs: 60_000, max: 60 });
 const mutationLimit = rateLimit({ windowMs: 60_000, max: 30 });
-const identity = z.object({ provider: z.enum(["tmdb", "omdb"]), id: z.string().min(1).max(40), type: z.enum(["movie", "series"]) }).strict();
+const identity = z.object({ provider: z.enum(["tmdb", "omdb", "free"]), id: z.string().min(1).max(40), type: z.enum(["movie", "series"]) }).strict();
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 function action(run: (req: Request, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req, res) => {
@@ -44,7 +44,7 @@ async function followed(req: Request, admin = false) {
 const pageInput = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: id.optional(), status: z.enum(REQUEST_STATUSES).optional(), q: z.string().trim().max(200).optional() }).strict();
 
 discoveryRouter.get("/search", lookupLimit, action(async (req, res) => {
-  const query = parse(z.object({ q: z.string().trim().min(1).max(200), type: z.enum(["movie", "series"]), provider: z.enum(["tmdb", "omdb"]).optional() }).strict(), req.query);
+  const query = parse(z.object({ q: z.string().trim().min(1).max(200), type: z.enum(["movie", "series"]), provider: z.enum(["tmdb", "omdb", "free"]).optional() }).strict(), req.query);
   const results = await searchMetadata({ query: query.q, type: query.type, provider: query.provider });
   await assertRequestActor(req.session!);
   res.json({ results });

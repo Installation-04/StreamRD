@@ -18,7 +18,7 @@ describe("private metadata settings", () => {
     const defaults = await getMetadataSettings(); expect(defaults).toEqual(DEFAULT_METADATA_SETTINGS);
     await saveMetadataSettings({ tmdbApiKey: "Bearer fixture-private-token", omdbApiKey: "private-omdb-token" });
     const current = await getMetadataSettings(); expect(current.tmdbApiKey).toBe("fixture-private-token");
-    expect(publicMetadataSettings(current)).toEqual({ provider: "tmdb", automatic: false, language: "en-US", refreshDays: 30, tmdbConfigured: true, omdbConfigured: true });
+    expect(publicMetadataSettings(current)).toEqual({ provider: "tmdb", activeProvider: "tmdb", automatic: false, language: "en-US", refreshDays: 30, tmdbConfigured: true, omdbConfigured: true });
     expect(JSON.stringify(publicMetadataSettings(current))).not.toContain("private"); expect(fetch).not.toHaveBeenCalled();
   });
   it("preserves omitted or blank keys and clears credentials only explicitly", async () => {
@@ -43,13 +43,14 @@ describe("private metadata settings", () => {
     ]);
     expect(await getMetadataSettings()).toMatchObject({ tmdbApiKey: "", omdbApiKey: "preserve-this-key", language: "de-DE" });
   });
-  it("requires the selected provider's saved key before enabling automation or switching/clearing it", async () => {
-    await expect(saveMetadataSettings({ automatic: true })).rejects.toMatchObject({ status: 400, code: "metadata-not-configured" });
-    await saveMetadataSettings({ tmdbApiKey: "saved-key", automatic: true });
-    await expect(saveMetadataSettings({ provider: "omdb" })).rejects.toMatchObject({ status: 400 });
-    await expect(saveMetadataSettings({ clearTmdb: true })).rejects.toMatchObject({ status: 400 });
-    expect(await getMetadataSettings()).toMatchObject({ automatic: true, provider: "tmdb", tmdbApiKey: "saved-key" });
-    await saveMetadataSettings({ automatic: false, clearTmdb: true }); expect((await getMetadataSettings()).tmdbApiKey).toBe("");
+  it("needs no key to enable automation: a provider without a key falls back to the built-in source", async () => {
+    await saveMetadataSettings({ automatic: true });
+    expect(await getMetadataSettings()).toMatchObject({ automatic: true, provider: "tmdb", tmdbApiKey: "" });
+    await saveMetadataSettings({ tmdbApiKey: "saved-key" });
+    await saveMetadataSettings({ provider: "omdb" }); // no OMDb key: lookups use the built-in source rather than failing
+    expect(await getMetadataSettings()).toMatchObject({ automatic: true, provider: "omdb", tmdbApiKey: "saved-key", omdbApiKey: "" });
+    await saveMetadataSettings({ provider: "tmdb", clearTmdb: true });
+    expect(await getMetadataSettings()).toMatchObject({ automatic: true, provider: "tmdb", tmdbApiKey: "" });
   });
   it("rejects malformed patches and sanitizes unsupported persisted fields", async () => {
     for (const patch of [{ provider: "unknown" }, { refreshDays: 0 }, { language: "invalid" }, { tmdbApiKey: "key\nsecret" }, { unsupported: "private" }]) {
@@ -64,7 +65,7 @@ describe("private metadata settings", () => {
 
 describe("metadata provider protocol", () => {
   it("makes no requests without credentials or for invalid identity input", async () => {
-    await expect(searchMetadata({ query: "Film", type: "movie" }, { ...DEFAULT_METADATA_SETTINGS })).rejects.toMatchObject({ code: "metadata-not-configured", status: 503 });
+    await expect(searchMetadata({ query: "Film", type: "movie", provider: "tmdb" }, { ...DEFAULT_METADATA_SETTINGS })).rejects.toMatchObject({ code: "metadata-not-configured", status: 503 }); // naming a keyed provider still needs its key
     await expect(fetchMetadata({ provider: "tmdb", id: "../../authentication", type: "movie" }, settings())).rejects.toMatchObject({ status: 400 });
     await expect(searchMetadata({ query: "x", type: "movie", year: 12 }, settings())).rejects.toMatchObject({ status: 400 });
     expect(fetch).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 # Automatic metadata and matching
 
-**Admin → Metadata** saves a TMDB API key/read token or an OMDb key, tests it explicitly, and
+Metadata works with **no account or key**: when no TMDB or OMDb key is saved, StreamRD uses a built-in source (Cinemeta, IMDb-linked data) and
+sends only the title being looked up. Add a key for richer results. **Admin → Metadata** saves a TMDB API key/read token or an OMDb key, tests it explicitly, and
 optionally enables automatic matching. A saved key is configuration, not proof of a working connection.
 TMDB provides artwork, movie/TV details and IMDb IDs; OMDb provides IMDb-linked details and ratings.
 Ratings keep their source labels, and the app includes TMDB attribution.

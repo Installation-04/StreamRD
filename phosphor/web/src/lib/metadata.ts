@@ -1,4 +1,5 @@
-export type MetadataProvider = "tmdb" | "omdb";
+/** "free" is the built-in source: no account or API key needed. */
+export type MetadataProvider = "tmdb" | "omdb" | "free";
 export type MetadataType = "movie" | "series";
 export type MetadataTarget = { type: "catalog" | "library" | "account"; id: string };
 export interface MetadataCandidate {
@@ -25,6 +26,8 @@ export interface MetadataDetails extends MetadataCandidate {
 }
 export interface MetadataSettings {
   provider: MetadataProvider;
+  /** The source actually used: the chosen provider when it has a key, otherwise the built-in one. */
+  activeProvider: MetadataProvider;
   language: string;
   automatic: boolean;
   refreshDays: number;
@@ -52,7 +55,7 @@ export const METADATA_FIELDS = ["name", "year", "description", "genres", "poster
 export const METADATA_LABELS: Record<typeof METADATA_FIELDS[number], string> = {
   name: "Title", year: "Year", description: "Overview", genres: "Genres", posterUrl: "Poster", backdropUrl: "Backdrop",
 };
-export const PROVIDER_LABELS: Record<MetadataProvider, string> = { tmdb: "TMDB", omdb: "OMDb / IMDb" };
+export const PROVIDER_LABELS: Record<MetadataProvider, string> = { tmdb: "TMDB", omdb: "OMDb / IMDb", free: "Built-in (no account)" };
 export function imdbLink(id: string | null | undefined): string | null {
   return id && /^tt\d{7,12}$/.test(id) ? `https://www.imdb.com/title/${id}/` : null;
 }
