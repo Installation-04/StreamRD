@@ -9,7 +9,8 @@ independent of it. Sizes are rough (S = days, M = a week or two, L = several wee
 Shipped so far, as the visible half of this plan: **v0.11.0** one Library page and libraries visible to everyone or chosen people (Phase A,
 plus an *Everyone* switch); **v0.12.0 and v0.13.0** a home page with a featured carousel;
 **v0.14.0** viewing limits for a kids account (part of Phase C); **v0.15.0** invitations that carry library access (part of Phase C);
-**v0.16.0** a full-page player. Still ahead are the parts that change the data model underneath (Phases B, D and E below): a unified
+**v0.16.0** a full-page player; **v0.17.0** one card per title with versions. The notes on the data model, with the decisions that
+remain, are in [library-model.md](library-model.md). Still ahead are the parts that change the data model underneath (Phases B, D and E below): a unified
 library model with one row per movie or episode, merging duplicates, and retiring the old catalogue, personal-library and request
 surfaces. These are deliberately left until they can be tested against a copy of real data.
 

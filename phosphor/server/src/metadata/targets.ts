@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { mediaLibrary } from "../library-instance";
 import { ageForRating } from "../ratings";
+import { idKey, refreshPrimaries, titleKey } from "../versions";
 import { MetadataDetails } from "./types";
 export type TargetType = "catalog" | "library" | "account";
 export interface MetadataTarget { targetType: TargetType; targetId: string; ownerId?: string; name: string; mediaType: "movie" | "series"; year: number | null }
@@ -28,6 +29,9 @@ async function applyAccountMetadata(tx: Prisma.TransactionClient, target: Metada
   if (!locks.includes("year") && details.year !== null && (manual || item.year === null || applied.year === item.year)) { update.year = details.year; managed.year = details.year; }
   // The title's age rating follows its metadata unless an administrator set one by hand.
   const ratingLabel = (item.ratingOverride ?? details.contentRating ?? "").trim() || null;
-  await tx.accountMedia.update({ where: { id: item.id }, data: { ...update, ratingLabel, minAge: ageForRating(ratingLabel) } });
+  // Versions of one title share a key: the provider id once matched, else the cleaned name, year and type.
+  const groupKey = idKey(details) ?? titleKey(update.name ?? item.name, update.year ?? item.year, item.type);
+  await tx.accountMedia.update({ where: { id: item.id }, data: { ...update, ratingLabel, minAge: ageForRating(ratingLabel), groupKey } });
+  await refreshPrimaries(tx, item.userId, [item.groupKey, groupKey]);
   return managed;
 }

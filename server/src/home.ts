@@ -99,11 +99,11 @@ export async function librarySections(userId: string, role: string, limit: numbe
   if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], libraryFeatured: [] as Slide[] };
   const where = { phase: "finished", OR: [...await Promise.all(libraries.map(library => sharedMediaWhere(library, limit))), ...own] };
   const libraryOf = (item: { userId: string; type: string }) => libraries.find(library => library.sourceUserId === item.userId && (library.mediaType === "all" || library.mediaType === item.type))?.id ?? null;
-  const recent = await db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: ROW });
+  const recent = await db.accountMedia.findMany({ where: { AND: [where, { isPrimary: true }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: ROW });
   // Ranked by how many viewers resumed or finished a title in the last 30 days; only the ranking leaves the server, never who watched.
   const groups = await db.sharedLibraryProgress.groupBy({ by: ["itemId"], where: { updatedAt: { gte: new Date(Date.now() - 30 * 86400_000) } }, _count: { _all: true }, orderBy: [{ _count: { itemId: "desc" } }], take: 60 });
   const found = groups.length ? await db.accountMedia.findMany({ where: { AND: [where, { id: { in: groups.map(group => group.itemId) } }] } }) : [];
-  const rank = new Map(groups.map((group, index) => [group.itemId, index])), popular = found.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!).slice(0, 12);
+  const rank = new Map(groups.map((group, index) => [group.itemId, index])), popular = found.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!).filter((item, index, all) => !item.groupKey || all.findIndex(other => other.userId === item.userId && other.groupKey === item.groupKey) === index).slice(0, 12);
   const [recentViews, popularViews] = await Promise.all([accountMediaViews(recent), accountMediaViews(popular)]);
   const recentlyAdded = recent.map((item, index) => ({ libraryId: libraryOf(item), item: recentViews[index] }));
   // Titles of the viewer's own libraries that have a backdrop and a synopsis lead the banner.

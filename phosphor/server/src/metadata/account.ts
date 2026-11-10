@@ -1,5 +1,6 @@
 import { AccountMedia } from "@prisma/client";
 import { db } from "../db";
+import { refreshPrimaries } from "../versions";
 import { queueAutomaticTargets, queueTarget, storedMetadata } from "./automation";
 import { activeProvider, getMetadataSettings } from "./settings";
 import { classifyTitle } from "../media-filter";
@@ -77,7 +78,9 @@ export async function cleanupAccountLibrary(userId: string, apply: boolean) {
   if (apply) {
     for (let offset = 0; offset < ids.length; offset += 200) {
       const batch = ids.slice(offset, offset + 200);
+      const keys = (await db.accountMedia.findMany({ where: { id: { in: batch }, userId }, select: { groupKey: true } })).map(row => row.groupKey);
       removed += (await db.accountMedia.deleteMany({ where: { id: { in: batch }, userId } })).count;
+      await refreshPrimaries(db, userId, keys);
       await db.metadataRecord.deleteMany({ where: { targetType: "account", targetId: { in: batch }, ownerId: userId } });
     }
   }

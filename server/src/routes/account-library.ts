@@ -8,6 +8,7 @@ import { asyncHandler } from "../http";
 import { AccountLibraryError, cancelAccountScan, getAccountScanStatus, playImportedMedia, queueAccountScans } from "../account-library";
 import { PROVIDER_IDS } from "../providers/types";
 import { accountMetadataSummary, cleanupAccountLibrary, decorateAccountMedia, rematchAccountMetadata } from "../metadata/account";
+import { refreshPrimaries } from "../versions";
 import { rateLimit } from "../util/rateLimit";
 
 export const accountLibraryRouter = Router();
@@ -81,6 +82,7 @@ accountLibraryRouter.delete("/:id", action(async (req, res) => {
     if (!item) throw new AccountLibraryError("Library item not found.", 404);
     await tx.metadataRecord.deleteMany({ where: { targetType: "account", targetId: item.id, ownerId: req.session!.sub } });
     await tx.accountMedia.delete({ where: { id: item.id } });
+    await refreshPrimaries(tx, item.userId, [item.groupKey]);
   });
   res.json({ ok: true });
 }));

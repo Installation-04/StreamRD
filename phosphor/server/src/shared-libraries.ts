@@ -39,7 +39,7 @@ export async function assertUnchangedSharedViewer(session: SessionClaims, librar
   if (fresh.updatedAt.getTime() !== library.updatedAt.getTime()) throw new AccountLibraryError("Shared library changed. Refresh and try again.", 409);
 }
 export async function sharedLibraryView(library: SharedLibrary, limit: number | null = null) {
-  return { id: library.id, name: library.name, mediaType: library.mediaType, itemCount: await db.accountMedia.count({ where: await sharedMediaWhere(library, limit) }) };
+  return { id: library.id, name: library.name, mediaType: library.mediaType, itemCount: await db.accountMedia.count({ where: { AND: [await sharedMediaWhere(library, limit), { isPrimary: true }] } }) };
 }
 /** Setup readiness uses only accessible, ready imports with current source bindings. */
 export async function getSharedSetupState(userId: string): Promise<{ libraryCount: number; readyCount: number }> {
