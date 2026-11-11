@@ -45,6 +45,32 @@ jobs:
           path: ${{ runner.temp }}/playback-qa
           if-no-files-found: ignore
 
+  journey:
+    name: Owner's journey in Google Chrome
+    runs-on: ubuntu-24.04
+    # The whole product on one machine against a stand-in debrid account: first account, import, every kind of playback, seeking and
+    # resuming, invitations, a child's limit, a request from search to playback, and the log. See qa/lab/.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install dependencies
+        run: npm ci --prefix server && npm ci --prefix web && npm ci --prefix qa
+      - name: Run the journey
+        env:
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/journey
+        run: node qa/lab/journey.cjs
+      - name: Upload the journey report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: streamrd-journey
+          path: ${{ runner.temp }}/journey
+          if-no-files-found: ignore
+
   web:
     name: Web — lint & build
     runs-on: ubuntu-latest
