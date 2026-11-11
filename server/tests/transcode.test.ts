@@ -10,6 +10,7 @@ import { db } from "../src/db";
 import { signSession } from "../src/auth/jwt";
 import { accountProviderContext } from "../src/account-library";
 import { playAccountItem } from "../src/providers/account-library";
+import { ProviderError } from "../src/providers/types";
 import { convertibleUrl, decideMode, ffmpegArgs, guessMode, planPlayback, Probe, probeStream, registerStream } from "../src/transcode";
 
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
@@ -137,6 +138,31 @@ it("says why when the player asks for the picture to be converted and that is tu
     expect((await request(app).get(`/api/stream/${id}/status`)).body.lastError).toMatch(/TRANSCODE_VIDEO/);
     expect((await request(app).get(`/api/stream/${id}?video=yes`)).status).toBe(400);
   } finally { delete process.env.TRANSCODE_VIDEO; }
+});
+
+it("tells a viewer what a dead link means for them, keeps the owner's instructions for the owner, and logs the failed play", async () => {
+  const owner = await member("admin"), viewer = await member("user");
+  await db.debridConfig.upsert({ where: { userId: owner.id }, create: { userId: owner.id, realDebridToken: "private-fixture-key" }, update: {} });
+  const ctx = await accountProviderContext(owner.id, "realdebrid");
+  const media = await db.accountMedia.create({ data: { userId: owner.id, provider: "realdebrid", providerRef: "ref-gone", credentialFingerprint: ctx.fingerprint, name: "Gone Film", year: 2001, type: "movie", phase: "finished", progress: 100, groupKey: "movie|gone film|2001", isPrimary: true } });
+  const created = await request(app).post("/api/admin/shared-libraries").set(auth(owner.token)).send({ name: "Films", mediaType: "movie" });
+  await request(app).post(`/api/admin/shared-libraries/${created.body.library.id}/users`).set(auth(owner.token)).send({ userId: viewer.id });
+  const url = `/api/shared-libraries/${created.body.library.id}/items/${media.id}/play`;
+  play.mockRejectedValue(new ProviderError("realdebrid", "unknown_ressource for private-fixture-key", 404));
+  const seen = await request(app).post(url).set(auth(viewer.token)).send({});
+  expect(seen.status).toBe(404); expect(seen.body.error).toMatch(/cannot be played right now: its link stopped working\. The administrator is told automatically/);
+  expect(seen.body.error).not.toMatch(/Rescan|provider account|private-fixture-key/);
+  const mine = await request(app).post(url).set(auth(owner.token)).send({});
+  expect(mine.status).toBe(404); expect(mine.body.error).toMatch(/no longer available in the provider account\. Rescan/);
+  play.mockRejectedValue(new ProviderError("realdebrid", "upstream timeout", 504));
+  const later = await request(app).post(url).set(auth(viewer.token)).send({});
+  expect(later.status).toBe(503); expect(later.body.error).toMatch(/provider did not answer\. Try again in a moment/);
+  await new Promise(done => setTimeout(done, 100));
+  const lines = await db.logEvent.findMany({ where: { type: "playback", level: "warn" }, orderBy: { createdAt: "asc" } });
+  expect(lines).toHaveLength(3); expect(lines[0].message).toMatch(/^Could not play Gone Film \(2001\): This item is no longer available/); expect(lines[0].userId).toBe(viewer.id);
+  expect(JSON.stringify(lines)).not.toContain("private-fixture-key");
+  expect((await db.accountMedia.findUniqueOrThrow({ where: { id: media.id } })).health).toBe("broken");   // two refusals: the link is marked
+  play.mockReset();
 });
 
 it("refuses unknown or malformed stream ids and bad start times", async () => {

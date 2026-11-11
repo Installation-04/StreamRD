@@ -57,7 +57,7 @@ async function realDebrid(url, init, method) {
   if (method === "POST" && /^\/torrents\/selectFiles\/[A-Za-z0-9]+$/.test(route)) return new Response(null, { status: 204 });
   if (method === "POST" && route === "/unrestrict/link") {
     const match = /\/d\/([A-Za-z0-9]+)x(\d+)$/.exec(body.get("link") ?? ""), entry = match && live().find(item => item.id === match[1]), item = entry?.files[Number(match?.[2])];
-    if (process.env.LAB_DEAD_LINKS?.split(",").includes(entry?.id)) return json({ error: "hoster_unavailable", error_code: 19 }, 503);
+    if (process.env.LAB_DEAD_LINKS?.split(",").includes(entry?.id)) return json({ error: "unavailable_file", error_code: 24 }, 404);   // LAB_DEAD_LINKS=id,id: the provider no longer has these files
     if (!item?.media) return json({ error: "unavailable_file", error_code: 24 }, 404);
     return json({ id: "LABLINK", filename: item.media, mimeType: /\.mp4$/.test(item.media) ? "video/mp4" : /\.mkv$/.test(item.media) ? "video/x-matroska" : "video/x-msvideo", filesize: sizeOf(item.media), link: body.get("link"), host: "real-debrid.com", chunks: 16, crc: 1,
       download: `${ORIGIN}/media/${encodeURIComponent(item.media)}`, streamable: 1 });

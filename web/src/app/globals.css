@@ -161,7 +161,8 @@ select option { background: var(--bg-raised); color: var(--text); }
 .stat-value { font-size: 28px; font-weight: 800; }
 .stat-label { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
 
-.table-wrap { overflow-x: auto; }
+/* position: a visually hidden label inside the table is positioned absolutely; without a containing block here it escapes the scroll area and makes the whole page scroll sideways on a phone. */
+.table-wrap { overflow-x: auto; position: relative; }
 table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.data th, table.data td {
   text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border);

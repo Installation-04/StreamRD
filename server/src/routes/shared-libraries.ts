@@ -219,7 +219,19 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
     const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
     if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
   };
-  const { mediaKey, ...result } = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);
+  // A play that fails is in the log with the reason the owner needs. The viewer is told what it means for them: they cannot rescan or
+  // reconnect anything, so the owner's instructions are not passed on to them.
+  const resolved = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize).catch(async error => {
+    if (!(error instanceof AccountLibraryError)) throw error;
+    const failed = await db.accountMedia.findUnique({ where: { id: itemId }, select: { name: true, year: true } });
+    void logEvent("warn", "playback", `Could not play ${failed?.name ?? "a title"}${failed?.year ? ` (${failed.year})` : ""}: ${error.message}`, { userId: req.session!.sub, meta: { libraryId, itemId, status: error.status } }).catch(() => undefined);
+    if (req.session!.sub === library.sourceUserId) throw error;
+    throw new AccountLibraryError(error.status === 404 || error.status === 422
+      ? "This title cannot be played right now: its link stopped working. The administrator is told automatically, and it comes back when a replacement arrives."
+      : error.status === 400 || error.status === 409 ? error.message
+      : "This title could not be started: the server's provider did not answer. Try again in a moment.", error.status);
+  });
+  const { mediaKey, ...result } = resolved;
   await authorize();
   if (!result.stream || !mediaKey) { res.json(result); return; }
   // Resume state belongs to the viewer; each play supersedes older player sessions.

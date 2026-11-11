@@ -70,7 +70,7 @@ async function main() {
       await owner.page.goto(base, { waitUntil: "networkidle" });
       await owner.page.getByRole("link", { name: /create the first account/i }).click();   // not "Sign in": nobody has an account yet
       await until("the sign-up page", async () => /\/signup$/.test(owner.page.url()), 15_000, 300); await owner.page.waitForLoadState("networkidle");
-      assert.match(await owner.text(), /Set up your server/);
+      await until("the owner's sign-up form", async () => /Set up your server/.test(await owner.text()), 30_000, 300);   // the page first asks the server who may join
       await owner.page.getByLabel("Display name", { exact: true }).fill("Owner");
       await owner.page.getByLabel("Email", { exact: true }).fill("owner@example.invalid");
       await owner.page.getByLabel(/^Password/).fill("lab-owner-password-1");
@@ -120,7 +120,7 @@ async function main() {
 
     await step("an MKV with H.264 and DTS plays with its audio converted, and playback is asked for once", async () => {
       await owner.open("Movies", "Big Buck Bunny");
-      await owner.page.locator("select").first().selectOption({ index: 1 }); await sleep(1000);   // the 1080p version
+      await owner.page.getByLabel("Version", { exact: true }).selectOption({ index: 1 }); await sleep(1000);   // the 1080p version
       owner.plays.length = 0;
       const state = await owner.play("Big Buck Bunny (DTS)");
       assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0$/);
@@ -204,6 +204,11 @@ async function main() {
 
     await step("the friend asks for a film that is not in the library", async () => {
       friend = await join("friend", "Friend");
+      await friend.page.goto(`${base}/library`, { waitUntil: "networkidle" });   // Imports is the administrator's page
+      await until("a viewer to be taken from Imports to the libraries", async () => /\/shared-libraries$/.test(friend.page.url()), 15_000, 300);
+      await friend.page.goto(`${base}/setup`, { waitUntil: "networkidle" });
+      await until("the viewer's setup page", async () => /Server-managed playback/.test(await friend.text()), 20_000, 300);
+      assert.doesNotMatch(await friend.text(), /private debrid library/i, "a viewer is not sent to import from a debrid account");
       await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
       await friend.page.getByRole("searchbox").first().or(friend.page.getByRole("textbox").first()).fill("Cosmos Laundromat"); await friend.page.keyboard.press("Enter");
       await friend.page.getByRole("link", { name: /cosmos laundromat/i }).first().click(); await friend.page.waitForLoadState("networkidle");
