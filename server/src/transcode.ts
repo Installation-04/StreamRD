@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import type { Response } from "express";
+import { logEvent } from "./logger";
 
 /**
  * Plays files a browser cannot play by converting them on the fly with ffmpeg, the way a media server does.
@@ -91,7 +92,7 @@ let found: boolean | undefined;
 async function available() { if (found === undefined || process.env.NODE_ENV === "test") found = (await run(ffmpegBin(), ["-version"], 5000)).code === 0; return found; }
 
 // ---- Streams: short-lived, unguessable ids that stand for one resolved link.
-interface Registered { url: string; mode: Exclude<Mode, "direct">; userId: string; expires: number }
+interface Registered { url: string; mode: Exclude<Mode, "direct">; userId: string; expires: number; lastError?: string; stop?: () => void }
 const streams = new Map<string, Registered>();
 const TTL_MS = 12 * 60 * 60 * 1000, MAX_STREAMS = 500;
 export function registerStream(url: string, mode: Exclude<Mode, "direct">, userId: string): string {
@@ -112,25 +113,55 @@ export function ffmpegArgs(url: string, mode: Exclude<Mode, "direct">, startSeco
   if (mode === "video") args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-vf", "scale=w='min(1920,iw)':h=-2");
   else args.push("-c:v", "copy");
   if (mode === "remux") args.push("-c:a", "copy"); else args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
-  args.push("-avoid_negative_ts", "make_zero", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1");
+  args.push("-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "4096", "-movflags", "frag_keyframe+empty_moov+default_base_moof+negative_cts_offsets", "-f", "mp4", "pipe:1");
   return args;
 }
 
 let active = 0;
 export const activeConversions = () => active;
-/** Streams a converted file to the response. Returns false (and answers) when the id is unknown or the server is busy. */
+/** What ffmpeg complained about, with the link taken out, for the log and for the player's explanation. */
+const tidy = (text: string) => text.replace(/https?:\/\/\S+/g, "<link>").replace(/\s+/g, " ").trim().slice(-600);
+/** What the player may ask after a converted stream failed to play. Nothing here reveals the link. */
+export function streamStatus(id: string): { known: boolean; lastError: string | null; running: boolean } {
+  const entry = streams.get(id);
+  return entry && entry.expires >= Date.now() ? { known: true, lastError: entry.lastError ?? null, running: Boolean(entry.stop) } : { known: false, lastError: null, running: false };
+}
+/**
+ * Streams a converted file to the response. Returns false (and answers) when the id is unknown or the server is busy.
+ * Nothing is sent until ffmpeg has produced its first bytes, so a conversion that fails at once answers with the reason instead of an empty video.
+ */
 export function streamConverted(id: string, startSeconds: number, res: Response): boolean {
   const entry = streams.get(id);
   if (!entry || entry.expires < Date.now()) { res.status(404).json({ error: "This stream has expired. Open the video again." }); return false; }
+  // A browser often opens several requests for one video (to sniff it, then to play it): the newest request for a stream replaces the older one
+  // instead of using up the limit on conversions nobody is watching.
+  entry.stop?.();
   if (active >= maxConversions()) { res.status(503).set("Retry-After", "10").json({ error: "The server is converting as many videos as it is set to. Try again in a moment." }); return false; }
-  active += 1;
-  let child: ChildProcess | null = null, released = false;
+  active += 1; entry.lastError = undefined;
+  let released = false, started = false, replaced = false, errorText = "";
   const release = () => { if (!released) { released = true; active -= 1; } };
-  child = spawn(ffmpegBin(), ffmpegArgs(entry.url, entry.mode, startSeconds), { stdio: ["ignore", "pipe", "ignore"] });
-  res.status(200).set({ "Content-Type": "video/mp4", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Accept-Ranges": "none" });
-  child.stdout!.pipe(res);
-  child.on("error", () => { release(); if (!res.headersSent) res.status(503).json({ error: "Conversion is not available on this server." }); else res.destroy(); });
-  child.on("close", () => { release(); res.end(); });
-  res.on("close", () => { if (child && child.exitCode === null) child.kill("SIGKILL"); release(); });
+  const child: ChildProcess = spawn(ffmpegBin(), ffmpegArgs(entry.url, entry.mode, startSeconds), { stdio: ["ignore", "pipe", "pipe"] });
+  const stop = () => { replaced = true; if (child.exitCode === null) child.kill("SIGKILL"); release(); if (entry.stop === stop) entry.stop = undefined; };
+  entry.stop = stop;
+  const fail = (message: string, status = 502) => {
+    entry.lastError = message; release(); if (entry.stop === stop) entry.stop = undefined;
+    void logEvent("error", "playback", `Video conversion failed (${entry.mode}): ${message}`, { userId: entry.userId }).catch(() => undefined);
+    if (!res.headersSent) res.status(status).json({ error: `The server could not convert this video: ${message}` }); else res.destroy();
+  };
+  child.stderr!.on("data", chunk => { errorText = (errorText + chunk).slice(-4000); });
+  child.stdout!.once("data", first => {
+    started = true;
+    res.status(200).set({ "Content-Type": "video/mp4", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Accept-Ranges": "none" });
+    res.write(first); child.stdout!.pipe(res);
+  });
+  child.on("error", () => fail("ffmpeg could not be started on this server", 503));
+  child.on("close", code => {
+    release(); if (entry.stop === stop) entry.stop = undefined;
+    if (replaced) { if (!res.writableEnded && !res.destroyed) res.destroy(); return; }   // a newer request for this stream took over
+    if (!started) { if (res.writableEnded || res.destroyed) return; fail(tidy(errorText) || `ffmpeg stopped (exit ${code}) before producing any video`); return; }
+    if (code !== 0 && code !== null && !res.destroyed) { entry.lastError = tidy(errorText) || `ffmpeg stopped (exit ${code})`; void logEvent("warn", "playback", `Video conversion ended early (${entry.mode}): ${entry.lastError}`, { userId: entry.userId }).catch(() => undefined); }
+    res.end();
+  });
+  res.on("close", () => { if (child.exitCode === null) { child.kill("SIGKILL"); } release(); if (entry.stop === stop) entry.stop = undefined; });
   return true;
 }

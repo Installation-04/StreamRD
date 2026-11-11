@@ -30,6 +30,14 @@ export default function SharedPlayer() {
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
   const converted = playback && playback.mode !== "direct" && playback.url ? playback : null;
+  const [reason, setReason] = useState("");
+  // When a converted video fails to play, ask the server why (its own message; never the link).
+  useEffect(() => {
+    if (!videoError || !converted?.url) { setReason(""); return; }
+    let live = true;
+    fetch(`${API_BASE}${converted.url}/status`, { credentials: "include" }).then(response => response.json()).then((status: { lastError?: string | null; known?: boolean }) => { if (live) setReason(status.known === false ? "The converted stream expired. Press Try again or reopen the video." : status.lastError ?? ""); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [videoError, converted?.url]);
   const mounted = useRef(false), request = useRef<AbortController | null>(null), root = useRef<HTMLDivElement | null>(null), video = useRef<HTMLVideoElement | null>(null), idle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useRef<{ id: string; sequence: number; sentAt: number; resume: number; position: number; duration: number } | null>(null);
   const detail = `/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(itemId)}`;
@@ -159,7 +167,7 @@ export default function SharedPlayer() {
       {ended && next && countdown !== null && <div className={`${styles.card} ${styles.upnext}`} role="status"><p className={styles.kicker}>UP NEXT</p><h2>{next.name}</h2><p>Starting in {Math.max(0, countdown)} seconds</p><div className={styles.actions}><button type="button" className="btn" onClick={() => void play(next.token)}>Play now</button><button type="button" className="btn btn-secondary" onClick={() => setCountdown(null)}>Cancel</button></div></div>}
       {ended && !(next && countdown !== null) && <div className={`${styles.card} ${styles.upnext}`}><h2>Finished</h2><div className={styles.actions}>{next && <button type="button" className="btn" onClick={() => void play(next.token)}>Play next</button>}<button type="button" className="btn btn-secondary" onClick={leave}>Back to {name}</button></div></div>}
     </div>
-    {stream && (videoError || !paused) && <div className={styles.help}><PlaybackHelp url={stream.url} filename={stream.filename} mimeType={stream.mimeType} failed={videoError} converted={Boolean(converted)} /></div>}
+    {stream && (videoError || !paused) && <div className={styles.help}><PlaybackHelp url={stream.url} filename={stream.filename} mimeType={stream.mimeType} failed={videoError} converted={Boolean(converted)} reason={reason} /></div>}
     {stream && visible && !choosing && <p className={styles.hint} aria-hidden="true">Space play/pause · J/L ±10s · ↑↓ volume · M mute · F fullscreen{next ? " · N next" : ""} · Esc back{shownTotal > 0 ? ` · ${clock(shownAt)} / ${clock(shownTotal)}` : ""}</p>}
   </div>;
 }
