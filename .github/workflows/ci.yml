@@ -28,8 +28,22 @@ jobs:
       - run: npx prisma generate
       - name: Typecheck
         run: npm run lint
+      - name: Install ffmpeg (the conversion tests skip themselves without it)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Tests
         run: npm test
+      - name: Converted playback in Google Chrome (H.264 and AAC decoders)
+        working-directory: .
+        env:
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/playback-qa
+        run: npm ci --prefix qa && node qa/converted-playback.cjs
+      - name: Upload the playback report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: streamrd-converted-playback
+          path: ${{ runner.temp }}/playback-qa
+          if-no-files-found: ignore
 
   web:
     name: Web — lint & build

@@ -219,7 +219,7 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 | DELETE | `/api/shared-libraries/:id/items/:itemId/watched` | Unmarks it → `{ watched: false }` and restarts the title. Items and My List carry `watched`; `GET /:id/items?unwatched=1` leaves out finished titles. |
 | GET | `/api/shared-libraries/:id/items/:itemId/trailer` | StreamRD only. `{ trailer: <YouTube id> | null }` from the public catalogue; `null` when there is none or `HOME_TRAILERS=false`. |
 | POST | `/api/shared-libraries/:id/items/:itemId/play` | Besides the stream, answers `playback: { mode: direct\|remux\|audio\|video, url?, durationSeconds, video, audio }`; for a converted mode `url` is `/api/stream/:id`. |
-| GET | `/api/stream/:id?start=SECONDS` | The converted fragmented MP4 for a stream id from a play response. The id is unguessable and lasts 12 hours; 404 when unknown or expired, 503 (Retry-After) at the `TRANSCODE_MAX` limit. Items now carry `tags: [{ kind, label }]`. |
+| GET | `/api/stream/:id?start=SECONDS` | The converted fragmented MP4 for a stream id from a play response. The id is unguessable and lasts 12 hours; 404 when unknown or expired, 503 (Retry-After) at the `TRANSCODE_MAX` limit. `&video=1` asks for the picture to be re-encoded as well, which the player sends after the browser reports a decode error on a copied picture; 409 when `TRANSCODE_VIDEO` is off. Items now carry `tags: [{ kind, label }]`. |
 
 Library item views (a library's items, one item, and `GET /api/home` rows) carry `favorite: boolean`, and `GET /api/home` has a `myList` row (StreamRD). Entries name a title by owner and group, so every version of a title shares one entry.
 

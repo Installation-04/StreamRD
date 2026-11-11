@@ -65,6 +65,8 @@ beforeAll(async () => {
   fixtures.dts = make("ac3.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "ac3"]);
   fixtures.remux = make("aac.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "10", "-c:a", "aac"]);
   fixtures.tenbit = make("ten.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-c:a", "ac3"]);
+  // An "open GOP" H.264 file, as most Blu-ray style encodes are: its later keyframes are not clean entry points.
+  try { execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=24,noise=alls=20:allf=t", "-f", "lavfi", "-i", "sine", "-t", "12", "-c:v", "libx264", "-preset", "medium", "-x264-params", "open-gop=1:keyint=48:b-pyramid=none", "-pix_fmt", "yuv420p", "-c:a", "ac3", join(dir, "opengop.mkv")], { stdio: "ignore" }); fixtures.openGop = true; } catch { fixtures.openGop = false; }
   server = createServer((req, res) => {
     const file = join(dir, (req.url ?? "").split("?")[0].replace(/[^a-z0-9.]/gi, ""));
     try {
@@ -107,6 +109,34 @@ real("re-encodes the video for formats a browser cannot decode, and can start pa
   const later = await grab(registerStream(`${base}/aac.mkv`, "remux", "someone"), "?start=1.5"); const second = join(dir, "out-later.mp4"); writeFileSync(second, later.body);
   const length = (path: string) => Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path]).toString().trim());
   expect(length(second)).toBeLessThan(2.5);
+});
+
+// Browsers decode strictly: one reference to a picture that is not in the stream stops playback (Chrome: PIPELINE_ERROR_DECODE).
+// ffmpeg's "-err_detect explode -xerror" applies the same rule, so it stands in for a browser's decoder here.
+const decodesStrictly = (file: string) => spawnSync("ffmpeg", ["-v", "error", "-err_detect", "explode", "-xerror", "-i", file, "-map", "0:v:0", "-f", "null", "-"]).status === 0;
+real("re-encodes the picture when the player says the browser could not decode the copied one (open-GOP H.264 started part-way in)", async () => {
+  if (!fixtures.openGop) return;
+  const grab = (id: string, query: string) => request(app).get(`/api/stream/${id}${query}`).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on("data", chunk => chunks.push(chunk)); res.on("end", () => done(null, Buffer.concat(chunks))); });
+  const id = registerStream(`${base}/opengop.mkv`, "audio", "someone");
+  const save = async (name: string, query: string) => { const response = await grab(id, query); expect(response.status).toBe(200); const file = join(dir, name); writeFileSync(file, response.body); return file; };
+  expect(decodesStrictly(await save("og-start.mp4", ""))).toBe(true);            // from the very start the copied picture is clean
+  expect(decodesStrictly(await save("og-copy.mp4", "?start=6"))).toBe(false);    // the cause: resumed or sought, the copied picture is not decodable by a browser
+  const forced = await save("og-forced.mp4", "?start=6&video=1");
+  expect(decodesStrictly(forced)).toBe(true);                                     // the fix: the same stream id, picture re-encoded
+  expect(streams(forced).map(stream => `${stream.codec_type}:${stream.codec_name}`).sort()).toEqual(["audio:aac", "video:h264"]);
+  const log = await db.logEvent.findFirst({ where: { type: "playback", level: "info" }, orderBy: { createdAt: "desc" } });
+  expect(log?.message).toMatch(/could not decode the copied picture \(audio\) at 6s/); expect(log?.message).not.toMatch(/127\.0\.0\.1|opengop/);
+}, 60_000);
+
+it("says why when the player asks for the picture to be converted and that is turned off", async () => {
+  process.env.TRANSCODE_VIDEO = "false";
+  try {
+    const id = registerStream("https://example.com/a.mkv", "audio", "x");
+    const refused = await request(app).get(`/api/stream/${id}?video=1`);
+    expect(refused.status).toBe(409); expect(refused.body.error).toMatch(/TRANSCODE_VIDEO/);
+    expect((await request(app).get(`/api/stream/${id}/status`)).body.lastError).toMatch(/TRANSCODE_VIDEO/);
+    expect((await request(app).get(`/api/stream/${id}?video=yes`)).status).toBe(400);
+  } finally { delete process.env.TRANSCODE_VIDEO; }
 });
 
 it("refuses unknown or malformed stream ids and bad start times", async () => {

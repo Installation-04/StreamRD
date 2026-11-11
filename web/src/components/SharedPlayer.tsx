@@ -31,6 +31,9 @@ export default function SharedPlayer() {
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
   const converted = playback && playback.mode !== "direct" && playback.url ? playback : null;
   const [reason, setReason] = useState("");
+  // A copied picture can be undecodable from where a resumed or sought stream starts (open-GOP H.264): the browser reports a decode error.
+  // The player then asks the server once to re-encode the picture from that moment, and keeps doing so for the rest of this video.
+  const [forceVideo, setForceVideo] = useState(false);
   // When a converted video fails to play, ask the server why (its own message; never the link).
   useEffect(() => {
     if (!videoError || !converted?.url) { setReason(""); return; }
@@ -55,7 +58,7 @@ export default function SharedPlayer() {
 
   const play = useCallback(async (fileToken?: string) => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
-    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null); setPlayback(null); setStartAt(0); setScrub(null);
+    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null); setPlayback(null); setStartAt(0); setScrub(null); setForceVideo(false);
     try {
       const result = await api<AccountPlayResult>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/play`, { method: "POST", signal: controller.signal, body: JSON.stringify(fileToken ? { fileToken } : {}) });
       if (controller.signal.aborted || !mounted.current) return;
@@ -127,8 +130,8 @@ export default function SharedPlayer() {
 
   const name = item ? accountMediaName(item) : "", backdrop = safeMediaUrl(item?.metadata?.backdropUrl) ?? safeMediaUrl(item?.metadata?.posterUrl);
   const shown = files.filter(file => file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[converted.mode] : null].filter(Boolean).join(" · ");
-  const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}` : stream.url : "", shownAt = scrub ?? (converted ? startAt + position.at : position.at), shownTotal = converted ? converted.durationSeconds : position.total;
+  const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[forceVideo ? "video" : converted.mode] : null].filter(Boolean).join(" · ");
+  const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownAt = scrub ?? (converted ? startAt + position.at : position.at), shownTotal = converted ? converted.durationSeconds : position.total;
   if (authLoading || !user) return <div className={styles.page}><p role="status" className={styles.status}>Checking your account…</p></div>;
   return <div ref={root} className={`${styles.page} ${visible || paused || !stream ? "" : styles.idle}`} onMouseMove={wake} onTouchStart={wake} onFocus={wake}>
     <header className={styles.bar}>
@@ -138,11 +141,15 @@ export default function SharedPlayer() {
       <button type="button" className={styles.bar_button} aria-label="Fullscreen (F)" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.().catch(() => undefined); }}>⛶</button>
     </header>
     {stream && <video ref={video} key={source} className={styles.video} controls={!converted} autoPlay playsInline preload="metadata" aria-label={`Playing ${name}`}
-      onError={() => setVideoError(true)} onPlay={() => { setPaused(false); wake(); }} onPause={() => { setPaused(true); setVisible(true); saveProgress(true); }}
+      onError={event => {
+        const element = event.currentTarget, code = element.error?.code;
+        if (converted && converted.mode !== "video" && !forceVideo && (code === 3 || code === 4)) { saveProgress(true); setStartAt(Math.max(0, Math.floor(startAt + element.currentTime))); setForceVideo(true); return; }
+        setVideoError(true);
+      }} onPlay={() => { setPaused(false); wake(); }} onPause={() => { setPaused(true); setVisible(true); saveProgress(true); }}
       onLoadedMetadata={event => { if (converted) return; const resume = session.current?.resume ?? 0, element = event.currentTarget; if (resume > 5 && resume < element.duration - 5) element.currentTime = resume; }}
       onTimeUpdate={event => { saveProgress(); setPosition({ at: event.currentTarget.currentTime, total: converted ? 0 : event.currentTarget.duration || 0 }); }}
       onEnded={() => { saveProgress(true); setEnded(true); if (next) setCountdown(NEXT_SECONDS); }}>
-      <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} />Your browser cannot play this video.</video>}
+      <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} onError={() => setVideoError(true)} />Your browser cannot play this video.</video>}
     {stream && converted && !choosing && <div className={`${styles.controls} ${visible || paused ? "" : styles.controlsIdle}`} role="group" aria-label="Playback controls">
       <button type="button" className={styles.bar_button} aria-label={paused ? "Play" : "Pause"} onClick={() => { const element = video.current; if (element) element.paused ? void element.play() : element.pause(); }}>{paused ? "▶" : "❚❚"}</button>
       <span className={styles.clock}>{clock(shownAt)}</span>
