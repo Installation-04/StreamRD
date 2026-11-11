@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { AccountMedia, AccountPlayResult, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { imdbLink, metadataSourceLink, PROVIDER_LABELS } from "@/lib/metadata";
 import { SharedLibrary, TitleVersion } from "@/lib/shared-libraries";
-import { FavoriteToggle } from "@/components/LibraryCard";
+import { FavoriteToggle, WatchedToggle } from "@/components/LibraryCard";
 import styles from "@/app/library/[id]/detail.module.css";
 
 export default function SharedLibraryDetail() {
@@ -69,7 +69,7 @@ export default function SharedLibraryDetail() {
       <div className={styles.heroCopy}><p className={styles.eyebrow}>SHARED BY YOUR SERVER</p><h1>{name}</h1><div className={styles.facts}><span>{item.year ?? metadata?.year ?? "Year unknown"}</span><span>{item.type === "series" ? "Series" : "Movie"}</span>{metadata?.runtimeMinutes != null && <span>{metadata.runtimeMinutes} min</span>}{metadata?.contentRating && <span>{metadata.contentRating}</span>}{metadata?.rating != null && <span>★ {metadata.rating.toFixed(1)} / 10 · {metadata.ratingSource ?? PROVIDER_LABELS[metadata.provider]}</span>}</div>
         {metadata?.genres.length ? <p className={styles.genres}>{metadata.genres.join(" · ")}</p> : null}
         <p className={styles.overview}>{metadata?.description || "This title is part of a collection shared with you by the server. Your server handles the connection when you press Play."}</p>
-        <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" disabled={playing} onClick={() => void play()}>{playing ? "Resolving stream…" : "▶ Play from server"}</button><FavoriteToggle libraryId={id} item={item} onChange={favorite => setItem(current => current ? { ...current, favorite } : current)} /></div>
+        <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" disabled={playing} onClick={() => void play()}>{playing ? "Resolving stream…" : "▶ Play from server"}</button><FavoriteToggle libraryId={id} item={item} onChange={favorite => setItem(current => current ? { ...current, favorite } : current)} /><WatchedToggle libraryId={id} item={item} onChange={watched => setItem(current => current ? { ...current, watched } : current)} /></div>
         {versions.length > 1 && <label className={styles.availability} style={{ display: "block" }}>This title has {versions.length} versions:{" "}<select aria-label="Version" value={item.id} onChange={event => router.push(`/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(event.target.value)}`)}>
           {versions.map(version => <option key={version.id} value={version.id}>{version.quality ?? version.release ?? "Version"}{version.phase === "finished" ? "" : ` (${version.phase})`} · added {new Date(version.createdAt).toLocaleDateString()}</option>)}
         </select></label>}
