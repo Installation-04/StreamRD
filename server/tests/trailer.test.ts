@@ -50,3 +50,21 @@ it("answers null when there is no trailer, the catalogue fails, or an operator t
   resetHomeCache(); const fetcher = meta([{ source: "abcdefghijk", type: "Trailer" }]); vi.stubGlobal("fetch", fetcher); process.env.HOME_TRAILERS = "false";
   expect((await request(app).get(url(libraryId, film.id)).set(auth(viewer.token))).body).toEqual({ trailer: null }); expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("falls back to TMDB for a trailer the catalogue lacks, when a TMDB key is configured", async () => {
+  const owner = await user("admin"), viewer = await user(), film = await item(owner, "Crank");
+  const libraryId = await library(owner, [viewer]);
+  process.env.TMDB_DEFAULT_API_KEY = "a".repeat(32);
+  const seen: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+    const href = String(input); seen.push(href);
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (href.includes("cinemeta")) return json({ meta: { id: "tt0388482", trailers: [] } });
+    if (href.includes("/find/tt0388482")) return json({ movie_results: [{ id: 9472 }] });
+    if (href.includes("/movie/9472/videos")) return json({ results: [{ site: "Vimeo", key: "notyoutube1", type: "Trailer" }, { site: "YouTube", key: "teaserteas1", type: "Teaser" }, { site: "YouTube", key: "officialtr1", type: "Trailer", official: true }] });
+    return new Response("no", { status: 404 });
+  }));
+  try { expect((await request(app).get(url(libraryId, film.id)).set(auth(viewer.token))).body).toEqual({ trailer: "officialtr1" }); }
+  finally { delete process.env.TMDB_DEFAULT_API_KEY; }
+  expect(seen.some(href => href.includes("api.themoviedb.org") && href.includes("api_key="))).toBe(true);
+});

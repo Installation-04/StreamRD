@@ -18,5 +18,5 @@ export interface ManagedSharedLibrary extends SharedLibrary {
 export interface SharedLibraryItems { items: AccountMedia[]; total: number; nextCursor: string | null; attention?: { match: number; links: number } }
 export const libraryTypeLabel = (type: SharedLibrary["mediaType"]) => type === "movie" ? "Movies" : type === "series" ? "TV shows" : "Movies & TV shows";
 /** One of several copies of the same title (for example 1080p and 4K); the page offers a choice when there is more than one. */
-export interface TitleVersion { id: string; quality: string | null; release: string | null; phase: "queued" | "downloading" | "finished" | "error"; createdAt: string; current: boolean }
+export interface TitleVersion { id: string; quality: string | null; season?: { from: number; to: number } | null; release: string | null; phase: "queued" | "downloading" | "finished" | "error"; createdAt: string; current: boolean }
 export interface SharedContinueItem { libraryId: string; item: AccountMedia; positionSeconds: number; durationSeconds: number; updatedAt: string }

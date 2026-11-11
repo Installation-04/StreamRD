@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { mediaTags } from "../src/media-tags";
+import { mediaTags, seasonOf } from "../src/media-tags";
 
 const labels = (release: string | null) => mediaTags(release).map(tag => `${tag.kind}:${tag.label}`);
 
@@ -17,4 +17,14 @@ it("says nothing when the name says nothing, and never matches inside words", ()
   expect(mediaTags("The Dvd Collection of Stories")).toEqual([{ kind: "source", label: "DVD" }]);
   expect(labels("Attitude Maximum Webster")).toEqual([]);
   expect(labels("Movie 4K UHD")).toEqual(["resolution:4K"]);
+});
+
+it("reads which seasons a release holds, and ignores a single episode", () => {
+  expect(seasonOf("Breaking.Bad.S02.1080p.BluRay.x264")).toEqual({ from: 2, to: 2 });
+  expect(seasonOf("Breaking Bad Season 3 720p WEB-DL")).toEqual({ from: 3, to: 3 });
+  expect(seasonOf("Breaking.Bad.S01-S05.Complete.1080p")).toEqual({ from: 1, to: 5 });
+  expect(seasonOf("Breaking Bad Seasons 1-4 BluRay")).toEqual({ from: 1, to: 4 });
+  expect(seasonOf("Breaking.Bad.S01E05.1080p")).toBeNull();
+  expect(seasonOf("Crank 2006 1080p BluRay")).toBeNull();
+  expect(seasonOf(null)).toBeNull();
 });

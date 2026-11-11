@@ -54,3 +54,13 @@ export function mediaTags(release: string | null | undefined): MediaTag[] {
   if (container) add("container", container === "M4V" ? "MP4" : container);
   return tags;
 }
+
+/** The seasons a release holds: "S02", "Season 2", "S01-S03", "Seasons 1-4"; null for a movie or a name that does not say. */
+export function seasonOf(release: string | null | undefined): { from: number; to: number } | null {
+  const text = (release ?? "").replace(/_/g, " ");
+  if (/(?:^|[^a-z0-9])s\d{1,2}[ .-]?e\d{1,3}/i.test(text)) return null; // one episode, not a season
+  const range = /(?:^|[^a-z0-9])(?:seasons?[ .]*|s)(\d{1,2})[ .]*(?:-|–|to|&|and)[ .]*(?:seasons?[ .]*|s)?(\d{1,2})(?:[^a-z0-9]|$)/i.exec(text);
+  if (range && Number(range[2]) >= Number(range[1])) return { from: Number(range[1]), to: Number(range[2]) };
+  const one = /(?:^|[^a-z0-9])(?:season[ .]*|s)(\d{1,2})(?:[^a-z0-9]|$)/i.exec(text);
+  return one ? { from: Number(one[1]), to: Number(one[1]) } : null;
+}

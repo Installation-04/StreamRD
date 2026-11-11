@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
+import { seasonOf } from "./media-tags";
 
 /**
  * Versions of one title. A debrid account often holds the same film twice (1080p and 4K) or a show as several season packs. Those rows
@@ -74,5 +75,5 @@ export async function versionViews(visible: Prisma.AccountMediaWhereInput, item:
   if (!item.groupKey) return [];
   const rows = await db.accountMedia.findMany({ where: { AND: [visible, { userId: item.userId, groupKey: item.groupKey }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20 });
   if (rows.length < 2) return [];
-  return rows.map(row => ({ id: row.id, quality: qualityLabel(row.releaseName), release: row.releaseName?.slice(0, 160) ?? null, phase: row.phase, createdAt: row.createdAt.toISOString(), current: row.id === item.id }));
+  return rows.map(row => ({ id: row.id, quality: qualityLabel(row.releaseName), season: seasonOf(row.releaseName), release: row.releaseName?.slice(0, 160) ?? null, phase: row.phase, createdAt: row.createdAt.toISOString(), current: row.id === item.id }));
 }

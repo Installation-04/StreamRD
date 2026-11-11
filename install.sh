@@ -592,6 +592,11 @@ main() {
   esac
   local zurg_flag=none; [ "$use_zurg" = true ] && zurg_flag=zurg
   local use_manager=false
+  # An existing install that never had the helper is offered it once, so Plex and Jellyfin can start from the Setup page without more steps.
+  if [ "$FIRST" != true ] && [ -z "$MEDIA_MANAGER" ] && [ "$ASSUME_YES" != true ] && [ -t 0 ] && ! env_value COMPOSE_FILE | grep -q manager && [ -z "$(env_value MEDIA_MANAGER_ASKED)" ]; then
+    set_env MEDIA_MANAGER_ASKED 1
+    if confirm "Add the small helper that lets StreamRD start Plex and Jellyfin for you (it can only manage those two containers)?" y; then MEDIA_MANAGER=on; fi
+  fi
   # A first install gets the helper by default, so Plex and Jellyfin start from StreamRD's Setup page with no extra step (it can only manage those two containers).
   # An existing install keeps its choice; add it later with --media-manager.
   case "$MEDIA_MANAGER" in on) use_manager=true ;; off) ;; *) if [ "$FIRST" = true ]; then use_manager=true; else env_value COMPOSE_FILE | grep -q manager && use_manager=true; fi ;; esac
