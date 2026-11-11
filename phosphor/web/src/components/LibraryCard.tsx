@@ -39,11 +39,28 @@ export function FavoriteToggle({ libraryId, item, onChange }: { libraryId: strin
   </>;
 }
 
+/** Marks a title watched or unwatched for the viewer (StreamRD only: the server leaves `watched` out where nothing can be played). */
+export function WatchedToggle({ libraryId, item, onChange }: { libraryId: string; item: Pick<AccountMedia, "id" | "watched">; onChange?: (watched: boolean) => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(false), on = Boolean(item.watched);
+  if (item.watched === undefined) return null;
+  async function toggle() {
+    if (busy) return;
+    setBusy(true); setError(false);
+    try { onChange?.((await api<{ watched: boolean }>(`/api/shared-libraries/${encodeURIComponent(libraryId)}/items/${encodeURIComponent(item.id)}/watched`, { method: on ? "DELETE" : "PUT" })).watched); }
+    catch { setError(true); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <button type="button" className="btn btn-secondary" aria-pressed={on} disabled={busy} onClick={() => void toggle()}>{on ? "✓ Watched · mark unwatched" : "Mark as watched"}</button>
+    {error && <span role="alert" style={{ fontSize: 13, opacity: 0.8 }}>Could not update. Try again.</span>}
+  </>;
+}
+
 /** One title in a library grid or on My List: the card, and the heart beside it. */
 export default function LibraryCard({ libraryId, item, onFavorite }: { libraryId: string; item: AccountMedia; onFavorite?: (favorite: boolean) => void }) {
   const name = accountMediaName(item), poster = safeMediaUrl(item.metadata?.posterUrl), ready = item.phase === "finished";
   return <div className={gallery.cardWrap}>
-    <Link href={`/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}`} className={gallery.card} aria-label={`Open ${name}`}><div className={`${gallery.poster} ${gallery[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={gallery.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "SERVER COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} onLoad={event => { event.currentTarget.style.display = ""; }} />}<span className={gallery.provider}>SHARED BY YOUR SERVER</span><span className={`${gallery.readiness} ${ready && item.health !== "broken" ? gallery.ready : ""}`}>{item.health === "broken" ? "Link needs attention" : ready ? "Provider reports ready" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span><span className={gallery.open}><span aria-hidden="true">↗</span> View title</span></div><div className={gallery.cardInfo}><h2>{name}</h2><p>{item.year ?? item.metadata?.year ?? "Year unknown"}<span>·</span>{item.type === "series" ? "Series" : "Movie"}{item.metadata?.rating != null && <><span>·</span>★ {item.metadata.rating.toFixed(1)}</>}</p></div></Link>
+    <Link href={`/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}`} className={gallery.card} aria-label={`Open ${name}`}><div className={`${gallery.poster} ${gallery[`color${item.id.charCodeAt(item.id.length - 1) % 4}`]}`}><div className={gallery.posterFallback} aria-hidden="true"><span>{item.type === "series" ? "SERIES" : "FILM"}</span><strong>{name}</strong><i>{item.year ?? "SERVER COLLECTION"}</i></div>{poster && <img src={poster} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} onLoad={event => { event.currentTarget.style.display = ""; }} />}<span className={gallery.provider}>SHARED BY YOUR SERVER</span><span className={`${gallery.readiness} ${ready && item.health !== "broken" ? gallery.ready : ""}`}>{item.health === "broken" ? "Link needs attention" : ready ? "Provider reports ready" : item.phase === "error" ? "Needs attention" : `${item.phase === "downloading" ? "Downloading" : "Queued"} · ${Math.max(0, Math.min(100, item.progress))}%`}</span>{item.watched && <span className={gallery.watchedBadge}>✓ Watched</span>}<span className={gallery.open}><span aria-hidden="true">↗</span> View title</span></div><div className={gallery.cardInfo}><h2>{name}</h2><p>{item.year ?? item.metadata?.year ?? "Year unknown"}<span>·</span>{item.type === "series" ? "Series" : "Movie"}{item.metadata?.rating != null && <><span>·</span>★ {item.metadata.rating.toFixed(1)}</>}</p></div></Link>
     <FavoriteButton libraryId={libraryId} item={{ id: item.id, name, favorite: item.favorite }} onChange={onFavorite} />
   </div>;
 }
