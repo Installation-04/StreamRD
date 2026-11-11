@@ -76,7 +76,7 @@ beforeAll(async () => {
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done)); base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   process.env.TRANSCODE = "true"; process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS = "1";
 }, 120_000);
-afterAll(async () => { process.env.TRANSCODE = "false"; delete process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS; delete process.env.TRANSCODE_MAX; delete process.env.FFMPEG_PATH; await new Promise(done => server?.close(done)); });
+afterAll(async () => { process.env.TRANSCODE = "false"; delete process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS; delete process.env.TRANSCODE_MAX; delete process.env.FFMPEG_PATH; if (server) { server.closeAllConnections?.(); await new Promise(done => server.close(done)); } });
 const real = haveFfmpeg ? it : it.skip;
 const streams = (file: string) => JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,codec_name,pix_fmt", "-of", "json", file]).toString()).streams as Array<{ codec_type: string; codec_name: string; pix_fmt?: string }>;
 
