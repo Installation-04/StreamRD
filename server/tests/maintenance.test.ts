@@ -128,6 +128,24 @@ it("backs up first and then asks only the operator-configured hook to update", a
   expect(JSON.stringify(ok.body)).not.toContain("hook-token");
 });
 
+it("uses the media manager helper as the updater when no hook is set: an Update button, a backup first, and the helper's token", async () => {
+  const { admin } = await adminAndUser();
+  const info = (await request(app).get("/api/admin/system/update").set(auth(admin.token))).body; expect(info.canApply).toBe(false); expect(info.updater).toBeNull();
+  process.env.MEDIA_MANAGER_URL = "http://media-manager:8099"; process.env.MEDIA_MANAGER_TOKEN = "m".repeat(40);
+  try {
+    const calls: Array<[string, RequestInit | undefined]> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => { calls.push([String(input), init]); return String(input).includes("api.github.com") ? release("v99.0.0") : new Response("{}", { status: 202 }); });
+    const after = (await request(app).get("/api/admin/system/update?refresh=1").set(auth(admin.token))).body; expect(after.canApply).toBe(true); expect(after.updater).toBe("helper");
+    const ok = await request(app).post("/api/admin/system/update").set(auth(admin.token)).send({ version: "99.0.0" });
+    expect(ok.status).toBe(202); expect(listBackups().some(b => b.kind === "pre-update")).toBe(true);
+    const helper = calls.find(([target]) => target === "http://media-manager:8099/update")!;
+    expect(helper[1]?.method).toBe("POST"); expect((helper[1]?.headers as Record<string, string>).Authorization).toBe(`Bearer ${"m".repeat(40)}`);
+    expect(JSON.stringify(ok.body)).not.toContain("m".repeat(40));
+    process.env.UPDATE_WEBHOOK_URL = "https://updater.example.invalid/hook";   // an operator's own hook wins
+    expect((await request(app).get("/api/admin/system/update").set(auth(admin.token))).body.updater).toBe("webhook");
+  } finally { delete process.env.MEDIA_MANAGER_URL; delete process.env.MEDIA_MANAGER_TOKEN; }
+});
+
 it("keeps the safety backup and reports a generic error when the hook rejects the request", async () => {
   const { admin } = await adminAndUser();
   process.env.UPDATE_WEBHOOK_URL = "https://updater.example.invalid/hook";

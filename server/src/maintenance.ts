@@ -131,7 +131,7 @@ export function restartSoon(): void { setTimeout(() => process.exit(0), 800).unr
 // ---- Update checks and the operator-configured update hook ----
 export interface UpdateInfo {
   current: string; latest: string | null; updateAvailable: boolean; publishedAt: string | null; url: string | null;
-  checkEnabled: boolean; checkedAt: string | null; error: string | null; canApply: boolean;
+  checkEnabled: boolean; checkedAt: string | null; error: string | null; canApply: boolean; updater: "helper" | "webhook" | null;
 }
 let cache: { at: number; latest: string; publishedAt: string | null; url: string | null } | null = null;
 function parse(value: string): number[] | null {
@@ -149,8 +149,16 @@ export function updateWebhook(): URL | null {
   if (!raw) return null;
   try { const url = new URL(raw); return ["http:", "https:"].includes(url.protocol) ? url : null; } catch { return null; }
 }
+/** Who rolls out an update: the operator's own hook, or else the media manager helper, which replaces the StreamRD container itself. */
+export function updateTarget(): { url: URL; token: string; helper: boolean } | null {
+  const hook = updateWebhook();
+  if (hook) return { url: hook, token: process.env.UPDATE_WEBHOOK_TOKEN ?? "", helper: false };
+  const base = process.env.MEDIA_MANAGER_URL, token = process.env.MEDIA_MANAGER_TOKEN;
+  if (!base || !token) return null;
+  try { const url = new URL("/update", base); return ["http:", "https:"].includes(url.protocol) ? { url, token, helper: true } : null; } catch { return null; }
+}
 export async function checkForUpdates(force = false): Promise<UpdateInfo> {
-  const base: UpdateInfo = { current: version, latest: null, updateAvailable: false, publishedAt: null, url: null, checkEnabled: process.env.UPDATE_CHECK !== "false", checkedAt: null, error: null, canApply: updateWebhook() !== null };
+  const base: UpdateInfo = { current: version, latest: null, updateAvailable: false, publishedAt: null, url: null, checkEnabled: process.env.UPDATE_CHECK !== "false", checkedAt: null, error: null, canApply: updateTarget() !== null, updater: updateTarget() ? (updateTarget()!.helper ? "helper" : "webhook") : null };
   if (!base.checkEnabled) return base;
   const repository = process.env.UPDATE_REPOSITORY ?? "Installation-04/StreamRD";
   if (!UPDATE_SLUG.test(repository)) return { ...base, error: "UPDATE_REPOSITORY is not a valid owner/name." };
@@ -172,16 +180,16 @@ export function clearUpdateCache(): void { cache = null; }
 /** Back up first, then ask the operator's updater (for example a host-side script or Watchtower) to roll out. */
 export function requestUpdate(targetVersion: string): Promise<{ backup: BackupInfo; status: number }> {
   return exclusive(async () => {
-    const hook = updateWebhook();
-    if (!hook) throw new MaintenanceError("No update hook is configured. Set UPDATE_WEBHOOK_URL (see the admin guide).", 409);
+    const hook = updateTarget();
+    if (!hook) throw new MaintenanceError("No updater is set up. Run install.sh --media-manager, or set UPDATE_WEBHOOK_URL (see the admin guide).", 409);
     const info = await checkForUpdates(true);
     if (!info.latest || info.latest !== targetVersion || !info.updateAvailable) throw new MaintenanceError("That version is not the available update. Check for updates again.", 409);
     const backup = await snapshot("pre-update");
     const headers: Record<string, string> = { "Content-Type": "application/json", "User-Agent": `${PRODUCT.id}-update` };
-    if (process.env.UPDATE_WEBHOOK_TOKEN) headers.Authorization = `Bearer ${process.env.UPDATE_WEBHOOK_TOKEN}`;
+    if (hook.token) headers.Authorization = `Bearer ${hook.token}`;
     let status: number;
     try {
-      const response = await fetch(hook, { method: "POST", headers, body: JSON.stringify({ product: PRODUCT.id, from: version, to: targetVersion }), signal: AbortSignal.timeout(15000), redirect: "error" });
+      const response = await fetch(hook.url, { method: "POST", headers, body: JSON.stringify({ product: PRODUCT.id, from: version, to: targetVersion }), signal: AbortSignal.timeout(15000), redirect: "error" });
       status = response.status;
       if (!response.ok) throw new Error(String(status));
     } catch { throw new MaintenanceError("The update hook did not accept the request. Your backup was kept; nothing was changed.", 502); }
