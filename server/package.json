@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/server",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "description": "StreamRD backend media server: auth, RBAC, catalog, playback and a multiservice debrid provider layer.",
   "type": "commonjs",

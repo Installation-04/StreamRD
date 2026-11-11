@@ -14,7 +14,7 @@ import gallery from "@/app/library/library.module.css";
 export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
   const { user, loading: authLoading } = useAuth(), router = useRouter();
   const [libraries, setLibraries] = useState<SharedLibrary[]>([]), [items, setItems] = useState<AccountMedia[]>([]);
-  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [query, setQuery] = useState(""), [type, setType] = useState("all");
+  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [query, setQuery] = useState(""), [type, setType] = useState("all"), [unwatched, setUnwatched] = useState(false);
   const [resume, setResume] = useState<SharedContinueItem[]>([]);
   const [total, setTotal] = useState(0), [cursor, setCursor] = useState<string | null>(null), [loadedMore, setLoadedMore] = useState(false);
   const request = useRef<AbortController | null>(null);
@@ -28,7 +28,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
       if (libraryId) {
         if (!response.libraries.some(library => library.id === libraryId)) { setItems([]); setTotal(0); setCursor(null); throw new Error("This library is unavailable. Ask the server owner to check your access."); }
         const params = new URLSearchParams({ limit: "30" });
-        if (query.trim()) params.set("q", query.trim()); if (type !== "all") params.set("type", type); if (next) params.set("cursor", next);
+        if (query.trim()) params.set("q", query.trim()); if (type !== "all") params.set("type", type); if (unwatched) params.set("unwatched", "1"); if (next) params.set("cursor", next);
         const page = await api<SharedLibraryItems>(`/api/shared-libraries/${encodeURIComponent(libraryId)}/items?${params}`, { signal: controller.signal });
         if (controller.signal.aborted) return;
         setItems(current => next ? [...current.filter(item => !page.items.some(other => other.id === item.id)), ...page.items].slice(-200) : page.items);
@@ -36,7 +36,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
       }
     } catch (reason) { if (!controller.signal.aborted) { if (reason instanceof ApiError && [401, 403, 404].includes(reason.status)) { setLibraries([]); setItems([]); setTotal(0); setCursor(null); } setError(reason instanceof Error ? reason.message : "Shared libraries could not be loaded."); } }
     finally { if (!controller.signal.aborted) setLoading(false); }
-  }, [libraryId, query, type]);
+  }, [libraryId, query, type, unwatched]);
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
     if (!user) return;
@@ -56,7 +56,7 @@ export default function SharedLibraries({ libraryId }: { libraryId?: string }) {
       <section className={styles.libraryGrid} aria-label="Libraries shared with you" aria-busy={loading}>{libraries.map(collection => <Link key={collection.id} href={`/shared-libraries/${encodeURIComponent(collection.id)}`} className={styles.libraryTile} aria-label={`Open library ${collection.name}`}><div className={styles.tileArt}><span className={styles.tileIcon} aria-hidden="true">{collection.mediaType === "series" ? "▤" : "◈"}</span><span>{libraryTypeLabel(collection.mediaType)}</span></div><div className={styles.tileCopy}><h2>{collection.name}</h2><p><span>{collection.itemCount} {collection.itemCount === 1 ? "title" : "titles"}</span><span>Explore collection ↗</span></p></div></Link>)}</section>
     </>}
     {libraryId && library && <>
-      <section className={gallery.toolbar} aria-label="Shared library filters"><label className={gallery.search}><span>Find your next watch</span><input type="search" aria-label="Search shared library" value={query} maxLength={160} placeholder="Search titles…" onChange={event => setQuery(event.target.value)} /></label>{library.mediaType === "all" && <label className={gallery.type}><span>Show</span><select aria-label="Filter shared library by type" value={type} onChange={event => setType(event.target.value)}><option value="all">Everything</option><option value="movie">Movies</option><option value="series">Series</option></select></label>}<div className={gallery.total}><strong>{total}</strong><span>{total === 1 ? "title" : "titles"}</span></div></section>
+      <section className={gallery.toolbar} aria-label="Shared library filters"><label className={gallery.search}><span>Find your next watch</span><input type="search" aria-label="Search shared library" value={query} maxLength={160} placeholder="Search titles…" onChange={event => setQuery(event.target.value)} /></label>{library.mediaType === "all" && <label className={gallery.type}><span>Show</span><select aria-label="Filter shared library by type" value={type} onChange={event => setType(event.target.value)}><option value="all">Everything</option><option value="movie">Movies</option><option value="series">Series</option></select></label>}<label className={gallery.type}><span>Show</span><select aria-label="Filter by watched" value={unwatched ? "unwatched" : "all"} onChange={event => setUnwatched(event.target.value === "unwatched")}><option value="all">All titles</option><option value="unwatched">Unwatched</option></select></label><div className={gallery.total}><strong>{total}</strong><span>{total === 1 ? "title" : "titles"}</span></div></section>
       {loading && !items.length && <div className={gallery.skeleton} role="status">Gathering this collection…</div>}
       {!loading && !items.length && !error && <section className={styles.empty}><h2>{query || type !== "all" ? "No titles match this view." : "This collection is getting started."}</h2><p>{query || type !== "all" ? "Try another title or clear your filters." : "Titles appear here as the server’s account library is imported. Check back soon."}</p>{(query || type !== "all") && <button type="button" className="btn btn-secondary" onClick={() => { setQuery(""); setType("all"); }}>Clear filters</button>}</section>}
       <section className={gallery.grid} aria-label="Shared library titles" aria-busy={loading}>{items.map(item => {

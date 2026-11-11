@@ -215,6 +215,8 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 | GET | `/api/shared-libraries/favorites` | `{ items: [{ libraryId, item }] }`: the viewer's list, newest first, one entry per title (the version a library shows), only from libraries and within the viewing limit the viewer has now. |
 | PUT | `/api/shared-libraries/:id/items/:itemId/favorite` | Adds the title → `{ favorite: true }`; 404 if the item is not visible to the viewer; 409 when the list holds 500 titles. |
 | DELETE | `/api/shared-libraries/:id/items/:itemId/favorite` | Removes it → `{ favorite: false }`. |
+| PUT | `/api/shared-libraries/:id/items/:itemId/watched` | StreamRD only. Marks the title (every version) watched for the viewer → `{ watched: true }`; clears resume points. 404 if not visible. |
+| DELETE | `/api/shared-libraries/:id/items/:itemId/watched` | Unmarks it → `{ watched: false }` and restarts the title. Items and My List carry `watched`; `GET /:id/items?unwatched=1` leaves out finished titles. |
 
 Library item views (a library's items, one item, and `GET /api/home` rows) carry `favorite: boolean`, and `GET /api/home` has a `myList` row (StreamRD). Entries name a title by owner and group, so every version of a title shares one entry.
 
