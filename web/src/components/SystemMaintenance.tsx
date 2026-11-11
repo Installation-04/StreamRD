@@ -6,7 +6,7 @@ import styles from "./SystemMaintenance.module.css";
 
 interface Backup { name: string; kind: "manual" | "pre-update" | "pre-restore" | "pre-upgrade" | "other"; sizeBytes: number; createdAt: string }
 interface Maintenance { backups: Backup[]; pendingRestore: { backup: string; requestedAt: string } | null; restartSupported: boolean }
-interface UpdateInfo { current: string; latest: string | null; updateAvailable: boolean; publishedAt: string | null; url: string | null; checkEnabled: boolean; checkedAt: string | null; error: string | null; canApply: boolean }
+interface UpdateInfo { current: string; latest: string | null; updateAvailable: boolean; publishedAt: string | null; url: string | null; checkEnabled: boolean; checkedAt: string | null; error: string | null; canApply: boolean; updater?: "helper" | "webhook" | null }
 const KIND: Record<Backup["kind"], string> = { manual: "Manual", "pre-update": "Before update", "pre-restore": "Before restore", "pre-upgrade": "Before upgrade", other: "Other" };
 const when = (value: string | null) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded";
 const size = (bytes: number) => bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -51,10 +51,21 @@ export default function SystemMaintenance() {
   }, "The restore could not be staged. Nothing was changed.");
   const cancelRestore = () => run("cancel", async () => { await api("/api/admin/system/restore", { method: "DELETE" }); setNotice("Staged restore cancelled."); await loadMaintenance(); }, "The staged restore could not be cancelled.");
   const restart = () => run("restart", async () => { if (!window.confirm("Restart the server now? Everyone will be briefly disconnected.")) return; await api("/api/admin/system/restart", { method: "POST" }); setNotice("Restarting. Reload this page in a minute."); }, "The server could not be restarted from here.");
+  const [updating, setUpdating] = useState("");
+  useEffect(() => {
+    if (!updating) return;
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      try { const info = await api<UpdateInfo>("/api/admin/system/update"); if (info.current === updating) { clearInterval(timer); window.location.reload(); } }
+      catch { /* the server is restarting; keep waiting */ }
+      if (Date.now() - started > 10 * 60 * 1000) { clearInterval(timer); setUpdating(""); setNotice("The update is taking longer than expected. If this page does not show the new version soon, check the updater's log or run docker compose pull && docker compose up -d."); }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [updating]);
   const applyUpdate = () => run("update", async () => {
     if (!update?.latest) return;
     const result = await api<{ backup: Backup }>("/api/admin/system/update", { method: "POST", body: JSON.stringify({ version: update.latest }) });
-    setConfirmUpdate(false); setNotice(`Backup ${result.backup.name} was created and the update was requested. The server will restart into v${update.latest} when your updater finishes.`); await loadMaintenance();
+    setConfirmUpdate(false); setUpdating(update.latest); setNotice(`Backup ${result.backup.name} was created. Updating to v${update.latest}: StreamRD downloads it, restarts and checks it starts. This page reloads by itself when it is done (a minute or two).`);
   }, "The update could not be requested. Your data was not changed.");
   return <div className={styles.wrap}>
     <section className={styles.panel} aria-labelledby="update-heading">
@@ -71,13 +82,14 @@ export default function SystemMaintenance() {
       {update?.error && <p className={styles.notice}>{update.error}</p>}
       {update?.updateAvailable && update.url && <p className={styles.copy}><a href={update.url} target="_blank" rel="noreferrer">Read the v{update.latest} release notes ↗</a></p>}
       {update?.updateAvailable && !update.canApply && <div className={styles.notice}>
-        <strong>How to update.</strong> In your install folder run:
+        <strong>One click, once set up.</strong> Run <code>bash install.sh --media-manager</code> in your install folder one time: it adds a small helper that lets this page update StreamRD for you (an <strong>Update</strong> button appears here, with an automatic backup and an automatic rollback if the new version does not start). Until then, update by hand. In your install folder run:
         <pre style={{ margin: "8px 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>docker compose pull &amp;&amp; docker compose up -d</pre>
         <div className={styles.actions}><button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard?.writeText("docker compose pull && docker compose up -d").then(() => setNotice("Update command copied."), () => setNotice("Your browser blocked copying; select the command above.")); }}>Copy command</button></div>
-        <p className={styles.hint}>Your settings (<code>config</code>) and downloads (<code>data</code>) are kept; the database is snapshotted before any upgrade. Running the older split install? Use <code>git pull</code> then <code>docker compose up -d --build</code>. For a one-click button, point <code>UPDATE_WEBHOOK_URL</code> at an updater such as Watchtower.</p>
+        <p className={styles.hint}>Your settings (<code>config</code>) and downloads (<code>data</code>) are kept; the database is snapshotted before any upgrade. Running the older split install? Use <code>git pull</code> then <code>docker compose up -d --build</code>. Prefer your own updater? Point <code>UPDATE_WEBHOOK_URL</code> at it (for example Watchtower).</p>
       </div>}
-      {update?.updateAvailable && update.canApply && !confirmUpdate && <button type="button" className="btn" disabled={busy !== ""} onClick={() => setConfirmUpdate(true)}>Update to v{update.latest}…</button>}
-      {update?.updateAvailable && update.canApply && confirmUpdate && <div className={styles.confirm}><p className={styles.copy}>This creates a verified backup, then asks your updater to roll out v{update.latest}. The server restarts and applies database upgrades on startup. Users are briefly disconnected.</p><div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void applyUpdate()}>{busy === "update" ? "Backing up…" : "Back up and update"}</button><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => setConfirmUpdate(false)}>Cancel</button></div></div>}
+      {update?.updateAvailable && update.canApply && !confirmUpdate && !updating && <button type="button" className="btn" disabled={busy !== ""} onClick={() => setConfirmUpdate(true)}>Update to v{update.latest}</button>}
+      {updating && <p className={styles.copy} role="status"><span aria-hidden="true">⏳ </span>Updating to v{updating}… do not close this page.</p>}
+      {update?.updateAvailable && update.canApply && confirmUpdate && <div className={styles.confirm}><p className={styles.copy}>{update.updater === "helper" ? <>This creates a verified backup, downloads v{update.latest}, restarts StreamRD into it and checks that it starts; if it does not, the previous version is put back automatically. Your settings and downloads are kept. Everyone is briefly disconnected.</> : <>This creates a verified backup, then asks your updater to roll out v{update.latest}. The server restarts and applies database upgrades on startup. Users are briefly disconnected.</>}</p><div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void applyUpdate()}>{busy === "update" ? "Backing up…" : "Back up and update"}</button><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => setConfirmUpdate(false)}>Cancel</button></div></div>}
     </section>
     <section className={styles.panel} aria-labelledby="backup-restore-heading">
       <div className={styles.heading}><div><p className={styles.eyebrow}>RECOVERY</p><h3 id="backup-restore-heading">Backups &amp; restore</h3></div>

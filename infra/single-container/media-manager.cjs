@@ -1,13 +1,16 @@
 'use strict';
-// The media manager: a tiny helper that starts, stops and removes exactly two containers (Jellyfin and Plex) next to StreamRD,
-// so the Setup page can launch a media server without the StreamRD container itself ever touching Docker.
+// The media manager: a tiny helper that starts, stops and removes exactly two containers (Jellyfin and Plex) next to StreamRD, and
+// replaces the StreamRD container itself with a newer image of its own, so the Setup page can launch a media server and the System page
+// can update StreamRD without the StreamRD container ever touching Docker.
 //
 // It is the only thing in the installation that holds the Docker socket, and it is opt-in (install.sh --media-manager). To keep what
 // it can do small it:
 //   - listens only on the internal compose network (no published port) and answers only requests carrying MEDIA_MANAGER_TOKEN;
 //   - accepts only a server name (jellyfin or plex), a port and an optional Plex claim token; the image, the folders it mounts, the
 //     user it runs as and every other setting of the container are fixed here, not chosen by the caller;
-//   - never logs or stores the claim token.
+//   - never logs or stores the claim token;
+//   - updates only the one container named by STREAMRD_CONTAINER (default streamrd), only to a newer image of the reference that container
+//     already uses; the caller chooses nothing. The old container is kept until the new one is healthy and put back if it is not.
 const http = require('node:http');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -72,20 +75,21 @@ function createManager(config) {
     return { state: response.json?.State?.Running ? 'running' : 'stopped', port: Number(bindings?.[0]?.HostPort) || SERVERS[name].port };
   }
   /** Pulls an image, reading Docker's progress as it arrives so the deploy log can say how far along it is. */
-  function pull(name, server) {
+  function pull(name, server) { return pullImage(server.image, server.tag, message => note(name, message)); }
+  function pullImage(image, tag, say) {
     return new Promise((resolve, reject) => {
       const layers = new Map(); let last = 0, buffer = '', failed = false;
       const report = () => {
         let current = 0, total = 0; for (const layer of layers.values()) { current += layer.current; total += layer.total; }
-        if (total > 0 && Date.now() - last > 3000) { last = Date.now(); note(name, `Downloading ${server.image}: ${Math.min(99, Math.floor(current / total * 100))}% of ${(total / 1048576).toFixed(0)} MB`); }
+        if (total > 0 && Date.now() - last > 3000) { last = Date.now(); say(`Downloading ${image}: ${Math.min(99, Math.floor(current / total * 100))}% of ${(total / 1048576).toFixed(0)} MB`); }
       };
       const line = text => {
         if (!text.trim()) return; let event; try { event = JSON.parse(text); } catch { return; }
-        if (event.error) { failed = true; note(name, 'The image could not be downloaded'); return; }
+        if (event.error) { failed = true; say('The image could not be downloaded'); return; }
         const detail = event.progressDetail; if (event.id && detail && detail.total) layers.set(event.id, { current: detail.current || 0, total: detail.total });
         report();
       };
-      const request = http.request({ socketPath: config.socketPath, path: `/images/create?fromImage=${encodeURIComponent(server.image)}&tag=${encodeURIComponent(server.tag)}`, method: 'POST', headers: { Host: 'docker' } }, response => {
+      const request = http.request({ socketPath: config.socketPath, path: `/images/create?fromImage=${encodeURIComponent(image)}&tag=${encodeURIComponent(tag)}`, method: 'POST', headers: { Host: 'docker' } }, response => {
         if (response.statusCode !== 200) { response.resume(); return reject(new Error('The image could not be downloaded')); }
         response.setEncoding('utf8');
         response.on('data', chunk => { buffer += chunk; const lines = buffer.split('\n'); buffer = lines.pop(); lines.forEach(line); });
@@ -138,6 +142,81 @@ function createManager(config) {
   async function stop(name) { delete jobs[name]; note(name, 'Stop requested'); const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
   async function remove(name) { delete jobs[name]; note(name, 'Remove requested'); const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
 
+  // ---- Updating StreamRD itself.
+  const STREAMRD = config.streamrdContainer || 'streamrd', HEALTH_WAIT_MS = config.healthWaitMs || 300000, SETTLE_MS = config.settleMs === undefined ? 8000 : config.settleMs;
+  const upd = { state: 'idle', log: [], error: '', startedAt: null, finishedAt: null };
+  const unote = message => { upd.log.push({ time: new Date().toISOString(), message: redact(message).slice(0, 300) }); if (upd.log.length > LOG_LINES) upd.log.splice(0, upd.log.length - LOG_LINES); };
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  function splitReference(reference) { const slash = reference.lastIndexOf('/'), colon = reference.lastIndexOf(':'); return colon > slash ? [reference.slice(0, colon), reference.slice(colon + 1)] : [reference, 'latest']; }
+  /** The settings of the running container, minus whatever the old image supplied itself, so the new image's own defaults apply. */
+  function recreateBody(inspected, oldImage, reference) {
+    const c = inspected.Config || {}, base = oldImage || {};
+    const labels = Object.fromEntries(Object.entries(c.Labels || {}).filter(([key, value]) => (base.Labels || {})[key] !== value));
+    const body = { Image: reference, Env: (c.Env || []).filter(entry => !(base.Env || []).includes(entry)), Labels: labels, HostConfig: inspected.HostConfig };
+    if (c.User && c.User !== base.User) body.User = c.User;
+    if (!same(c.Cmd, base.Cmd)) body.Cmd = c.Cmd; if (!same(c.Entrypoint, base.Entrypoint)) body.Entrypoint = c.Entrypoint;
+    if (!same(c.Healthcheck, base.Healthcheck) && c.Healthcheck) body.Healthcheck = c.Healthcheck;
+    if (c.WorkingDir && c.WorkingDir !== base.WorkingDir) body.WorkingDir = c.WorkingDir;
+    return body;
+  }
+  const networksOf = inspected => Object.entries(inspected.NetworkSettings?.Networks || {}).map(([name, value]) => [name, { Aliases: (value.Aliases || []).filter(alias => !/^[0-9a-f]{12}$/.test(alias)) }]);
+  async function mustOk(label, response, ok) { if (!ok.includes(response.status)) throw new Error(`${label} failed (Docker answered ${response.status})`); return response; }
+  async function waitHealthy(name) {
+    const deadline = Date.now() + HEALTH_WAIT_MS; let steadySince = 0;
+    while (Date.now() < deadline) {
+      const response = await docker('GET', `/containers/${name}/json`), state = response.json?.State;
+      if (response.status === 200 && state?.Running) {
+        if (state.Health) { if (state.Health.Status === 'healthy') return true; if (state.Health.Status === 'unhealthy') return false; }
+        else { steadySince = steadySince || Date.now(); if (Date.now() - steadySince >= SETTLE_MS) return true; }
+      } else if (response.status === 200 && !state?.Running && state?.Status === 'exited') return false;
+      await sleep(1000);
+    }
+    return false;
+  }
+  async function doUpdate() {
+    const current = await docker('GET', `/containers/${STREAMRD}/json`);
+    if (current.status !== 200) throw new Error('The StreamRD container was not found');
+    const inspected = current.json, reference = inspected.Config?.Image || '';
+    if (!reference || reference.startsWith('sha256:')) throw new Error('StreamRD was not started from a named image, so it cannot be updated from here');
+    const [image, tag] = splitReference(reference);
+    unote(`Checking ${reference} for a newer version`);
+    await pullImage(image, tag, unote);
+    const fresh = await docker('GET', `/images/${encodeURIComponent(reference)}/json`);
+    if (fresh.status !== 200) throw new Error('The new image is not available after the download');
+    if (fresh.json?.Id === inspected.Image) { unote('Already running the newest image'); return 'current'; }
+    const oldImage = (await docker('GET', `/images/${inspected.Image}/json`)).json?.Config;
+    const body = recreateBody(inspected, oldImage, reference), networks = networksOf(inspected), previous = `${STREAMRD}-previous`;
+    unote('Stopping StreamRD (it is back in a minute)');
+    await docker('DELETE', `/containers/${previous}?force=true`);
+    await mustOk('Stopping StreamRD', await docker('POST', `/containers/${STREAMRD}/stop?t=30`), [204, 304]);
+    await mustOk('Keeping the old container', await docker('POST', `/containers/${STREAMRD}/rename?name=${previous}`), [204]);
+    const restore = async why => {
+      unote(`${why}; putting the previous version back`);
+      await docker('DELETE', `/containers/${STREAMRD}?force=true`);
+      await docker('POST', `/containers/${previous}/rename?name=${STREAMRD}`);
+      await docker('POST', `/containers/${STREAMRD}/start`);
+    };
+    try {
+      const [first] = networks;
+      const created = await docker('POST', `/containers/create?name=${STREAMRD}`, { ...body, ...(first ? { NetworkingConfig: { EndpointsConfig: { [first[0]]: first[1] } } } : {}) });
+      if (created.status !== 201 || !created.json?.Id) throw new Error(`Creating the new container failed (Docker answered ${created.status})`);
+      for (const [network, endpoint] of networks.slice(1)) await docker('POST', `/networks/${encodeURIComponent(network)}/connect`, { Container: created.json.Id, EndpointConfig: endpoint });
+      await mustOk('Starting the new version', await docker('POST', `/containers/${STREAMRD}/start`), [204, 304]);
+    } catch (error) { await restore(error.message); throw new Error(`${error.message}. The previous version was restored.`); }
+    unote('Waiting for the new version to start');
+    if (!await waitHealthy(STREAMRD)) { await restore('The new version did not become healthy'); throw new Error('The new version did not start properly. The previous version was restored; nothing was lost.'); }
+    await docker('DELETE', `/containers/${previous}?force=true`);
+    unote('Updated. The previous image is kept on this machine until you prune it.');
+    return 'updated';
+  }
+  function startUpdate() {
+    if (upd.state === 'running') return { state: 'running' };
+    Object.assign(upd, { state: 'running', log: [], error: '', startedAt: new Date().toISOString(), finishedAt: null });
+    doUpdate().then(result => { upd.state = result === 'current' ? 'current' : 'done'; }, error => { upd.state = 'failed'; upd.error = redact(error.message || 'The update failed'); unote(upd.error); }).finally(() => { upd.finishedAt = new Date().toISOString(); });
+    return { state: 'running' };
+  }
+
   function authorized(request) {
     const header = String(request.headers.authorization ?? ''), token = header.startsWith('Bearer ') ? header.slice(7) : '';
     return token.length > 0 && crypto.timingSafeEqual(sha(token), sha(config.token));
@@ -153,7 +232,13 @@ function createManager(config) {
     const send = (status, body) => { response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(body)); };
     try {
       if (!authorized(request)) return send(401, { error: 'Not authorized' });
-      const url = new URL(request.url ?? '/', 'http://manager'), match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs))?$/.exec(url.pathname);
+      const url = new URL(request.url ?? '/', 'http://manager');
+      if (url.pathname === '/update') {
+        if (request.method === 'POST') return send(202, startUpdate());
+        if (request.method === 'GET') return send(200, { state: upd.state, error: upd.error, startedAt: upd.startedAt, finishedAt: upd.finishedAt, log: upd.log.slice(-50) });
+        return send(405, { error: 'Method not allowed' });
+      }
+      const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs))?$/.exec(url.pathname);
       if (request.method === 'GET' && url.pathname === '/status') return send(200, { servers: await status() });
       if (!match || !SERVERS[match[1]]) return send(404, { error: 'Unknown server' });
       const name = match[1];
@@ -175,7 +260,7 @@ function createManager(config) {
       send(status, { error: status === 502 ? 'Docker could not be reached' : error.message });
     }
   });
-  return { server, specFor: (name, options) => specFor(name, options, config), status };
+  return { server, specFor: (name, options) => specFor(name, options, config), status, update: doUpdate, updateState: () => upd };
 }
 
 module.exports = { createManager, SERVERS };
@@ -185,6 +270,6 @@ if (require.main === module) {
   const token = need('MEDIA_MANAGER_TOKEN'), hostDir = need('HOST_INSTALL_DIR');
   if (token.length < 32) { console.error('MEDIA_MANAGER_TOKEN must be at least 32 characters'); process.exit(1); }
   if (!path.isAbsolute(hostDir) || hostDir.includes('..') || /[\0\n\r]/.test(hostDir)) { console.error('HOST_INSTALL_DIR must be an absolute path'); process.exit(1); }
-  const manager = createManager({ socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock', token, hostDir: hostDir.replace(/\/+$/, ''), network: process.env.DOCKER_NETWORK || '', zurg: process.env.ZURG === '1', tz: process.env.TZ || 'UTC' });
+  const manager = createManager({ socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock', token, hostDir: hostDir.replace(/\/+$/, ''), network: process.env.DOCKER_NETWORK || '', zurg: process.env.ZURG === '1', tz: process.env.TZ || 'UTC', streamrdContainer: process.env.STREAMRD_CONTAINER || 'streamrd' });
   manager.server.listen(Number(process.env.PORT) || 8099, '0.0.0.0', () => console.log(JSON.stringify({ level: 'info', message: 'Media manager listening' })));
 }
