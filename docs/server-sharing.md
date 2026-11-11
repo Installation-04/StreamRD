@@ -93,10 +93,12 @@ In **Admin → Users → Registration**, choose:
 | Invitation only | The recipient of a valid, unused invitation |
 | Closed | Nobody, including invitation recipients, until registration is reopened |
 
-Existing installations retain **Open** registration until an administrator changes
-it. Restricting registration does not deactivate existing users or remove their
-library grants. An empty server can still create its bootstrap administrator;
-when `ADMIN_EMAIL` is set, restricted registration permits that address only.
+A server is **Invitation only** until its administrator chooses otherwise. The first
+account, which sets the server up, never needs an invitation; when `ADMIN_EMAIL` is
+set, only that address can create it. A server from before v0.23.2 that had never
+saved a choice was open; on its first start with v0.23.2 the choice is recorded as
+Invitation only and a line in Admin → Logs says so. Restricting registration does
+not deactivate existing users or remove their library grants.
 
 Create an invitation with the recipient's email and an expiry from 1 to 30 days
 (default seven). Copy the link shown after creation and send it yourself. This

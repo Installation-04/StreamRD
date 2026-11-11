@@ -3,7 +3,7 @@
 // replaces the StreamRD container itself with a newer image of its own, so the Setup page can launch a media server and the System page
 // can update StreamRD without the StreamRD container ever touching Docker.
 //
-// It is the only thing in the installation that holds the Docker socket, and it is opt-in (install.sh --media-manager). To keep what
+// It is the only thing in the installation that holds the Docker socket, and it can be declined (install.sh --no-media-manager). To keep what
 // it can do small it:
 //   - listens only on the internal compose network (no published port) and answers only requests carrying MEDIA_MANAGER_TOKEN;
 //   - accepts only a server name (jellyfin or plex), a port and an optional Plex claim token; the image, the folders it mounts, the

@@ -31,9 +31,9 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${API_BASE}/api/health`);
       const body = await res.json();
-      setHealth(`Server ${API_BASE}: ${body.status} (db ${body.db})`);
+      setHealth(`The server${API_BASE ? ` at ${API_BASE}` : ""} answered: ${body.status} (database ${body.db}).`);
     } catch {
-      setHealth(`Cannot reach ${API_BASE}`);
+      setHealth(`The server${API_BASE ? ` at ${API_BASE}` : ""} could not be reached.`);
     }
   };
 
@@ -44,12 +44,12 @@ export default function SettingsPage() {
       <form className="card" onSubmit={changePassword} style={{ marginBottom: 24 }}>
         <h2 style={{ marginBottom: 16, fontSize: 18 }}>Change password</h2>
         <div className="field">
-          <label>Current password</label>
-          <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <label htmlFor="current-password">Current password</label>
+          <input id="current-password" type="password" autoComplete="current-password" required value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setError(null); setMsg(null); }} />
         </div>
         <div className="field">
-          <label>New password (min. 8 characters)</label>
-          <input type="password" required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <label htmlFor="new-password">New password (min. 8 characters)</label>
+          <input id="new-password" type="password" autoComplete="new-password" required minLength={8} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setError(null); setMsg(null); }} />
         </div>
         {msg && <p className="ok-text">{msg}</p>}
         {error && <p className="error-text">{error}</p>}
@@ -59,9 +59,9 @@ export default function SettingsPage() {
       <div className="card">
         <h2 style={{ marginBottom: 8, fontSize: 18 }}>Server connection</h2>
         <p className="dim" style={{ fontSize: 14, marginBottom: 16 }}>
-          This web app talks to <code>{API_BASE}</code> (set via{" "}
-          <code>NEXT_PUBLIC_API_BASE_URL</code>). Works the same over LAN, reverse proxy
-          or VPN.
+          {API_BASE
+            ? <>This web app talks to the server at <code>{API_BASE}</code> (set when the web app was built, with <code>NEXT_PUBLIC_API_BASE_URL</code>).</>
+            : <>This web app and its server share this address, so it works the same on your home network, through a reverse proxy or over a VPN.</>}
         </p>
         {health && <p className="ok-text">{health}</p>}
         <button className="btn btn-secondary" onClick={testServer}>Test connection</button>

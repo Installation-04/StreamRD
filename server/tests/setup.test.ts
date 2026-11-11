@@ -17,6 +17,8 @@ it("requires login and gives members actionable setup without admin paths or sec
   expect(res.body.configurationReady).toBe(false); expect(res.body.connectionVerified).toBe(false);
   expect(res.body.progress).toEqual({ completed: 1, total: 3 }); expect(res.body.library).toBeUndefined();
   expect(res.body.checks.every((c: { href: string | null }) => !c.href?.startsWith("/admin"))).toBe(true);
+  expect(res.body.checks.map((c: { id: string }) => c.id)).not.toContain("account-library");   // importing is the administrator's; members are not sent to a page that refuses them
+  expect(res.body.checks.every((c: { href: string | null }) => c.href !== "/library")).toBe(true);
   expect(JSON.stringify(res.body)).not.toContain("/private"); expect(JSON.stringify(res.body)).not.toContain(config.jwtSecret);
   expect(res.body.product).toBe(product);
 });

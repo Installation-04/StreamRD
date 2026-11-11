@@ -61,7 +61,7 @@ server snapshots each database (verified) before applying any migration. You can
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
 `docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
-**One click.** With the media manager helper (included on new installs; `bash install.sh --media-manager` adds it to an existing one),
+**One click.** With the media manager helper (part of every install unless you declined it; running `bash install.sh` again adds it to an older one),
 **Admin → System → Updates** shows an **Update** button. It takes a verified backup, downloads the new image, replaces the StreamRD container with
 it (same ports, folders, settings and network), waits until it is healthy and removes the old one. If the new version does not start, the old
 container is put back automatically and the page says so. The helper can only replace the one container named `streamrd` and only with a newer
@@ -76,7 +76,7 @@ a newer release exists and shows the command. For automatic updates run
 
 ## Optional add-ons
 
-`install.sh --media-manager` adds a small helper so **Setup → Plex or Jellyfin** can start them later, with a place for the Plex claim token, the Plex token and the Jellyfin API key; see [Start Plex or Jellyfin from StreamRD's Setup page](plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page) for what the helper can and cannot do (it holds the Docker socket, so it is opt-in).
+The installer adds a small helper (unless you pass `--no-media-manager`) so **Setup → Plex or Jellyfin** can start them later, with a place for the Plex claim token, the Plex token and the Jellyfin API key; see [Start Plex or Jellyfin from StreamRD's Setup page](plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page) for what the helper can and cannot do (it holds the Docker socket, so it is opt-in).
 
 `install.sh --media-server jellyfin|plex|both` runs [Jellyfin and/or Plex](plex-jellyfin.md#built-in-jellyfin-and-plex) in the same Compose project, already mapped to the
 libraries StreamRD and Phosphor export and to your downloads, with their own settings kept under `config/jellyfin` and `config/plex`. Choose their ports with

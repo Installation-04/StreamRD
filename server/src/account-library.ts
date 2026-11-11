@@ -1,3 +1,4 @@
+import { logEvent } from "./logger";
 import { createHash } from "node:crypto";
 import { AccountMedia, AccountScan, Prisma } from "@prisma/client";
 import { db } from "./db";
@@ -106,7 +107,6 @@ export function mediaHint(item: ExistingAccountItem) {
   if (typeof item.providerRef !== "string" || !item.providerRef || item.providerRef.length > 8192 || /[\x00-\x1f]/.test(item.providerRef)) return null;
   const original = typeof item.name === "string" ? item.name.replace(/[\x00-\x1f]/g, " ").trim() : "";
   if (!original || /^(?:https?:|magnet:)/i.test(original)) return null;
-  if (/\.(?:nfo|txt|srt|ass|sub|ssa|vtt|pdf|jpe?g|png|webp|gif|mp3|flac|wav|ogg|aac|exe|dmg)$/i.test(original)) return null;
   if (!classifyTitle(original).keep) return null; // games, software, music, books and unreadable names are not movies or shows
   const filename = original.split(/[\\/]/).at(-1)!.replace(/\.(?:mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg)$/i, "");
   const yearMatch = /(?:^|[ ._(\-])((?:18|19|20|21)\d{2}|2200)(?=$|[ ._)\-])/.exec(filename);
@@ -136,6 +136,7 @@ export async function runAccountLibraryJob(): Promise<boolean> {
     }
     const page = await scanAccountPage(provider, ctx.creds, scan.cursor ?? undefined);
     if (!Array.isArray(page.items) || page.items.length > 100 || (page.nextCursor !== null && (typeof page.nextCursor !== "string" || !page.nextCursor || page.nextCursor.length > 8192))) throw new AccountLibraryError("The provider returned an invalid account page.");
+    const leftOut: string[] = []; let outcome: { complete: boolean; scanned: number; imported: number; skipped: number } | null = null;
     const items = await db.$transaction(async tx => {
       const [claim, fresh] = await Promise.all([tx.accountScan.findUnique({ where: { id: scan.id } }), context(scan.userId, provider, tx)]);
       if (!claim || claim.status !== "scanning" || claim.revision !== scan.revision || claim.leaseUntil?.getTime() !== leaseUntil.getTime()) return [];
@@ -145,7 +146,7 @@ export async function runAccountLibraryJob(): Promise<boolean> {
       let imported = 0, skipped = 0;
       const importedItems: AccountMedia[] = [], touchedGroups: Array<string | null | undefined> = [];
       for (const item of page.items) {
-        const hint = mediaHint(item); if (!hint) { skipped++; continue; }
+        const hint = mediaHint(item); if (!hint) { skipped++; if (typeof item.name === "string") leftOut.push(item.name.replace(/[\x00-\x1f]/g, " ").slice(0, 120)); continue; }
         const key = { userId: scan.userId, provider, providerRef: item.providerRef };
         const existing = await tx.accountMedia.findUnique({ where: { userId_provider_providerRef: key } });
         const sameSource = existing?.credentialFingerprint === scan.credentialFingerprint;
@@ -157,15 +158,22 @@ export async function runAccountLibraryJob(): Promise<boolean> {
       }
       await refreshPrimaries(tx, scan.userId, touchedGroups);
       const incomplete = Boolean(page.warning) || (page.nextCursor !== null && (page.nextCursor === scan.cursor || scan.pages + 1 >= MAX_PAGES));
+      if (incomplete || !page.nextCursor) outcome = { complete: !incomplete, scanned: scan.scanned + page.items.length, imported: scan.imported + imported, skipped: scan.skipped + skipped };
       await tx.accountScan.updateMany({ where: owned, data: { status: incomplete ? "error" : page.nextCursor ? "queued" : "complete", cursor: page.nextCursor, leaseUntil: null, nextAttemptAt: new Date(), failures: 0, pages: { increment: 1 }, scanned: { increment: page.items.length }, imported: { increment: imported }, skipped: { increment: skipped }, error: incomplete ? "The provider scan could not establish a complete library. Imported items were kept; review the connection and rescan." : null } });
       return importedItems;
     }, { timeout: 15000 });
     if (items.length && importHook) { try { await importHook(items); } catch { /* Metadata discovery can recover queued work; imports remain durable. */ } }
+    // What a scan did is in the log: the totals when it ends, and the names it left out (not a film or a show by its name), so a title
+    // that is missing from the library can be traced to the reason.
+    const found = outcome as { complete: boolean; scanned: number; imported: number; skipped: number } | null;
+    if (leftOut.length) void logEvent("info", "library", `Account scan left out ${leftOut.length} ${leftOut.length === 1 ? "entry that does" : "entries that do"} not look like a film or a show`, { userId: scan.userId, provider, meta: { names: leftOut.slice(0, 40) } }).catch(() => undefined);
+    if (found) void logEvent(found.complete ? "info" : "warn", "library", found.complete ? `Account scan finished: ${found.scanned} checked, ${found.imported} imported, ${found.skipped} already known or left out` : "Account scan could not read the whole account; what was imported is kept", { userId: scan.userId, provider, meta: found }).catch(() => undefined);
   } catch (error) {
     const failures = scan.failures + 1;
     const denied = error instanceof ProviderError && [401, 403].includes(error.statusCode ?? 0);
     const retry = !denied && failures < 3 && !(error instanceof AccountLibraryError);
     const message = denied ? "The provider rejected the saved credentials. Review your debrid settings." : retry ? "The provider could not be reached. The scan will retry automatically." : "The provider scan could not finish. Existing imports were kept; review the connection and rescan.";
+    if (!retry) void logEvent("warn", "provider_error", `Account scan stopped: ${message}`, { userId: scan.userId, provider: scan.provider }).catch(() => undefined);
     await db.accountScan.updateMany({ where: owned, data: { status: retry ? "queued" : "error", leaseUntil: null, failures, nextAttemptAt: new Date(Date.now() + (error instanceof ProviderError && error.statusCode === 429 ? 30000 : 2000 * 2 ** (failures - 1))), error: message } });
   }
   return true;

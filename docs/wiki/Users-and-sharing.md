@@ -10,7 +10,7 @@ own debrid key; playback uses the administrator's connected account.
 2. **Libraries.** In **Admin → Libraries**, create the libraries you want. Pick a content type (movies, TV shows, or both)
    and either tick **Visible to everyone** or add chosen people under *Who can watch*. A library always shows the
    imported media of its type, including titles imported later. **Paused** hides it without losing its access list.
-3. **People.** In **Admin → Users**, choose invitation-only registration and create email-bound invitation links. In the same form,
+3. **People.** In **Admin → Users**, create email-bound invitation links (a server is invitation only unless you open it). In the same form,
    tick the **libraries** the person should get and optionally set a **viewing limit** (a kids account starts safe). Save the
    **address for invitation links** (your local network address, Tailscale name or domain) so links work for the person you send them to.
    Send the link by any means; it works wherever the server can be reached.

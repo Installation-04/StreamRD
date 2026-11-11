@@ -100,7 +100,7 @@ It does not install Docker, set up HTTPS or open firewall ports. Read [`install.
 <details>
 <summary><b>Optional add-ons</b>: Zilean, Zurg, Plex and Jellyfin</summary>
 
-- `install.sh --media-manager` lets the **Setup** page launch Plex or Jellyfin beside StreamRD: you paste the tokens (the Plex claim token is used once and never stored) and press Launch. A small opt-in helper holds the Docker socket, not StreamRD itself; see [what it can do](docs/plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page).
+- The installer includes a small helper (decline it with `--no-media-manager`) that lets the **Setup** page launch Plex or Jellyfin beside StreamRD: you paste the tokens (the Plex claim token is used once and never stored) and press Launch. A small opt-in helper holds the Docker socket, not StreamRD itself; see [what it can do](docs/plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page).
 - `install.sh --media-server jellyfin|plex|both` runs Jellyfin and/or Plex next to StreamRD with the library folders and your downloads already mapped (read-only); you only add the libraries in their setup. See [Plex and Jellyfin](docs/plex-jellyfin.md#built-in-jellyfin-and-plex).
 - `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
 - `install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).
@@ -148,7 +148,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 - Automatic artwork and details matching for release-style file names, with manual correction and a *Retry matching* button. A built-in source works with no account or key; TMDB and OMDb keys are optional upgrades.
 
 **Share**
-- Invitation-only, open or closed registration; expiring one-use invitation links.
+- Invitation-only registration by default, with open or closed as choices; expiring one-use invitation links.
 - Libraries (Movies, TV Shows, or your own) visible to everyone or to chosen people; viewers need no debrid account.
 - Invitation links that carry the libraries and viewing limit the new person gets, with a link address for your local network, Tailscale or a domain.
 - A kids account: give a member a viewing limit (Kids, Pre-teens, Teens, Mature) and they see only titles rated at or below it; unrated titles stay hidden.
