@@ -14,6 +14,8 @@ export default function setup() {
   writeFileSync(databasePath, "");
   process.env.DATABASE_URL = `file:${databasePath}`;
   process.env.JWT_SECRET = "test-secret";
+  // Playback conversion is exercised only by its own tests; everywhere else a play answers with the provider link as before.
+  process.env.TRANSCODE = "false";
   execSync("npx prisma db push --skip-generate", {
     cwd: join(__dirname, ".."),
     env: { ...process.env },

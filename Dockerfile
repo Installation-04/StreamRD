@@ -49,7 +49,7 @@ RUN --mount=type=bind,from=streamrd-server,source=/app,target=/mnt/streamrd-serv
     done
 
 FROM base AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends qbittorrent-nox tini && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends qbittorrent-nox tini ffmpeg && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 DATA_DIR=/data
 WORKDIR /opt
 RUN mkdir -p /config /data && chown node:node /config /data

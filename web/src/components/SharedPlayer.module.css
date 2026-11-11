@@ -36,3 +36,10 @@
 .status { color:#d8d2ca; }
 .page :is(button,a,input):focus-visible { outline:3px solid var(--accent);outline-offset:3px; }
 @media (max-width:720px) { .bar { padding:12px 14px 30px;gap:10px; }.titles strong { font-size:16px; }.card { padding:22px; }.upnext { right:14px;left:14px;bottom:80px;max-width:none; }.hint { display:none; } }
+
+/* Converted playback draws its own controls: the converted stream has no length of its own. */
+.controls { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 6; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(10, 10, 10, 0.78); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); transition: opacity 200ms ease; }
+.controlsIdle { opacity: 0; pointer-events: none; }
+.clock { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 3.2em; text-align: center; }
+.scrubber { flex: 1; accent-color: #ff8a1f; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .controls { transition: none; } }

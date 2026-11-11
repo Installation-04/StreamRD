@@ -63,7 +63,7 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
   await page.getByRole('button',{name:'Remove export for Example Show',exact:true}).click();await page.getByRole('button',{name:'Remove export',exact:true}).click();await page.getByRole('status').filter({hasText:'Source media was kept'}).waitFor();assert.equal((await call(api,'/api/admin/library',null,admin.token)).entries.length,1);
   report.journeys.push(`${product}: explicit link removal`);
   // Media server onboarding: tokens are saved (encrypted) from the page; launching needs the helper, which is not installed here.
-  await page.getByRole('region',{name:'Media servers',exact:true}).waitFor();await page.getByText('Launching from here needs the media manager.',{exact:true}).waitFor();
+  await page.getByRole('region',{name:'Media servers',exact:true}).waitFor();await page.getByText('One quick step, once.', { exact: true }).waitFor();
   const plexCard=page.getByRole('article',{name:'Plex media server'});
   await plexCard.getByLabel('Plex token',{exact:false}).fill('qa-plex-token-9876');await plexCard.getByLabel('Plex port',{exact:false}).fill('32410');await plexCard.getByRole('button',{name:'Save settings',exact:true}).click();
   await page.getByRole('status').filter({hasText:'Plex settings saved.'}).waitFor();
