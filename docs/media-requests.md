@@ -29,11 +29,18 @@ not an assurance that all seasons and episodes have been acquired.
 
 ## Administrator approval
 
-Open **Admin → Requests**, inspect the title, choose a destination and supply a
-magnet for the release you have reviewed. The current implementation accepts
-BitTorrent v1 magnets, including base32 info hashes and hybrid magnets with a v1
-hash. It does not automatically choose a torrent or quality from metadata search.
-Use your normal source/indexer workflow to find the desired release.
+Open **Admin → Requests**, inspect the title and choose a destination. **Leave the
+magnet empty and the best release is found automatically** (v0.22.0): StreamRD
+searches the indexers listed in **Admin → Request settings → Release search**
+(Prowlarr, Jackett or Zilean, all through their Torznab URL; Zilean from
+`install.sh --zilean` is found on its own), keeps only releases of the requested
+title (not its sequels, not another year, no cams, no single episodes for a show),
+and ranks them for what plays in a browser: 1080p first, WEB-DL or BluRay, H.264,
+AAC, healthy seeders, and a season pack for a show. **Find releases** shows the
+ranked list with tags so you can choose another, and a magnet pasted by hand
+still works: BitTorrent v1 magnets, including base32 info hashes and hybrid
+magnets with a v1 hash. With no indexer set up, or nothing found, approval says
+so and asks for a magnet.
 
 - **Cloud:** choose an enabled debrid provider configured on your own administrator
   account. Optionally select one of your enabled, type-compatible shared libraries.

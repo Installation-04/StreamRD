@@ -1,4 +1,4 @@
-import { discoveryRouter, requestsRouter, adminRequestsRouter } from "./routes/requests";
+import { discoveryRouter, requestsRouter, adminRequestsRouter, requestIndexersRouter } from "./routes/requests";
 import { requestSettingsRouter } from "./requests/config";
 import { mediaServersRouter } from "./media-servers";
 import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
@@ -47,6 +47,7 @@ export function createApp(): Express {
   app.use("/api/requests", requestsRouter);
   app.use("/api/admin/requests", adminRequestsRouter);
   app.use("/api/admin/request-settings", requestSettingsRouter);
+  app.use("/api/admin/request-indexers", requestIndexersRouter);
   app.use("/api/auth", authRouter);
   // Only the administrator imports from a debrid account (v0.18.0); members request content instead. Earlier personal imports stay stored, hidden.
   app.use("/api/account/library", requireAuth, requireAdmin);

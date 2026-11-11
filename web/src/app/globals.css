@@ -184,9 +184,9 @@ button { transition:background .16s,color .16s,transform .16s; }
 .btn:hover { transform:translateY(-1px); }
 .btn-secondary { background:var(--bg-hover);color:var(--text); }
 .btn-sm { padding:8px 12px;min-height:36px; }
-.container { max-width:1440px;padding:0 48px; }
+.container { max-width:calc(1440px * var(--wide, 1));padding:0 48px; }
 .site-header { position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(20px);border-bottom:1px solid var(--border); }
-.site-header .nav { position:static;border:0;background:none;max-width:1600px;margin:auto;padding:19px 40px;gap:22px;backdrop-filter:none; }
+.site-header .nav { position:static;border:0;background:none;max-width:calc(1600px * var(--wide, 1));margin:auto;padding:19px 40px;gap:22px;backdrop-filter:none; }
 .nav-logo { display:flex;align-items:center;gap:0;font-size:24px;color:var(--text);font-weight:850;letter-spacing:-1.2px;white-space:nowrap; }
 .nav-logo>span:not(.brand-mark) { color:var(--accent); }
 .brand-mark { width:36px;height:36px;display:block;margin-right:10px;flex-shrink:0; }
@@ -292,3 +292,9 @@ button { transition:background .16s,color .16s,transform .16s; }
 
 /* Keep the expanded library navigation usable at intermediate widths. */
 .nav-links { min-width:0; max-width:100%; overflow-x:auto; scrollbar-width:thin; }
+
+/* Big screens: pages grow with the screen instead of staying a narrow column, and everything is a little larger on a 27-32 inch monitor. */
+:root { --wide: 1; }
+@media (min-width: 1800px) { :root { --wide: 1.25; } }
+@media (min-width: 2200px) { :root { --wide: 1.5; } body { zoom: 1.15; } }
+@media (min-width: 3000px) { :root { --wide: 1.7; } body { zoom: 1.5; } }

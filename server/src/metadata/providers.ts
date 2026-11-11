@@ -287,6 +287,20 @@ export async function fetchMetadata(input: MetadataFetchInput, settings?: Metada
   });
 }
 /** OMDb has no authentication endpoint, and the built-in source has no key; both are tested with one public title lookup. */
+/** A trailer's YouTube id from TMDB, when a TMDB key is configured (the administrator's, or the project's shared one); null otherwise. */
+export async function tmdbTrailer(imdb: string, type: MediaType, settings?: MetadataSettings): Promise<string | null> {
+  const current = settings ?? await getMetadataSettings();
+  if (!providerCredential(current, "tmdb") || !/^tt\d{7,10}$/.test(imdb)) return null;
+  try {
+    const found = await request("tmdb", `/find/${imdb}`, { external_source: "imdb_id" }, current);
+    const first = object((Array.isArray(found[type === "movie" ? "movie_results" : "tv_results"]) ? found[type === "movie" ? "movie_results" : "tv_results"] as unknown[] : [])[0]), id = tmdbId(first.id);
+    if (!id) return null;
+    const videos = await request("tmdb", `/${type === "movie" ? "movie" : "tv"}/${id}/videos`, {}, current);
+    const list = (Array.isArray(videos.results) ? videos.results as unknown[] : []).map(object).filter(video => video.site === "YouTube" && typeof video.key === "string" && /^[A-Za-z0-9_-]{11}$/.test(video.key));
+    const pick = list.find(video => video.type === "Trailer" && video.official === true) ?? list.find(video => video.type === "Trailer") ?? list.find(video => video.type === "Teaser");
+    return pick ? String(pick.key) : null;
+  } catch { return null; }
+}
 export async function testMetadataProvider(provider: MetadataProvider, settings?: MetadataSettings): Promise<void> {
   settings ??= await getMetadataSettings();
   validProvider(provider);

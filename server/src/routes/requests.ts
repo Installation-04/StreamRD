@@ -9,6 +9,7 @@ import { MetadataError } from "../metadata/types";
 import { PROVIDER_IDS } from "../providers/types";
 import { assertRequestActor, canonicalMediaKey, lockRequests, mediaAvailability, requestAvailability, requestEvents, requestView, RequestError, REQUEST_STATUSES, ACTIVE_REQUEST_STATUSES } from "../requests/media";
 import { RequestClientError, validateMagnet } from "../requests/clients";
+import { addIndexer, FinderError, findBest, findReleases, listIndexers, publicIndexer, removeIndexer, testIndexer } from "../requests/finder";
 import { qbitContext } from "../requests/config";
 import { cloudContext, resumeRequestPolling } from "../requests/worker";
 import { rateLimit } from "../util/rateLimit";
@@ -25,7 +26,7 @@ function action(run: (req: Request, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req, res) => {
     try { await run(req, res); }
     catch (error) {
-      if (error instanceof RequestError || error instanceof MetadataError || error instanceof RequestClientError) { res.status(error.status).json({ error: error.message }); return; }
+      if (error instanceof RequestError || error instanceof MetadataError || error instanceof RequestClientError || error instanceof FinderError) { res.status(error.status).json({ error: error.message }); return; }
       throw error;
     }
   });
@@ -110,9 +111,25 @@ adminRequestsRouter.get("/:id", action(async (req, res) => {
   const request = await followed(req, true);
   res.json({ request: await requestView(request, req.session!.sub, true), events: await requestEvents(request.id) });
 }));
+/** Releases found for a request, best first, so the administrator can see what "automatic" would pick and choose another. */
+adminRequestsRouter.get("/:id/releases", rateLimit({ windowMs: 60_000, max: 20 }), action(async (req, res) => {
+  const wanted = await db.mediaRequest.findUnique({ where: { id: parse(id, req.params.id) }, select: { name: true, year: true, mediaType: true } });
+  if (!wanted) throw new RequestError("Media request not found", 404);
+  const found = await findReleases({ name: wanted.name, year: wanted.year, type: wanted.mediaType === "series" ? "series" : "movie" });
+  res.json({ indexers: found.indexers, errors: found.errors.slice(0, 5), candidates: found.candidates.slice(0, 15).map(({ title, magnet, sizeBytes, seeders, source, tags, score, pack }) => ({ title: title.slice(0, 200), magnet, sizeBytes, seeders, source, tags, score, pack })) });
+}));
 adminRequestsRouter.post("/:id/approve", mutationLimit, action(async (req, res) => {
-  const body = parse(z.object({ destination: z.enum(["cloud", "local"]), sourceUrl: z.string().trim().min(1).max(8192), providerId: z.enum(PROVIDER_IDS).optional(), sharedLibraryId: id.optional() }).strict(), req.body);
-  validateMagnet(body.sourceUrl);
+  const body = parse(z.object({ destination: z.enum(["cloud", "local"]), sourceUrl: z.string().trim().min(1).max(8192).optional(), providerId: z.enum(PROVIDER_IDS).optional(), sharedLibraryId: id.optional() }).strict(), req.body);
+  const requestId = parse(id, req.params.id);
+  // No magnet given: find the best release by itself (Admin → Requests lists the indexers it searches).
+  let sourceUrl = body.sourceUrl, chosen = "";
+  if (!sourceUrl) {
+    const wanted = await db.mediaRequest.findUnique({ where: { id: requestId }, select: { name: true, year: true, mediaType: true } });
+    if (!wanted) throw new RequestError("Media request not found", 404);
+    const best = await findBest({ name: wanted.name, year: wanted.year, type: wanted.mediaType === "series" ? "series" : "movie" });
+    sourceUrl = best.magnet; chosen = best.title.slice(0, 160);
+  }
+  validateMagnet(sourceUrl);
   let providerId = body.providerId;
   if (body.destination === "cloud" && !providerId) {
     const cfg = await db.debridConfig.findUnique({ where: { userId: req.session!.sub }, select: { primaryProvider: true } });
@@ -121,7 +138,6 @@ adminRequestsRouter.post("/:id/approve", mutationLimit, action(async (req, res) 
   }
   if (body.destination === "local" && providerId) throw new RequestError("Local downloads use qBittorrent rather than a debrid provider");
   const context = body.destination === "cloud" ? await cloudContext(req.session!.sub, providerId!) : await qbitContext(req.session!.sub);
-  const requestId = parse(id, req.params.id);
   const request = await db.$transaction(async tx => {
     await lockRequests(tx); await assertRequestActor(req.session!, tx, true);
     const existing = await tx.mediaRequest.findUnique({ where: { id: requestId } });
@@ -133,9 +149,9 @@ adminRequestsRouter.post("/:id/approve", mutationLimit, action(async (req, res) 
       if (!library || !["all", existing.mediaType].includes(library.mediaType)) throw new RequestError("Choose one of your enabled libraries with a matching media type", 400);
     }
     const updated = await tx.mediaRequest.update({ where: { id: requestId }, data: { status: "approved", destination: body.destination, sourceUserId: req.session!.sub,
-      sharedLibraryId: body.sharedLibraryId ?? null, sourceUrl: body.sourceUrl, providerId: providerId ?? null, sourceFingerprint: context.fingerprint,
+      sharedLibraryId: body.sharedLibraryId ?? null, sourceUrl, providerId: providerId ?? null, sourceFingerprint: context.fingerprint,
       providerRef: null, progress: null, downloadState: null, error: null, attempts: 0, leaseUntil: null, nextPollAt: new Date(), revision: { increment: 1 },
-      events: { create: { status: "approved", message: `Administrator approved a selected release for ${body.destination === "cloud" ? "cloud" : "local qBittorrent"} download.` } } } });
+      events: { create: { status: "approved", message: chosen ? `Administrator approved; the best release was chosen automatically (${chosen}) for ${body.destination === "cloud" ? "cloud" : "local qBittorrent"} download.` : `Administrator approved a selected release for ${body.destination === "cloud" ? "cloud" : "local qBittorrent"} download.` } } } });
     return updated;
   }, { maxWait: 10000, timeout: 10000 });
   res.json({ request: await requestView(request, req.session!.sub, true) });
@@ -160,4 +176,23 @@ adminRequestsRouter.post("/:id/resume", mutationLimit, action(async (req, res) =
   await assertRequestActor(req.session!, db, true);
   const row = await resumeRequestPolling(parse(id, req.params.id), req.session!.sub, body.reference, tx => assertRequestActor(req.session!, tx, true).then(() => {}));
   res.json({ request: await requestView(row, req.session!.sub, true) });
+}));
+
+/** Admin → Requests: the Torznab indexers the automatic release search uses. */
+export const requestIndexersRouter = Router();
+requestIndexersRouter.use(noStore, requireAuth, requireAdmin);
+requestIndexersRouter.get("/", action(async (_req, res) => { res.json({ indexers: (await listIndexers()).map(publicIndexer) }); }));
+requestIndexersRouter.post("/", mutationLimit, action(async (req, res) => {
+  const body = parse(z.object({ name: z.string().trim().max(80).default("Indexer"), baseUrl: z.string().trim().min(1).max(2048), apiKey: z.string().trim().max(1500).default("") }).strict(), req.body);
+  const entry = await addIndexer({ name: body.name ?? "Indexer", baseUrl: body.baseUrl, apiKey: body.apiKey ?? "" }); res.status(201).json({ indexer: publicIndexer(entry), test: await testIndexer(entry) });
+}));
+requestIndexersRouter.post("/:id/test", mutationLimit, action(async (req, res) => {
+  const found = (await listIndexers()).find(entry => entry.id === req.params.id);
+  if (!found) throw new FinderError("Indexer not found.", 404);
+  res.json(await testIndexer(found));
+}));
+requestIndexersRouter.delete("/:id", mutationLimit, action(async (req, res) => {
+  if (req.params.id === "zilean") throw new FinderError("Zilean comes from the installer (ZILEAN_URL). Run install.sh --no-zilean to remove it.", 409);
+  if (!await removeIndexer(parse(id, req.params.id))) throw new FinderError("Indexer not found.", 404);
+  res.json({ ok: true });
 }));

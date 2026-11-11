@@ -76,7 +76,8 @@ of 100 videos can be offered for one item.
 
 An imported transfer can still be downloading or unavailable. The player reports
 pending progress and offers a readiness retry. Browser playback depends on the
-file's container/codecs and the provider's URL; this app does not transcode. A
+file's container and codecs. A server with ffmpeg (the official image) converts what a browser
+cannot play while you watch (see [v0.22.0](releases/v0.22.0.md)); where that is off or fails, a
 temporary-stream link can be opened in a compatible external player.
 
 Changing credentials invalidates in-flight work. Rescan after reconnecting so
