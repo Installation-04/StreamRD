@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { get } from "@/lib/api";
 import { LogEntry, PROVIDER_NAMES, ProviderId } from "@/lib/types";
+import HomeSettingsPanel from "@/components/HomeSettingsPanel";
 
 interface AdminHealth {
   db: string;
@@ -33,6 +34,7 @@ export default function AdminOverviewPage() {
 
   return (
     <>
+      <HomeSettingsPanel />
       <div className="stat-grid" style={{ marginBottom: 28 }}>
         <div className="stat">
           <div className="stat-value">{health.users}</div>

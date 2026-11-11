@@ -8,6 +8,8 @@ export interface Slide { kind: "library" | "external"; id: string; href: string;
 export interface HomeData {
   externalEnabled: boolean;
   trailersEnabled: boolean;
+  /** Set by the administrator (Admin → Overview): featured trailers play quietly behind the banner. */
+  autoplayTrailers?: boolean;
   featured: Slide[];
   recentlyAdded: LibraryCard[];
   myList?: LibraryCard[];

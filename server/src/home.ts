@@ -15,7 +15,7 @@ const FRESH_MS = 6 * 3600_000, STALE_MS = 7 * 86400_000, TIMEOUT_MS = 8000, MAX_
 export interface ExternalCard { provider: "free"; id: string; type: "movie" | "series"; name: string; year: number | null; posterUrl: string | null; rating: number | null }
 type Ranked = ExternalCard & { trakt: number; backdrop: string | null; description: string; genres: string[]; trailer: string | null };
 const cache = new Map<string, { at: number; cards: Ranked[] }>(), flights = new Map<string, Promise<Ranked[]>>();
-export function resetHomeCache() { cache.clear(); flights.clear(); }
+export function resetHomeCache() { cache.clear(); flights.clear(); trailers.clear(); }
 export const externalListsEnabled = () => process.env.HOME_EXTERNAL_LISTS?.trim().toLowerCase() !== "false";
 /** Trailers are played by the viewer's browser from YouTube, and only after that viewer opts in; an operator can remove the option. */
 export const trailersAvailable = () => externalListsEnabled() && process.env.HOME_TRAILERS?.trim().toLowerCase() !== "false";
@@ -51,6 +51,18 @@ function trailerOf(meta: Record<string, unknown>): string | null {
   }
   for (const entry of Array.isArray(meta.trailerStreams) ? meta.trailerStreams : []) { const id = youtubeId(entry && typeof entry === "object" ? (entry as Record<string, unknown>).ytId : null); if (id) return id; }
   return null;
+}
+const trailers = new Map<string, { at: number; id: string | null }>();
+/** The YouTube id of a title's trailer, from the same public catalogue, for the title page's Watch trailer button. Cached; null when there is none or trailers are off. */
+export async function trailerFor(imdbId: string | null | undefined, type: "movie" | "series"): Promise<string | null> {
+  if (!trailersAvailable() || !imdbId || !/^tt\d{7,10}$/.test(imdbId)) return null;
+  const key = `${type}|${imdbId}`, hit = trailers.get(key);
+  if (hit && Date.now() - hit.at < (hit.id ? 7 * 86400_000 : 6 * 3600_000)) return hit.id;
+  let id: string | null = null;
+  try { const body = await getJson(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`) as { meta?: unknown }; id = body.meta && typeof body.meta === "object" ? trailerOf(body.meta as Record<string, unknown>) : null; } catch { return hit?.id ?? null; }
+  if (trailers.size >= 500) trailers.delete(trailers.keys().next().value!);
+  trailers.set(key, { at: Date.now(), id });
+  return id;
 }
 function card(value: unknown, type: "movie" | "series"): Ranked | null {
   const meta = value && typeof value === "object" ? value as Record<string, unknown> : {};

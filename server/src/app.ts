@@ -1,7 +1,8 @@
 import { discoveryRouter, requestsRouter, adminRequestsRouter } from "./routes/requests";
 import { requestSettingsRouter } from "./requests/config";
 import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
-import { homeRouter } from "./routes/home";
+import { streamRouter } from "./routes/stream";
+import { adminHomeSettingsRouter, homeRouter } from "./routes/home";
 import { accountLibraryRouter } from "./routes/account-library";
 import { accountMetadataRouter } from "./routes/accountMetadata";
 import { metadataRouter } from "./routes/metadata";
@@ -58,7 +59,9 @@ export function createApp(): Express {
   app.use("/api/account", accountRouter);
   app.use("/api/debrid", debridRouter);
   app.use("/api/shared-libraries", sharedLibrariesRouter);
+  app.use("/api/stream", streamRouter);
   app.use("/api/home", homeRouter);
+  app.use("/api/admin/home-settings", adminHomeSettingsRouter);
   app.use("/api/admin/shared-libraries", adminSharedLibrariesRouter);
   app.use("/api/admin/media-servers", mediaServersRouter);
   app.use("/api/admin/metadata", metadataRouter);

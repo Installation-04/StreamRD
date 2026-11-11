@@ -44,7 +44,7 @@ export default function HomeSections({ onLoaded }: { onLoaded?: (libraryTitles: 
   const continueTiles = resume.map((entry): Tile => ({ ...libraryTile({ libraryId: entry.libraryId, item: entry.item }), progress: entry.durationSeconds > 0 ? Math.max(2, Math.min(98, entry.positionSeconds / entry.durationSeconds * 100)) : undefined }));
   if (!home && !continueTiles.length) return null;
   return <div className={styles.sections}>
-    {home && <HomeCarousel slides={home.featured} trailersEnabled={home.trailersEnabled} />}
+    {home && <HomeCarousel slides={home.featured} trailersEnabled={home.trailersEnabled} autoplay={Boolean(home.autoplayTrailers)} />}
     <Row title="Continue watching" tiles={continueTiles} label="Resume" />
     <Row title="My List" note="Saved by you" tiles={(home?.myList ?? []).map(libraryTile)} label="Open" />
     <Row title="New in your libraries" note="Newest on this server" tiles={(home?.recentlyAdded ?? []).map(libraryTile)} label="Open" />

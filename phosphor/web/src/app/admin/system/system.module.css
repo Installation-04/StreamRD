@@ -1,4 +1,4 @@
-.page { --ink:var(--text,var(--fg));--dim:var(--text-dim,var(--fg-dim));--brand:var(--accent,var(--fg));max-width:1500px;margin:auto;color:var(--ink); }
+.page { --ink:var(--text,var(--fg));--dim:var(--text-dim,var(--fg-dim));--brand:var(--accent,var(--fg));max-width:calc(1500px * var(--wide, 1));margin:auto;color:var(--ink); }
 .page :is(a,button):focus-visible { outline:3px solid var(--brand);outline-offset:4px; }
 .page button { font:inherit;cursor:pointer; }.page button:disabled { cursor:wait; }
 .header { display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:25px; }
