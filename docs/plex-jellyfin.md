@@ -68,7 +68,7 @@ before it leaves the helper.
 
 **What the media manager is, and why it is separate.** Starting a container needs access to the Docker socket, which is the same as root on the
 machine. StreamRD never gets it. `--media-manager` adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
-three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`. It listens only on the internal Docker network (no published
+three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`, plus one more since v0.23.0: replace the StreamRD container with a newer image of itself when you press **Update** in Admin → System (with an automatic rollback). It listens only on the internal Docker network (no published
 port), answers only requests carrying a secret generated into your `.env`, and the image, the folders mounted (your libraries and downloads, read-only, and
 each server's own settings under `config/`), the user and every other container setting are fixed in the helper, not chosen by the caller. It runs
 read-only with all capabilities dropped. Even so, anyone who can control the helper controls Docker on that machine, so it is off unless you ask for it:

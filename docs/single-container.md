@@ -61,7 +61,13 @@ server snapshots each database (verified) before applying any migration. You can
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
 `docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
-Updates are never applied by the app itself. **Admin → System** tells you when
+**One click.** With the media manager helper (included on new installs; `bash install.sh --media-manager` adds it to an existing one),
+**Admin → System → Updates** shows an **Update** button. It takes a verified backup, downloads the new image, replaces the StreamRD container with
+it (same ports, folders, settings and network), waits until it is healthy and removes the old one. If the new version does not start, the old
+container is put back automatically and the page says so. The helper can only replace the one container named `streamrd` and only with a newer
+image of the reference it already runs. The helper itself is refreshed the next time you run `install.sh` or `docker compose up -d`.
+
+Without the helper, updates are not applied by the app itself. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
 [Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label
 (`com.centurylinklabs.watchtower.enable`). Watchtower can also serve an HTTP update endpoint; point
