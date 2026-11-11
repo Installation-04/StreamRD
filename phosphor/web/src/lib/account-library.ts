@@ -4,7 +4,7 @@ export type AccountProvider = "realdebrid" | "alldebrid" | "premiumize" | "torbo
 export const ACCOUNT_PROVIDER_NAMES: Record<AccountProvider, string> = { realdebrid: "Real-Debrid", alldebrid: "AllDebrid", premiumize: "Premiumize", torbox: "TorBox" };
 export interface AccountMedia {
   id: string; name: string; type: "movie" | "series"; year: number | null;
-  provider: AccountProvider; phase: "queued" | "downloading" | "finished" | "error"; health?: "unknown" | "ok" | "broken"; favorite?: boolean;
+  provider: AccountProvider; phase: "queued" | "downloading" | "finished" | "error"; health?: "unknown" | "ok" | "broken"; favorite?: boolean; watched?: boolean;
   progress: number; createdAt: string; metadata: MetadataDetails | null; metadataStatus: string | null;
   /** The age rating in effect (for example PG-13), and whether an administrator set it by hand. */
   ratingLabel?: string | null; ratingManual?: boolean;

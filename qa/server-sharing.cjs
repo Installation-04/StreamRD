@@ -130,6 +130,13 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     await viewer.getByRole('link', { name: 'Open Sintel', exact: true }).click();
     await viewer.getByRole('button', { name: 'Play from server', exact: true }).waitFor(); await viewer.getByRole('button', { name: 'On My List', exact: true }).waitFor();
     await viewerNoOverflow('desktop shared title'); await viewerShot('shared-title');
+    if (product === 'streamrd') { // Watched marks: mark the title, see it on the grid, then unmark it so the rest of the journey is unchanged.
+      await viewer.getByRole('button', { name: 'Mark as watched', exact: true }).click();
+      await viewer.getByRole('button', { name: '✓ Watched · mark unwatched', exact: true }).waitFor();
+      assert.ok(!(await call(api, `/api/shared-libraries/${libraryId}/items?unwatched=1`, null, viewerToken)).items.some(item => item.name === 'Sintel'), 'The Unwatched view leaves a watched title out');
+      await viewer.getByRole('button', { name: '✓ Watched · mark unwatched', exact: true }).click();
+      await viewer.getByRole('button', { name: 'Mark as watched', exact: true }).waitFor();
+    }
     await viewer.route('https://example.invalid/qa-account-video.mp4', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: fs.readFileSync(path.join(__dirname, 'fixtures/account-video.mp4')) }));
     await viewer.getByRole('button', { name: 'Play from server', exact: true }).click();
     await viewer.getByRole('heading', { name: 'This torrent has more than one video.', exact: true }).waitFor();
