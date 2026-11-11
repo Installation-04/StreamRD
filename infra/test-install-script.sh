@@ -8,7 +8,13 @@ run() { PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start "$@" >/d
 check() { grep -q "$2" "$1" || { echo "FAIL: $1 lacks: $2" >&2; exit 1; }; }
 absent() { ! grep -q "$2" "$1" || { echo "FAIL: $1 has: $2" >&2; exit 1; }; }
 
-d="$work/a"; run --dir "$d"
+# A first install gets the media manager by default, so Plex and Jellyfin start from the Setup page with no extra step.
+d0="$work/default"; run --dir "$d0"
+check "$d0/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.manager.yml$'; check "$d0/.env" '^MEDIA_MANAGER_TOKEN=[0-9a-f]\{48\}$'
+run --dir "$d0" --no-media-manager; absent "$d0/.env" manager.yml
+d0b="$work/kept"; run --dir "$d0b" --no-media-manager; run --dir "$d0b"; absent "$d0b/.env" manager.yml   # an existing install keeps its choice
+
+d="$work/a"; run --dir "$d" --no-media-manager
 check "$d/.env" '^COMPOSE_FILE=docker-compose.yml$'; absent "$d/.env" jellyfin
 
 run --dir "$d" --media-server both --jellyfin-port 8097 --plex-port 32401

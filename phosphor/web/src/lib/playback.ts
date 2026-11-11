@@ -1,4 +1,4 @@
-/** Browsers play a narrow set of containers and codecs, and this app never transcodes. */
+/** Browsers play a narrow set of containers and codecs, and the browser plays a file as it is unless the server converts it (StreamRD can). */
 export interface PlaybackAdvice { risky: boolean; reasons: string[] }
 
 const CONTAINER = /\.(mkv|avi|wmv|flv|ts|m2ts|mts|divx|rmvb)(?:$|[?#])/i;

@@ -175,6 +175,10 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `STREAMRD_DATA_KEY`, `PHOSPHOR_DATA_KEY` | Optional explicit keys (at least 16 characters) for encrypting stored credentials; otherwise generated under `/config/secrets` |
 | `LINK_HEALTH` | Set to `false` to turn off the background check of every imported link (on by default; see [the release notes](releases/v0.19.0.md)) |
 | `LINK_HEALTH_BATCH` | How many imports are checked per minute (default 3, at most 20) |
+| `TRANSCODE` | Set to `false` to stop converting files a browser cannot play (on by default; see [the release notes](releases/v0.22.0.md)) |
+| `TRANSCODE_VIDEO` | Set to `false` to allow only the light conversions (repackaging and audio), never re-encoding video |
+| `TRANSCODE_MAX` | How many videos may be converted at once (default 2, at most 8); more get a "try again" |
+| `TRANSCODE_ALLOW_PRIVATE_HOSTS` | Set to `true` only if your media links are on your own network (a local address); off by default |
 | `HOME_TRAILERS` | Set to `false` to remove trailers (played in the viewer's browser from YouTube, only after they opt in) from the home page carousel |
 | `HOME_EXTERNAL_LISTS` | Set to `false` to hide the trending and popular rows on the home page, which are fetched from public Cinemeta catalogues and cached |
 | `TMDB_DEFAULT_API_KEY` | Optional TMDB key (API key or read access token) shared by everyone on this server; used only until an administrator saves a key in Admin → Metadata |

@@ -7,19 +7,18 @@ import { Slide } from "@/lib/home";
 import { Icon } from "@/components/Icon";
 import styles from "./HomeCarousel.module.css";
 
-const SLIDE_MS = 8000, TRAILER_SLIDE_MS = 28000, TRAILER_DELAY_MS = 1800, STORAGE_KEY = "streamrd.trailers";
+const SLIDE_MS = 8000, TRAILER_SLIDE_MS = 28000, TRAILER_DELAY_MS = 1800;
 const embed = (id: string, background: boolean) => `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&playsinline=1&rel=0&modestbranding=1&${background ? `mute=1&controls=0&disablekb=1&loop=1&playlist=${id}` : "controls=1"}`;
-const read = () => { try { return window.localStorage.getItem(STORAGE_KEY) === "1"; } catch { return false; } };
 
 /**
  * The home banner: a rotating carousel of featured titles. Trailers are optional and per viewer: nothing is loaded from
  * YouTube until the viewer turns on "Autoplay trailers" or presses "Watch trailer", and reduced-motion settings stop all movement.
  */
-export default function HomeCarousel({ slides, trailersEnabled }: { slides: Slide[]; trailersEnabled: boolean }) {
-  const [index, setIndex] = useState(0), [paused, setPaused] = useState(false), [reduced, setReduced] = useState(false), [autoplay, setAutoplay] = useState(false);
+export default function HomeCarousel({ slides, trailersEnabled, autoplay }: { slides: Slide[]; trailersEnabled: boolean; autoplay: boolean }) {
+  const [index, setIndex] = useState(0), [paused, setPaused] = useState(false), [reduced, setReduced] = useState(false);
   const [playing, setPlaying] = useState<number | null>(null), [watching, setWatching] = useState<number | null>(null), [stopped, setStopped] = useState(false);
   const root = useRef<HTMLElement | null>(null), count = slides.length;
-  useEffect(() => { setAutoplay(read()); const media = window.matchMedia("(prefers-reduced-motion: reduce)"); const sync = () => setReduced(media.matches); sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync); }, []);
+  useEffect(() => { const media = window.matchMedia("(prefers-reduced-motion: reduce)"); const sync = () => setReduced(media.matches); sync(); media.addEventListener("change", sync); return () => media.removeEventListener("change", sync); }, []);
   const go = useCallback((next: number) => { setIndex((next + count) % count); setWatching(null); }, [count]);
   const slide = slides[index], backgroundTrailer = trailersEnabled && autoplay && !reduced && slide?.trailer && playing === index && watching === null;
   // A trailer starts shortly after a slide appears, so quickly skipping through slides loads nothing.
@@ -36,7 +35,6 @@ export default function HomeCarousel({ slides, trailersEnabled }: { slides: Slid
   }, [index, count, paused, reduced, stopped, watching, backgroundTrailer, go]);
   useEffect(() => { const hide = () => setPaused(document.hidden); document.addEventListener("visibilitychange", hide); return () => document.removeEventListener("visibilitychange", hide); }, []);
   if (!count) return null;
-  const toggleAutoplay = (on: boolean) => { setAutoplay(on); try { window.localStorage.setItem(STORAGE_KEY, on ? "1" : "0"); } catch { /* the choice just lasts for this visit */ } };
   return <section ref={root} className={styles.carousel} aria-roledescription="carousel" aria-label="Featured titles"
     onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={event => { if (!root.current?.contains(event.relatedTarget as Node | null)) setPaused(false); }}
     onKeyDown={event => { if (event.key === "ArrowRight") go(index + 1); else if (event.key === "ArrowLeft") go(index - 1); }}>
@@ -55,7 +53,7 @@ export default function HomeCarousel({ slides, trailersEnabled }: { slides: Slid
           <p>{entry.description}</p>
           <div className={styles.actions}>
             <Link href={entry.href} className="btn" tabIndex={current ? 0 : -1}><Icon name="play" size={18} />{entry.kind === "library" ? "Open" : "View details"}</Link>
-            {trailersEnabled && entry.trailer && <button type="button" className="btn btn-secondary" tabIndex={current ? 0 : -1} onClick={() => { setWatching(position); setPlaying(null); }}>Watch trailer</button>}
+            {trailersEnabled && entry.trailer && <button type="button" className="btn btn-secondary" tabIndex={current ? 0 : -1} onClick={() => { setWatching(position); setPlaying(null); }}>Watch trailer</button>}{trailersEnabled && !entry.trailer && <a className="btn btn-secondary" tabIndex={current ? 0 : -1} href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${entry.title}${entry.year ? ` ${entry.year}` : ""} official trailer`)}`} target="_blank" rel="noreferrer noopener">Find trailer ↗</a>}
           </div>
         </div>}
         {watching === position && <button type="button" className={`btn btn-secondary ${styles.close}`} onClick={() => setWatching(null)}>Close trailer</button>}
@@ -69,6 +67,5 @@ export default function HomeCarousel({ slides, trailersEnabled }: { slides: Slid
         <button type="button" className={styles.arrow} aria-label="Next featured title" onClick={() => go(index + 1)}><Icon name="chevron" size={18} /></button>
       </div>}
     </div>
-    {trailersEnabled && watching === null && slides.some(entry => entry.trailer) && <label className={styles.autoplay}><input type="checkbox" checked={autoplay} onChange={event => toggleAutoplay(event.target.checked)} /><span>Autoplay trailers <small>(your browser loads them from YouTube)</small></span></label>}
   </section>;
 }

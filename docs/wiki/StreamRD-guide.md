@@ -18,8 +18,7 @@ following episode, and keyboard shortcuts (Space, J/L, arrows, M, F, N, Esc). Wh
 samples and non-video files are never chosen automatically. Progress is saved per person and per file, older player sessions and
 out-of-order saves cannot overwrite the active one, and at least 95% completion removes an entry from Continue watching.
 
-Resolution success does not guarantee browser codec support. StreamRD does not transcode video. Playback runs in your browser or in
-any player you hand the stream link to.
+Resolution success does not guarantee browser codec support. StreamRD converts what a browser cannot play (MKV, DTS and other audio, HEVC) while you watch, and you can always hand the stream link to VLC or mpv.
 
 ## Administration
 

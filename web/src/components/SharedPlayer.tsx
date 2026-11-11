@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, AccountPlayResult, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { sourceType } from "@/lib/playback";
@@ -12,12 +12,15 @@ import styles from "./SharedPlayer.module.css";
 
 type Files = NonNullable<AccountPlayResult["files"]>;
 const HIDE_MS = 3200, NEXT_SECONDS = 10;
+type Playback = NonNullable<AccountPlayResult["playback"]>;
+const CONVERSION: Record<string, string> = { remux: "Repackaged for your browser", audio: "Audio converted for your browser", video: "Converted for your browser" };
 const clock = (seconds: number) => { const total = Math.max(0, Math.floor(seconds)), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`; };
 
 /**
  * The full-page player, in the style of Plex: a black page with the video, a title bar that fades away while you watch, keyboard shortcuts,
  * resume, a file/episode chooser, "Up next" for the next file of a pack, and a hand-off to VLC or mpv when a browser cannot play a file.
- * Playback is resolved by the server's own account; nothing is transcoded.
+ * Playback is resolved by the server's own account. A file a browser cannot open (MKV, DTS, HEVC...) is converted by the server while you watch, and the
+ * player then draws its own seek bar, because a converted stream has no length of its own: seeking restarts the stream at the chosen second.
  */
 export default function SharedPlayer() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
@@ -25,23 +28,26 @@ export default function SharedPlayer() {
   const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50);
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
+  const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
+  const converted = playback && playback.mode !== "direct" && playback.url ? playback : null;
   const mounted = useRef(false), request = useRef<AbortController | null>(null), root = useRef<HTMLDivElement | null>(null), video = useRef<HTMLVideoElement | null>(null), idle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useRef<{ id: string; sequence: number; sentAt: number; resume: number; position: number; duration: number } | null>(null);
   const detail = `/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(itemId)}`;
 
   const saveProgress = useCallback((force = false) => {
     const element = video.current, now = session.current; if (!now) return;
-    if (element && Number.isFinite(element.duration) && element.duration > 0) { now.position = Math.min(element.currentTime, element.duration); now.duration = element.duration; }
+    if (converted && converted.durationSeconds > 0) { now.position = Math.min(startAt + (element?.currentTime ?? 0), converted.durationSeconds); now.duration = converted.durationSeconds; }
+    else if (element && Number.isFinite(element.duration) && element.duration > 0) { now.position = Math.min(element.currentTime, element.duration); now.duration = element.duration; }
     if (now.duration <= 0 || now.position <= 0) return;
     const at = Date.now(); if (!force && at - now.sentAt < 15000) return;
     now.sentAt = at; now.sequence += 1;
     void api(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/progress`, { method: "PUT", keepalive: true, body: JSON.stringify({ sessionId: now.id, sequence: now.sequence, positionSeconds: now.position, durationSeconds: now.duration }) }).catch(() => undefined);
-  }, [id, itemId]);
+  }, [id, itemId, converted, startAt]);
   const leave = useCallback(() => { video.current?.pause(); saveProgress(true); session.current = null; if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); router.push(detail); }, [saveProgress, router, detail]);
 
   const play = useCallback(async (fileToken?: string) => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
-    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null);
+    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null); setPlayback(null); setStartAt(0); setScrub(null);
     try {
       const result = await api<AccountPlayResult>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/play`, { method: "POST", signal: controller.signal, body: JSON.stringify(fileToken ? { fileToken } : {}) });
       if (controller.signal.aborted || !mounted.current) return;
@@ -50,7 +56,7 @@ export default function SharedPlayer() {
       const url = result.stream ? safeMediaUrl(result.stream.url) : null;
       if (result.stream && url) {
         session.current = result.progressSessionId ? { id: result.progressSessionId, sequence: 0, sentAt: Date.now(), resume: result.resumeSeconds ?? 0, position: 0, duration: 0 } : null;
-        setStream({ ...result.stream, url }); setChoosing(false); setCurrent(fileToken ?? null); return;
+        setStream({ ...result.stream, url }); setPlayback(result.playback ?? null); setStartAt(result.playback?.url && result.playback.mode !== "direct" && (result.resumeSeconds ?? 0) > 5 ? Math.floor(result.resumeSeconds ?? 0) : 0); setChoosing(false); setCurrent(fileToken ?? null); return;
       }
       throw new Error("No playable video was returned. The torrent may need a video file selected by the server owner.");
     } catch (reason) { if (!controller.signal.aborted && mounted.current) setPlayError(reason instanceof Error ? reason.message : "The stream could not be resolved. Try again."); }
@@ -87,13 +93,14 @@ export default function SharedPlayer() {
     return () => clearTimeout(timer);
   }, [ended, next, countdown, play]);
 
+  const jump = useCallback((seconds: number) => { saveProgress(true); setStartAt(Math.max(0, Math.floor(seconds))); setScrub(null); setEnded(false); setVideoError(false); }, [saveProgress]);
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
       const element = video.current, target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (event.key === "Escape") { if (!document.fullscreenElement) leave(); return; }
       if (!element) return;
-      const seek = (seconds: number) => { element.currentTime = Math.max(0, Math.min(element.duration || Infinity, element.currentTime + seconds)); };
+      const seek = (seconds: number) => { if (converted && converted.durationSeconds > 0) jump(Math.max(0, Math.min(converted.durationSeconds - 1, startAt + element.currentTime + seconds))); else element.currentTime = Math.max(0, Math.min(element.duration || Infinity, element.currentTime + seconds)); };
       switch (event.key.toLowerCase()) {
         case " ": case "k": if (target?.tagName === "BUTTON" && event.key === " ") return; element.paused ? void element.play() : element.pause(); break;
         case "j": case "arrowleft": seek(-10); break;
@@ -108,11 +115,12 @@ export default function SharedPlayer() {
       event.preventDefault(); wake();
     };
     window.addEventListener("keydown", keys); return () => window.removeEventListener("keydown", keys);
-  }, [leave, next, play, wake]);
+  }, [leave, next, play, wake, converted, startAt, jump]);
 
   const name = item ? accountMediaName(item) : "", backdrop = safeMediaUrl(item?.metadata?.backdropUrl) ?? safeMediaUrl(item?.metadata?.posterUrl);
   const shown = files.filter(file => file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename].filter(Boolean).join(" · ");
+  const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[converted.mode] : null].filter(Boolean).join(" · ");
+  const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}` : stream.url : "", shownAt = scrub ?? (converted ? startAt + position.at : position.at), shownTotal = converted ? converted.durationSeconds : position.total;
   if (authLoading || !user) return <div className={styles.page}><p role="status" className={styles.status}>Checking your account…</p></div>;
   return <div ref={root} className={`${styles.page} ${visible || paused || !stream ? "" : styles.idle}`} onMouseMove={wake} onTouchStart={wake} onFocus={wake}>
     <header className={styles.bar}>
@@ -121,12 +129,20 @@ export default function SharedPlayer() {
       {files.length > 1 && stream && <button type="button" className={styles.bar_button} onClick={() => { video.current?.pause(); saveProgress(true); setChoosing(true); }}>Videos</button>}
       <button type="button" className={styles.bar_button} aria-label="Fullscreen (F)" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.().catch(() => undefined); }}>⛶</button>
     </header>
-    {stream && <video ref={video} key={stream.url} className={styles.video} controls autoPlay playsInline preload="metadata" aria-label={`Playing ${name}`}
+    {stream && <video ref={video} key={source} className={styles.video} controls={!converted} autoPlay playsInline preload="metadata" aria-label={`Playing ${name}`}
       onError={() => setVideoError(true)} onPlay={() => { setPaused(false); wake(); }} onPause={() => { setPaused(true); setVisible(true); saveProgress(true); }}
-      onLoadedMetadata={event => { const resume = session.current?.resume ?? 0, element = event.currentTarget; if (resume > 5 && resume < element.duration - 5) element.currentTime = resume; }}
-      onTimeUpdate={event => { saveProgress(); setPosition({ at: event.currentTarget.currentTime, total: event.currentTarget.duration || 0 }); }}
+      onLoadedMetadata={event => { if (converted) return; const resume = session.current?.resume ?? 0, element = event.currentTarget; if (resume > 5 && resume < element.duration - 5) element.currentTime = resume; }}
+      onTimeUpdate={event => { saveProgress(); setPosition({ at: event.currentTarget.currentTime, total: converted ? 0 : event.currentTarget.duration || 0 }); }}
       onEnded={() => { saveProgress(true); setEnded(true); if (next) setCountdown(NEXT_SECONDS); }}>
-      <source src={stream.url} type={sourceType(stream.mimeType)} />Your browser cannot play this video.</video>}
+      <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} />Your browser cannot play this video.</video>}
+    {stream && converted && !choosing && <div className={`${styles.controls} ${visible || paused ? "" : styles.controlsIdle}`} role="group" aria-label="Playback controls">
+      <button type="button" className={styles.bar_button} aria-label={paused ? "Play" : "Pause"} onClick={() => { const element = video.current; if (element) element.paused ? void element.play() : element.pause(); }}>{paused ? "▶" : "❚❚"}</button>
+      <span className={styles.clock}>{clock(shownAt)}</span>
+      <input type="range" className={styles.scrubber} aria-label="Seek" min={0} max={Math.max(1, Math.floor(shownTotal))} step={1} value={Math.min(Math.floor(shownAt), Math.max(1, Math.floor(shownTotal)))} disabled={shownTotal <= 0}
+        onChange={event => setScrub(Number(event.target.value))} onPointerUp={() => { if (scrub !== null) jump(scrub); }} onKeyUp={event => { if (scrub !== null && ["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) jump(scrub); }} />
+      <span className={styles.clock}>{shownTotal > 0 ? clock(shownTotal) : "—"}</span>
+      <button type="button" className={styles.bar_button} aria-label="Mute (M)" onClick={() => { if (video.current) video.current.muted = !video.current.muted; }}>🔊</button>
+    </div>}
     {!stream && backdrop && <img className={styles.backdrop} src={backdrop} alt="" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} />}
     <div className={styles.layer}>
       {busy && !choosing && !playError && pending === null && <div className={styles.center} role="status"><span className={styles.spinner} aria-hidden="true" /><p>Preparing your video…</p></div>}
@@ -143,7 +159,7 @@ export default function SharedPlayer() {
       {ended && next && countdown !== null && <div className={`${styles.card} ${styles.upnext}`} role="status"><p className={styles.kicker}>UP NEXT</p><h2>{next.name}</h2><p>Starting in {Math.max(0, countdown)} seconds</p><div className={styles.actions}><button type="button" className="btn" onClick={() => void play(next.token)}>Play now</button><button type="button" className="btn btn-secondary" onClick={() => setCountdown(null)}>Cancel</button></div></div>}
       {ended && !(next && countdown !== null) && <div className={`${styles.card} ${styles.upnext}`}><h2>Finished</h2><div className={styles.actions}>{next && <button type="button" className="btn" onClick={() => void play(next.token)}>Play next</button>}<button type="button" className="btn btn-secondary" onClick={leave}>Back to {name}</button></div></div>}
     </div>
-    {stream && (videoError || !paused) && <div className={styles.help}><PlaybackHelp url={stream.url} filename={stream.filename} mimeType={stream.mimeType} failed={videoError} /></div>}
-    {stream && visible && !choosing && <p className={styles.hint} aria-hidden="true">Space play/pause · J/L ±10s · ↑↓ volume · M mute · F fullscreen{next ? " · N next" : ""} · Esc back{position.total > 0 ? ` · ${clock(position.at)} / ${clock(position.total)}` : ""}</p>}
+    {stream && (videoError || !paused) && <div className={styles.help}><PlaybackHelp url={stream.url} filename={stream.filename} mimeType={stream.mimeType} failed={videoError} converted={Boolean(converted)} /></div>}
+    {stream && visible && !choosing && <p className={styles.hint} aria-hidden="true">Space play/pause · J/L ±10s · ↑↓ volume · M mute · F fullscreen{next ? " · N next" : ""} · Esc back{shownTotal > 0 ? ` · ${clock(shownAt)} / ${clock(shownTotal)}` : ""}</p>}
   </div>;
 }

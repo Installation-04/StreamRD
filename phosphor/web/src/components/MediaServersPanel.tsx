@@ -69,8 +69,14 @@ export default function MediaServersPanel() {
   return <section className={styles.panel} id="media-servers" aria-label="Media servers">
     <header className={styles.header}><div><p>ONBOARDING · MEDIA SERVER</p><h2>Run Plex or Jellyfin next to StreamRD.</h2>
       <p>Pick a server, enter its details and launch it. It starts beside StreamRD with your libraries and downloads already mapped (read-only); you only add the libraries inside Plex or Jellyfin.</p></div></header>
-    {!view.manager.available && <div role="note" style={{ margin: "12px 0", padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(255,138,31,.45)", background: "rgba(255,138,31,.08)" }}>
-      <strong>Launching from here needs the media manager.</strong> It is a small helper container that can only start, stop and remove these two containers. Install it with <code>bash install.sh --media-manager</code>, or have the installer start Plex or Jellyfin directly with <code>--media-server plex</code> or <code>--media-server jellyfin</code>. You can still save your tokens below.
+    {!view.manager.available && <div role="note" style={{ margin: "12px 0", padding: "14px 16px", borderRadius: 12, border: "1px solid rgba(255,138,31,.45)", background: "rgba(255,138,31,.08)", display: "grid", gap: 10 }}>
+      <div><strong>One quick step, once.</strong> New installs already include it. This server was installed without the small helper that starts Plex and Jellyfin for you (it can only start, stop and remove those two containers). On the computer that runs StreamRD, open the install folder and run:</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+        <code style={{ padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,.45)" }}>bash install.sh --media-manager</code>
+        <button type="button" className="btn btn-sm btn-secondary" onClick={() => { void navigator.clipboard?.writeText("bash install.sh --media-manager").then(() => setNotice("Command copied."), () => setNotice("Copy it by hand: bash install.sh --media-manager")); }}>Copy command</button>
+        <button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>I ran it — check again</button>
+      </div>
+      <div style={{ fontSize: 13, opacity: 0.85 }}>It keeps your settings and data and takes about a minute. After that, Launch works from this page. You can still save tokens and test or rescan a server you started another way.</div>
     </div>}
     {error && <div className={styles.error} role="alert"><p>{error}</p></div>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}

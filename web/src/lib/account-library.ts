@@ -2,9 +2,11 @@ import type { MetadataDetails } from "./metadata";
 
 export type AccountProvider = "realdebrid" | "alldebrid" | "premiumize" | "torbox";
 export const ACCOUNT_PROVIDER_NAMES: Record<AccountProvider, string> = { realdebrid: "Real-Debrid", alldebrid: "AllDebrid", premiumize: "Premiumize", torbox: "TorBox" };
+/** A label read from the release name: resolution, source, video, audio, HDR or container. */
+export interface MediaTag { kind: "resolution" | "source" | "video" | "audio" | "hdr" | "container"; label: string }
 export interface AccountMedia {
   id: string; name: string; type: "movie" | "series"; year: number | null;
-  provider: AccountProvider; phase: "queued" | "downloading" | "finished" | "error"; health?: "unknown" | "ok" | "broken"; favorite?: boolean; watched?: boolean;
+  provider: AccountProvider; phase: "queued" | "downloading" | "finished" | "error"; health?: "unknown" | "ok" | "broken"; favorite?: boolean; watched?: boolean; tags?: MediaTag[];
   progress: number; createdAt: string; metadata: MetadataDetails | null; metadataStatus: string | null;
   /** The age rating in effect (for example PG-13), and whether an administrator set it by hand. */
   ratingLabel?: string | null; ratingManual?: boolean;
@@ -22,6 +24,8 @@ export interface AccountPlayResult {
   pending?: boolean; progress?: number;
   /** Shared-library plays only: resume support for the signed-in viewer. */
   progressSessionId?: string; resumeSeconds?: number; durationSeconds?: number;
+  /** How the browser should play it: as is, or from the server's converted stream (`url`, with `?start=` to seek). */
+  playback?: { mode: "direct" | "remux" | "audio" | "video"; url?: string; durationSeconds: number; video: string | null; audio: string | null; reason?: string };
 }
 export function safeMediaUrl(value: string | null | undefined): string | null {
   try { const url = new URL(value ?? ""); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }

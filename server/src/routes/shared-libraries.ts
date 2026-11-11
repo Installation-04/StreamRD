@@ -14,6 +14,9 @@ import { viewingLimit } from "../restrictions";
 import { versionViews } from "../versions";
 import { favoriteIds, favoriteItems, MAX_FAVORITES, setFavorite } from "../favorites";
 import { setWatched, unwatchedWhere, watchedIds } from "../watched";
+import { planPlayback, registerStream } from "../transcode";
+import { trailerFor } from "../home";
+import { attentionCounts, attentionWhere } from "../attention";
 import { ageForRating, syncAccountRating } from "../ratings";
 
 export const sharedLibrariesRouter = Router();
@@ -24,7 +27,7 @@ adminSharedLibrariesRouter.use(noStore, requireAuth, requireAdmin);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const mediaType = z.enum(["all", "movie", "series"]);
 const fields = z.object({ name: z.string().trim().min(1).max(80), mediaType: mediaType.default("all"), everyone: z.boolean().default(false) }).strict();
-const list = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: z.string().max(512).optional(), q: z.string().trim().max(200).optional(), type: z.enum(["movie", "series"]).optional(), unwatched: z.enum(["1"]).optional() }).strict();
+const list = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: z.string().max(512).optional(), q: z.string().trim().max(200).optional(), type: z.enum(["movie", "series"]).optional(), unwatched: z.enum(["1"]).optional(), attention: z.enum(["1"]).optional() }).strict();
 const cursorSchema = z.object({ v: z.literal(1), id, at: z.string().datetime(), scope: z.string().regex(/^[a-f0-9]{32}$/) }).strict();
 function action(run: (req: Request, res: Response) => Promise<unknown>) {
   return asyncHandler(async (req, res) => {
@@ -172,9 +175,9 @@ for (const method of ["put", "delete"] as const) {
 }
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
-  const { limit, cursor, q, type, unwatched } = parse(list, req.query);
+  const { limit, cursor, q, type, unwatched, attention } = parse(list, req.query), admin = req.session!.role === "admin";
   const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
-  const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, { isPrimary: true }, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : []), ...(unwatched ? [await unwatchedWhere(req.session!.sub) ?? {}] : [])] };
+  const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, { isPrimary: true }, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : []), ...(unwatched ? [await unwatchedWhere(req.session!.sub) ?? {}] : []), ...(attention && admin ? [await attentionWhere(library.sourceUserId)] : [])] };
   const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
   let after: z.infer<typeof cursorSchema> | undefined;
   if (cursor) {
@@ -186,7 +189,16 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const page = items.slice(0, limit), last = page.at(-1), listed = await favoriteIds(req.session!.sub, page), seen = await watchedIds(req.session!.sub, page), views = (await accountMediaViews(page)).map((view, index) => ({ ...view, favorite: listed.has(page[index].id), watched: seen.has(page[index].id) }));
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit);
-  res.json({ items: views, total, nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
+  const needs = admin ? await attentionCounts(sourceWhere, library.sourceUserId) : undefined;
+  res.json({ items: views, total, ...(needs ? { attention: needs } : {}), nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
+}));
+/** The title's trailer, when the public catalogue has one (a YouTube id the viewer's browser plays only after pressing Watch trailer). */
+sharedLibrariesRouter.get("/:id/items/:itemId/trailer", action(async (req, res) => {
+  const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
+  const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [await sharedMediaWhere(library, await viewingLimit(req.session!.sub))] } });
+  if (!item) throw new AccountLibraryError("Library item not found.", 404);
+  const [view] = await accountMediaViews([item]);
+  res.json({ trailer: await trailerFor(view.metadata?.imdbId, item.type === "series" ? "series" : "movie") });
 }));
 sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
@@ -217,7 +229,11 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
     create: { userId, itemId, mediaKey, activeSessionId: progressSessionId },
     update: { activeSessionId: progressSessionId, lastSequence: -1 },
   });
-  res.json({ ...result, progressSessionId, resumeSeconds: saved.completed ? 0 : saved.positionSeconds, durationSeconds: saved.durationSeconds });
+  // A browser cannot play every file. When this one needs converting the viewer gets a stream id of ours instead of the provider link for the <video>.
+  const plan = await planPlayback(result.stream.url, result.stream.filename).catch(() => ({ mode: "direct" as const, probe: null, reason: "error" }));
+  const playback = plan.mode === "direct" ? { mode: "direct" as const, reason: plan.reason, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null }
+    : { mode: plan.mode, url: `/api/stream/${registerStream(result.stream.url, plan.mode, userId)}`, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null };
+  res.json({ ...result, progressSessionId, resumeSeconds: saved.completed ? 0 : saved.positionSeconds, durationSeconds: saved.durationSeconds || playback.durationSeconds, playback });
 }));
 const progressBody = z.object({
   sessionId: z.string().min(1).max(200), sequence: z.number().int().min(0).max(2147483647),

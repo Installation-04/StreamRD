@@ -1,5 +1,7 @@
 import { Request, Response, Router } from "express";
-import { requireAuth } from "../auth/middleware";
+import { z } from "zod";
+import { requireAdmin, requireAuth } from "../auth/middleware";
+import { getHomeSettings, saveHomeSettings } from "../home-settings";
 import { asyncHandler } from "../http";
 import { externalSections, librarySections } from "../home";
 import { assertActiveSharedViewer } from "../shared-libraries";
@@ -17,6 +19,17 @@ homeRouter.get("/", rateLimit({ windowMs: 60_000, max: 60 }), asyncHandler(async
     const [library, external] = await Promise.all([librarySections(req.session!.sub, req.session!.role, limit), limit === null ? externalSections() : Promise.resolve(none)]);
     await assertActiveSharedViewer(req.session!);
     const { libraryFeatured, ...rest } = library, { featured: outside, ...others } = external;
-    res.json({ ...rest, ...others, featured: [...libraryFeatured, ...outside].slice(0, 6) });
+    const settings = await getHomeSettings();
+    res.json({ ...rest, ...others, autoplayTrailers: settings.autoplayTrailers && Boolean((others as { trailersEnabled?: boolean }).trailersEnabled), featured: [...libraryFeatured, ...outside].slice(0, 6) });
   } catch (error) { if (error instanceof AccountLibraryError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
+}));
+
+/** Admin → Overview: options for everyone's home page. */
+export const adminHomeSettingsRouter = Router();
+adminHomeSettingsRouter.use(requireAuth, requireAdmin, (_req: Request, res: Response, next: () => void) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
+adminHomeSettingsRouter.get("/", asyncHandler(async (_req, res) => { res.json(await getHomeSettings()); }));
+adminHomeSettingsRouter.put("/", asyncHandler(async (req, res) => {
+  const parsed = z.object({ autoplayTrailers: z.boolean() }).strict().safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid home page settings." }); return; }
+  res.json(await saveHomeSettings(parsed.data));
 }));

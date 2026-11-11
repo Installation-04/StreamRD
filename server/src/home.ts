@@ -4,6 +4,7 @@ import { sharedMediaWhere, visibleSharedLibraryWhere } from "./shared-libraries"
 import { accountMediaViews } from "./routes/account-library";
 import { currentAccountMediaFilter } from "./account-library";
 import { favoriteIds, favoriteItems } from "./favorites";
+import { tmdbTrailer } from "./metadata/providers";
 
 /**
  * The rows on the home page. Library rows (recently added, popular on this server) come from the libraries the viewer may
@@ -15,7 +16,7 @@ const FRESH_MS = 6 * 3600_000, STALE_MS = 7 * 86400_000, TIMEOUT_MS = 8000, MAX_
 export interface ExternalCard { provider: "free"; id: string; type: "movie" | "series"; name: string; year: number | null; posterUrl: string | null; rating: number | null }
 type Ranked = ExternalCard & { trakt: number; backdrop: string | null; description: string; genres: string[]; trailer: string | null };
 const cache = new Map<string, { at: number; cards: Ranked[] }>(), flights = new Map<string, Promise<Ranked[]>>();
-export function resetHomeCache() { cache.clear(); flights.clear(); }
+export function resetHomeCache() { cache.clear(); flights.clear(); trailers.clear(); }
 export const externalListsEnabled = () => process.env.HOME_EXTERNAL_LISTS?.trim().toLowerCase() !== "false";
 /** Trailers are played by the viewer's browser from YouTube, and only after that viewer opts in; an operator can remove the option. */
 export const trailersAvailable = () => externalListsEnabled() && process.env.HOME_TRAILERS?.trim().toLowerCase() !== "false";
@@ -51,6 +52,20 @@ function trailerOf(meta: Record<string, unknown>): string | null {
   }
   for (const entry of Array.isArray(meta.trailerStreams) ? meta.trailerStreams : []) { const id = youtubeId(entry && typeof entry === "object" ? (entry as Record<string, unknown>).ytId : null); if (id) return id; }
   return null;
+}
+const trailers = new Map<string, { at: number; id: string | null }>();
+/** The YouTube id of a title's trailer, from the same public catalogue, for the title page's Watch trailer button. Cached; null when there is none or trailers are off. */
+export async function trailerFor(imdbId: string | null | undefined, type: "movie" | "series"): Promise<string | null> {
+  if (!trailersAvailable() || !imdbId || !/^tt\d{7,10}$/.test(imdbId)) return null;
+  const key = `${type}|${imdbId}`, hit = trailers.get(key);
+  if (hit && Date.now() - hit.at < (hit.id ? 7 * 86400_000 : 6 * 3600_000)) return hit.id;
+  let id: string | null = null;
+  try { const body = await getJson(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`) as { meta?: unknown }; id = body.meta && typeof body.meta === "object" ? trailerOf(body.meta as Record<string, unknown>) : null; } catch { /* fall through to TMDB */ }
+  if (!id) id = await tmdbTrailer(imdbId, type);
+  if (!id && hit) return hit.id;
+  if (trailers.size >= 500) trailers.delete(trailers.keys().next().value!);
+  trailers.set(key, { at: Date.now(), id });
+  return id;
 }
 function card(value: unknown, type: "movie" | "series"): Ranked | null {
   const meta = value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -88,8 +103,11 @@ export async function externalSections() {
   if (!externalListsEnabled()) return { externalEnabled: false, trailersEnabled: false, trending: [] as ExternalCard[], popularMovies: [] as ExternalCard[], popularSeries: [] as ExternalCard[], featured: [] as Slide[] };
   const [movies, series] = await Promise.all([catalogue("movie"), catalogue("series")]);
   const trending = [...movies, ...series].sort((a, b) => b.trakt - a.trakt).slice(0, ROW);
-  const featured = trending.filter(card => card.backdrop && card.description).slice(0, 6).map((card): Slide => ({ kind: "external", id: card.id, href: `/discover/free/${card.type}/${encodeURIComponent(card.id)}`, title: card.name, year: card.year, rating: card.rating,
-    genres: card.genres, description: card.description, backdropUrl: card.backdrop!, trailer: trailersAvailable() ? card.trailer : null, label: "TRENDING NOW" }));
+  const picked = trending.filter(card => card.backdrop && card.description).slice(0, 6);
+  // The catalogue row sometimes lacks a trailer that the title's own page (or TMDB) has: ask for the missing ones, cached.
+  const known = new Map(await Promise.all(picked.map(async card => [card.id, card.trailer ?? await trailerFor(card.id, card.type)] as const)));
+  const featured = picked.map((card): Slide => ({ kind: "external", id: card.id, href: `/discover/free/${card.type}/${encodeURIComponent(card.id)}`, title: card.name, year: card.year, rating: card.rating,
+    genres: card.genres, description: card.description, backdropUrl: card.backdrop!, trailer: trailersAvailable() ? known.get(card.id) ?? null : null, label: "TRENDING NOW" }));
   return { externalEnabled: true, trailersEnabled: trailersAvailable(), trending: trending.map(strip), popularMovies: movies.slice(0, ROW).map(strip), popularSeries: series.slice(0, ROW).map(strip), featured };
 }
 
@@ -111,11 +129,12 @@ export async function librarySections(userId: string, role: string, limit: numbe
   const listed = await favoriteItems(userId, limit, ROW), listedViews = await accountMediaViews(listed.map(row => row.item));
   const myList = listed.map((row, index) => ({ libraryId: row.libraryId, item: { ...listedViews[index], favorite: true } }));
   // Titles of the viewer's own libraries that have a backdrop and a synopsis lead the banner.
-  const featured = recentlyAdded.flatMap(({ libraryId, item }): Slide[] => {
+  const candidates = recentlyAdded.flatMap(({ libraryId, item }): Array<{ slide: Slide; imdbId: string | null | undefined; type: "movie" | "series" }> => {
     const details = item.metadata, backdrop = details?.backdropUrl;
     if (!details || !backdrop || !details.description) return [];
-    return [{ kind: "library", id: item.id, href: libraryId ? `/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}` : `/library/${encodeURIComponent(item.id)}`, title: details.name || item.name, year: details.year ?? item.year,
-      rating: details.rating ?? null, genres: (details.genres ?? []).slice(0, 3), description: details.description.slice(0, 280), backdropUrl: backdrop, trailer: null, label: "NEW IN YOUR LIBRARIES" }];
+    return [{ slide: { kind: "library", id: item.id, href: libraryId ? `/shared-libraries/${encodeURIComponent(libraryId)}/${encodeURIComponent(item.id)}` : `/library/${encodeURIComponent(item.id)}`, title: details.name || item.name, year: details.year ?? item.year,
+      rating: details.rating ?? null, genres: (details.genres ?? []).slice(0, 3), description: details.description.slice(0, 280), backdropUrl: backdrop, trailer: null, label: "NEW IN YOUR LIBRARIES" }, imdbId: details.imdbId, type: item.type === "series" ? "series" : "movie" }];
   }).slice(0, 2);
+  const featured = await Promise.all(candidates.map(async ({ slide, imdbId, type }) => ({ ...slide, trailer: await trailerFor(imdbId, type) })));
   return { recentlyAdded, myList, popularHere: popular.map((item, index) => ({ libraryId: libraryOf(item), item: { ...popularViews[index], favorite: marks.has(item.id) } })), libraryFeatured: featured };
 }
