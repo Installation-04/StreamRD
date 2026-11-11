@@ -63,7 +63,7 @@ on `/api/auth/*`), `502` provider failure).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/debrid/account?provider=<id>` | Live account info from the provider (defaults to primary). Doubles as "test connection". |
+| GET | `/api/debrid/account?provider=<id>` | Live account info from the provider (defaults to primary). Doubles as "test connection". On failure the `error` says what to do: 409 when the provider did not accept the key (never 401, which means the caller's own session ended), 429 when it is limiting requests, 504 on a timeout, 502 otherwise. |
 
 ```json
 // 200

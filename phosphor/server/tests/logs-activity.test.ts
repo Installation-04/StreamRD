@@ -84,6 +84,16 @@ it("builds a diagnostic bundle for administrators with the stuck requests and re
   expect(await db.logEvent.count({ where: { type: "admin_action", message: "Downloaded a diagnostic bundle" } })).toBe(1);
 });
 
+it("records failed sign-ins, so repeated guesses can be seen", async () => {
+  const { admin } = await adminAndUser(); await db.logEvent.deleteMany();
+  expect((await request(app).post("/api/auth/login").send({ email: admin.email, password: "not-the-password" })).status).toBe(401);
+  expect((await request(app).post("/api/auth/login").send({ email: "nobody@example.invalid", password: "whatever-1" })).status).toBe(401);
+  await new Promise(done => setTimeout(done, 100));
+  const lines = await db.logEvent.findMany({ where: { type: "login", level: "warn" }, orderBy: { createdAt: "asc" } });
+  expect(lines.map(line => line.message)).toEqual([`Failed sign-in for ${admin.email}`, "Failed sign-in for nobody@example.invalid"]);
+  expect(lines[0].userId).toBe(admin.id); expect(lines[1].userId).toBeNull(); expect(JSON.stringify(lines)).not.toMatch(/not-the-password|whatever-1/);
+});
+
 let helper: Server | undefined;
 afterEach(async () => { delete process.env.MEDIA_MANAGER_URL; delete process.env.MEDIA_MANAGER_TOKEN; if (helper) { await new Promise(done => helper!.close(done)); helper = undefined; } });
 it("copies the update helper's account of the last update into the log once, and marks a rollback as an error", async () => {

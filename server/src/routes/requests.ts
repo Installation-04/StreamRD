@@ -1,3 +1,4 @@
+import { logEvent } from "../logger";
 import { Prisma } from "@prisma/client";
 import { Request, Response, Router } from "express";
 import { z } from "zod";
@@ -184,7 +185,9 @@ requestIndexersRouter.use(noStore, requireAuth, requireAdmin);
 requestIndexersRouter.get("/", action(async (_req, res) => { res.json({ indexers: (await listIndexers()).map(publicIndexer) }); }));
 requestIndexersRouter.post("/", mutationLimit, action(async (req, res) => {
   const body = parse(z.object({ name: z.string().trim().max(80).default("Indexer"), baseUrl: z.string().trim().min(1).max(2048), apiKey: z.string().trim().max(1500).default("") }).strict(), req.body);
-  const entry = await addIndexer({ name: body.name ?? "Indexer", baseUrl: body.baseUrl, apiKey: body.apiKey ?? "" }); res.status(201).json({ indexer: publicIndexer(entry), test: await testIndexer(entry) });
+  const entry = await addIndexer({ name: body.name ?? "Indexer", baseUrl: body.baseUrl, apiKey: body.apiKey ?? "" }), test = await testIndexer(entry);
+  void logEvent(test.ok ? "info" : "warn", "admin_action", `Added the indexer ${entry.name}: ${test.message}`, { userId: req.session!.sub, meta: { indexerId: entry.id, results: test.results } }).catch(() => undefined);
+  res.status(201).json({ indexer: publicIndexer(entry), test });
 }));
 requestIndexersRouter.post("/:id/test", mutationLimit, action(async (req, res) => {
   const found = (await listIndexers()).find(entry => entry.id === req.params.id);
@@ -194,5 +197,6 @@ requestIndexersRouter.post("/:id/test", mutationLimit, action(async (req, res) =
 requestIndexersRouter.delete("/:id", mutationLimit, action(async (req, res) => {
   if (req.params.id === "zilean") throw new FinderError("Zilean comes from the installer (ZILEAN_URL). Run install.sh --no-zilean to remove it.", 409);
   if (!await removeIndexer(parse(id, req.params.id))) throw new FinderError("Indexer not found.", 404);
+  void logEvent("info", "admin_action", "Removed an indexer", { userId: req.session!.sub, meta: { indexerId: req.params.id } }).catch(() => undefined);
   res.json({ ok: true });
 }));

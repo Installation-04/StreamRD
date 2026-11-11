@@ -1,3 +1,4 @@
+import { logEvent } from "../logger";
 import { syncAccountLibraryConfiguration } from "../account-library";
 import { signSession } from "../auth/jwt";
 import { issueSession } from "../auth/cookie";
@@ -107,6 +108,8 @@ accountRouter.put("/debrid", asyncHandler(async (req, res) => {
     create: { userId: req.session!.sub, ...data },
     update: data,
   });
+  const changed = Object.keys(data).map(key => /token|key/i.test(key) ? `${key} ${data[key] ? "set" : "cleared"}` : key);
+  if (changed.length) void logEvent("info", "admin_action", "Saved debrid settings", { userId: req.session!.sub, meta: { changed } }).catch(() => undefined);   // names only, never a key
   await syncAccountLibraryConfiguration(req.session!.sub);
   res.json({ ok: true });
 }));

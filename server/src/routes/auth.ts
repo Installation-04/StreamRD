@@ -86,10 +86,13 @@ authRouter.post("/login", authRateLimit, asyncHandler(async (req, res) => {
   if (!body) return;
   const user = await db.user.findUnique({ where: { email: body.email.toLowerCase() } });
   if (!user || !(await verifyPassword(body.password, user.hashedPassword))) {
+    // Recorded so repeated guesses are visible in Admin → Logs. The address is what was typed; it may not belong to anyone here.
+    void logEvent("warn", "login", `Failed sign-in for ${body.email.toLowerCase().slice(0, 120)}`, user ? { userId: user.id } : {}).catch(() => undefined);
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
   if (!user.active) {
+    void logEvent("warn", "login", `Sign-in refused for the deactivated account ${user.email}`, { userId: user.id }).catch(() => undefined);
     res.status(403).json({ error: "This account has been deactivated" });
     return;
   }

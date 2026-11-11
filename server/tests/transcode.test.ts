@@ -214,4 +214,10 @@ real("a play of a file the browser cannot open answers with a stream of ours and
   play.mockResolvedValueOnce({ mediaKey: "k1", stream: { provider: "realdebrid", url: `${base}/plain.mp4`, filename: "Film.mp4", mimeType: "video/mp4" } });
   const direct = await request(app).post(url).set(auth(viewer.token)).send({});
   expect(direct.body.playback).toMatchObject({ mode: "direct" }); expect(direct.body.playback.url).toBeUndefined();
+  // Each play is in the log: who, which title, what the server decided. Never the link or the file name.
+  await new Promise(done => setTimeout(done, 100));
+  const plays = await db.logEvent.findMany({ where: { type: "playback", userId: viewer.id }, orderBy: { createdAt: "asc" } });
+  expect(plays.map(line => line.message)).toEqual(["Playing Crank (2006): audio converted", "Playing Crank (2006): as it is"]);
+  expect(JSON.parse(plays[0].meta!)).toMatchObject({ itemId: media.id, mode: "audio", video: "h264", audio: "ac3" }); expect(plays[0].provider).toBe("realdebrid");
+  expect(JSON.stringify(plays)).not.toMatch(/127\.0\.0\.1|ac3\.mkv|BluRay/);
 });

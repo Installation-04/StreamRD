@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, authFetch } from "@/lib/api";
 import { LogEntry, PROVIDER_IDS } from "@/lib/types";
 
-const TYPES = ["", "signup", "login", "logout", "playback", "request", "provider_error", "admin_action", "system"];
+const TYPES = ["", "signup", "login", "logout", "playback", "request", "library", "provider_error", "admin_action", "system"];
 const LEVELS = ["", "info", "warn", "error"];
 const PAGE_SIZES = [100, 250, 500, 1000];
 const FORMATS = [{ id: "txt", label: "Text (.log)" }, { id: "ndjson", label: "JSON lines (.ndjson)" }, { id: "csv", label: "CSV (.csv)" }] as const;

@@ -6,6 +6,7 @@ export type LogType =
   | "login"
   | "logout"
   | "playback"
+  | "library"
   | "provider_error"
   | "admin_action"
   | "system";

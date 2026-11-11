@@ -35,6 +35,9 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; }
 input, select, textarea { font: inherit; }
+/* A select outside a .field (the version and age-rating choosers, filters in Admin) follows the theme instead of the browser's white box. */
+select { background: var(--bg-raised); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 6px 10px; }
+select option { background: var(--bg-raised); color: var(--text); }
 
 .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 

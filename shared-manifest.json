@@ -76,6 +76,7 @@
         "age-limits.test.ts",
         "attention.test.ts",
         "api-hardening.test.ts",
+        "debrid-test.test.ts",
         "favorites.test.ts",
         "invitation-access.test.ts",
         "library-community.test.ts",
