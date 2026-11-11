@@ -310,6 +310,14 @@ All routes require a live administrator session, are `no-store`, and are rate li
   message text; `from`/`to` are ISO dates. Invalid dates or cursors return 400.
 - `GET /api/admin/logs/export?format=ndjson|csv|txt&max=…&(same filters)` streams an attachment
   (max 50,000 rows, 10 requests/minute). CSV neutralizes formula-leading cells.
+- Since v0.23.2 the log is one stream: every step of a media request appears in it as `type=request`, with
+  `meta: {requestId, status, progress, mediaType, destination}` and the title at the start of the message. `q` also searches
+  the details, a request's title and its id, so one search shows a request's whole history. `level` maps failed steps to
+  `error` and attention, rejected and cancelled steps to `warn`.
+- `GET /api/admin/logs/bundle?days=7` (1–90, 6 requests/minute) downloads one JSON file for a bug report: version and runtime,
+  which settings are set (never their values), update state and the update helper's account of the last update, backups,
+  request counts, requests that failed or are stuck with their history, and up to 5,000 recent log lines. Links are cut to
+  their host; magnets, e-mail addresses and anything key-shaped are removed.
 - `GET /api/account/library/metadata/summary` → counts for the caller's own library only:
   `{total, matched, matching, review, unmatched, error, notStarted, provider:{configured, automatic}}`.
 - `POST /api/account/library/metadata/rematch` queues up to 500 of the caller's review, unmatched,

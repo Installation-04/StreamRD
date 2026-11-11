@@ -9,6 +9,7 @@ import { backfillGroups } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
+import { recordUpdateOutcome } from "./routes/logs";
 
 async function main() {
   await enableWal();
@@ -30,6 +31,7 @@ async function main() {
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
+    void recordUpdateOutcome().catch(() => undefined); // how the last update or rollback went, as the update helper recorded it
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);
   });
 }

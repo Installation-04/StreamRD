@@ -42,6 +42,7 @@
         "routes/health.ts",
         "routes/library.ts",
         "routes/metadata.ts",
+        "routes/logs.ts",
         "routes/requests.ts",
         "routes/system.ts",
         "shared-libraries.ts",
@@ -93,6 +94,7 @@
         "request-worker.test.ts",
         "requests.test.ts",
         "session-cookie.test.ts",
+        "logs-activity.test.ts",
         "system.test.ts",
         "title-versions.test.ts"
       ]
