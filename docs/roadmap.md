@@ -1,98 +1,106 @@
 # Roadmap
 
-Where StreamRD and Phosphor go from here. The headline item is replacing today's patchwork of libraries
-with **one library, managed by the administrator, the way Plex does it**. Everything else is smaller and
-independent of it. Sizes are rough (S = days, M = a week or two, L = several weeks of focused work).
+Where StreamRD and Phosphor go from here. Each phase is one or more releases; every release upgrades from any earlier version without
+losing data. Sizes are rough (S = days, M = a week or two, L = several weeks of focused work).
 
 ## Status
 
-Shipped so far, as the visible half of this plan: **v0.11.0** one Library page and libraries visible to everyone or chosen people (Phase A,
-plus an *Everyone* switch); **v0.12.0 and v0.13.0** a home page with a featured carousel;
-**v0.14.0** viewing limits for a kids account (part of Phase C); **v0.15.0** invitations that carry library access (part of Phase C);
-**v0.16.0** a full-page player; **v0.17.0** one card per title with versions; **v0.18.0** the curated catalogue is retired and only the administrator imports. **v0.19.0** background link health checks with automatic switching and replacement requests; **v0.20.0** My List for library titles, and Plex and Jellyfin launched from the Setup page; **v0.21.0** watched marks and an Unwatched view; **v0.23.0** an Update button; **v0.22.0** converts what a browser cannot play (MKV, DTS, HEVC), format and resolution tags, and a trailer button. The notes on the data model, with the decisions that
-remain, are in [library-model.md](library-model.md). Still ahead are the parts that change the data model underneath (Phases B, D and E below): a unified
-library model with one row per movie or episode, merging duplicates, and retiring the old catalogue, personal-library and request
-surfaces. These are deliberately left until they can be tested against a copy of real data.
+Shipped: one Library page and library sharing (v0.11.0), the home page (v0.12.0, v0.13.0), viewing limits for kids' accounts (v0.14.0),
+invitations that carry library access (v0.15.0), the full-page player (v0.16.0), one card per title with versions (v0.17.0), a single
+administrator-managed library (v0.18.0), link health checks (v0.19.0), My List (v0.20.0), watched marks (v0.21.0), conversion while you
+watch (v0.22.0), the Update button (v0.23.0), and conversion that survives resuming and seeking (v0.23.2).
 
-## What exists today, and why it feels confusing
+The remaining data-model decisions are in [library-model.md](library-model.md).
 
-| Concept today | What it actually is | Where users see it |
+## Phase 1: playback you can rely on
+
+Playing a video is the product, so it comes first.
+
+| Release | What changes for the viewer | Size | Database |
+|---|---|---|---|
+| v0.23.2 | A converted video no longer stops when resumed or sought; a refused stream says why | S | none |
+| v0.24.0 | Instant seeking in converted videos, a real duration and buffer, the server converts only what your browser cannot play | L | none |
+| v0.24.x | Choose the audio track; subtitles; a quality menu (Original, 1080p, 720p, 480p) | M | none |
+| v0.24.x | The administrator sees who is watching and can stop a stream; a limit per viewer | S | none |
+| later | Optional hardware acceleration and correct colours for HDR sources | M | none |
+
+How v0.24.0 is built, in pull requests:
+1. The browser tells the server what it can decode; the server decides between playing the file as it is, repackaging it, converting the
+   audio, or converting the picture, and logs the reason.
+2. Converted video is delivered in short segments with a playlist that knows the full length. Segments are made on demand, a little
+   ahead of the viewer, kept in a temporary folder with a size limit, and removed when the viewer stops.
+3. The player uses those segments; seeking jumps to a segment instead of restarting the conversion.
+4. Audio-track choice and text subtitles.
+5. Now-playing list, stop action and the per-viewer limit.
+6. A set of test files (MP4 H.264/AAC, MKV H.264/DTS, MKV HEVC 10-bit/TrueHD, MKV H.264/AC-3 with image subtitles, AVI Xvid/MP3) played
+   in a browser with real decoders on every pull request.
+
+Risk: delivery changes completely while the old path still works. The old path stays behind a setting for one release.
+Not verifiable in CI: Safari, hardware acceleration. Those are recorded manual runs and stated in the release notes.
+
+## Phase 2: security baseline
+
+| Pull request | What it does | Size |
 |---|---|---|
-| **Catalog** | Titles the administrator adds by hand with link/magnet sources (`Title`) | *Discover* (home) |
-| **My library** | Items imported from a user's *own* debrid account (`AccountMedia`, owned by that user) | *My library* |
-| **Shared libraries** | The administrator's imported items published to chosen users (`SharedLibrary` + `SharedLibraryGrant`) | *Shared libraries* |
-| **Library export** | Symlinks of mounted media for Plex/Jellyfin (`admin/library`) | Admin only |
-| **Requests** | Wanted titles that end up in one of the above (`MediaRequest`) | *Requests* |
+| Security policy and threat model | How to report a problem; what is protected and from whom | S |
+| One guarded client for outbound requests | Every request the server makes to providers, indexers, metadata sources and media servers goes through one client that refuses private addresses unless allowed, fixes the resolved address, limits size and time, and never forwards credentials across redirects | M |
+| Content-Security-Policy | Both web apps send a strict policy, tested on every pull request | M |
+| Rate limiting that survives a restart | Stored in the database, per account as well as per address | S |
+| Dependency and code scanning | Scheduled and on every pull request; build actions pinned to exact commits; grouped dependency updates | S |
+| Signed images | Each published image carries a signature, a list of its contents and a record of how it was built | S |
+| Encryption key rotation | A command that re-encrypts stored credentials under a new key | S |
 
-Four places to look for media, three different ways something becomes visible, and a user cannot tell
-where a title lives. Plex has one idea instead: **a server has libraries (Movies, TV Shows), the owner decides
-which users can see which library, and everyone gets their own watch state.**
+Database: one additive table for rate limiting. Release: v0.25.0.
 
-## The goal: one library, access managed by the administrator
+## Phase 3: one codebase, one API description
 
-- A single **Library** page (movies and shows, search, filters, continue watching). It shows everything the signed-in user
-  is allowed to see; nobody has to know whether an item came from the catalog, a debrid account, a request or a mounted folder.
-- The administrator has one **Library access** screen: pick a user (or "everyone"), tick the libraries
-  they can see, optionally limit by type or label. Changes apply on the next request.
-- Items still have a source (a debrid account, a link, a mounted file); the source decides *how it plays*, never *where it appears*.
-- A user who connects their own debrid account can still keep **personal** items, but they appear in the same Library under a
-  *Mine* filter, not in a separate section.
+- Shared code moves into workspace packages that both products import; the copy-and-check script is removed when nothing depends on it. L, no behaviour change.
+- An OpenAPI description generated from the request schemas, served at `/api/openapi.json`, with a generated client for the web apps. M.
+- A formatter and a linter, applied in one mechanical pull request. M.
+- One runner for background work (scans, metadata, link checks, requests) with retries and an admin view. M, one additive table.
+- Configuration validated at start, with one generated settings table in the docs. S.
 
-### Decisions I need from you before building the data model
+## Phase 4: shows, seasons and episodes
 
-1. **Can regular users still connect their own debrid account**, or is every item on the server's library supplied by the administrator?
-   (The administrator supplies the library; keeping personal accounts is an optional extra.)
-2. **How fine-grained should access be?** Whole library only, library plus movie/show type, or per title? (Plex: per library with labels.)
-3. **Should requests go straight into the library** when approved, with no separate "Requests" destination?
-4. **Phosphor:** does it join the same model (recommended, now that most code is shared) or stay search-and-queue only?
+- One release-name reader used for importing, grouping and searching, tested on at least 500 names. M, no migration.
+- Shows, seasons, episodes and their files as records of their own, with external ids. Written alongside today's records for one
+  release, back-filled, then read from. L, additive migration, tested on a copy of real data before release.
+- Watched marks and resume per episode; "Next up" per show; Continue watching that mixes films and episodes. M.
+- Collections, and one tool to fix a match, merge versions or split them. M.
 
-## Phases
+Risk: the largest in this roadmap. Nothing is dropped or rewritten; the earlier records stay.
 
-### Phase A: one Library in the interface (M, no data migration)
-Ships first because it removes the confusion without touching the database.
-- Nav becomes **Discover · Library · Requests · Account** (plus Admin). *Shared libraries* and *My library* become filters on one Library page.
-- Admin gets a **Library access** page that wraps today's shared-library grants (who sees which library) in one dialog.
-- Existing URLs keep working (redirects) for one release.
-- Risk: low. Everything underneath is unchanged. Release: v0.11.0.
+## Phase 5: requests that look after themselves
 
-### Phase B: a unified library model (L, needs a verified migration)
-- New `Library` (named, typed), `LibraryItem` (one row per movie/episode with its source) and `LibraryAccess` (library × user or everyone).
-- A migration backfills: catalog titles and administrator imports into the server library; other users' imports into personal items;
-  today's shared libraries and grants into libraries and access rows. The database is snapshotted and verified first (the existing upgrade runner does this).
-- The old tables keep being written for one release (dual-write) so a rollback is possible; reads move to the new model.
-- Metadata matching, cleanup of non-movie items and watch progress apply to every item the same way.
-- Risk: the largest in this roadmap. Mitigation: ship Phase A first, migrate behind a flag, test with a copy of your real database.
+Quality profiles with scores; releases already available on the debrid service preferred; a blocklist with retry on the next candidate;
+automatic approval and quotas per person; requests per season; notifications by e-mail, Discord, ntfy and webhooks; indexer health.
+Additive migrations only.
 
-### Phase C: Plex-grade access and viewing (M-L)
-- Per-user **watch state** across the whole library, one Continue watching row, watched/unwatched marks.
-- Access by **labels** (for example "Kids", "4K") and per-user restrictions enforced on every browse and play route.
-- **Managed users** (profiles under one account) with an optional PIN.
-- Invitations that carry library access ("invite Anna to Movies and TV").
-- This is the "Plex Home parity" milestone already called out in [optimization-plan.md](optimization-plan.md).
+## Phase 6: identity
 
-### Phase D: one way in (M)
-- Requests, debrid-account scans, mounted-file exports and hand-added titles all create library items in a chosen library.
-- Duplicates (the same film from two sources) merge into one item with several sources and quality choices.
-- Zilean and Zurg results feed the same pipeline.
+Sign-in through an OpenID Connect provider with group-to-role mapping, respecting the invitation policy; two-step sign-in with recovery
+codes; passkeys; a device list with revoke; profiles under one account with an optional PIN and their own watch state; permissions
+finer than two roles. Additive migrations only.
 
-### Phase E: retire the old surfaces (S)
-- Remove the old routes, tables and screens after at least one release of dual-write. This is where the duplicated code finally shrinks.
-
-## Independent work, any time
+## Alongside, as they unblock other work
 
 | Item | Size | Notes |
 |---|---|---|
-| Check Zilean and Zurg against a real Real-Debrid account | S | Only configuration and start-up were tested; see [zilean-zurg.md](zilean-zurg.md) |
-| Content-Security-Policy for both web apps | M | Security headers exist; a CSP needs a pass over inline styles and scripts |
-| Share more code between the products (settings, setup, types) | M | The shared-file workflow in [CONTRIBUTING.md](../CONTRIBUTING.md) already makes this safe |
-| Release flow | done | **Auto release** tags and publishes when a version bump is merged and checks are green ([RELEASING.md](../RELEASING.md)) |
-| Restore-from-backup rehearsal in CI | S | Backups are verified; a full restore test in the container job would catch key mismatches |
-| `arm64` image | M | Add together with a test release, since the publish workflow only runs on a real tag |
-| Accessibility audit of the main flows | M | Today's tests check workflows, not WCAG conformance |
+| French and English interface | M | Dates and numbers localised |
+| Accessibility checks in the browser journeys, then fixes | M | Target: WCAG 2.2 AA |
+| Shared interface components, inline styles removed | M | Needed before the Content-Security-Policy can be strict about styles |
+| `arm64` image | M | Tested on both architectures |
+| User and group ids for file ownership on NAS volumes | S | Existing installs keep today's behaviour |
+| Scheduled backups with retention; a restore rehearsal on every pull request | S | |
+| Stable and beta channels on the Update button | S | |
+| Metrics endpoint and a dashboard | S | |
+| Reverse-proxy and tunnel examples | S | |
+| Test coverage reported, then held above a floor | S | |
+| Check Zilean and Zurg against a real debrid account | S | Only configuration and start-up were tested; see [zilean-zurg.md](zilean-zurg.md) |
+| PostgreSQL as an option | L | Only if wanted: it doubles the migration and test work |
+| A documentation site built from `docs/` | M | |
 
-## Order I would do it in
+## What needs the owner
 
-1. Answer the four decisions above.
-2. **Phase A** (visible improvement, low risk), released as v0.11.0.
-3. **Phase B** on a copy of your real data, behind a flag; release when it round-trips cleanly.
-4. **Phase C** features one at a time (watch state first), then **D**, then **E**.
+- A debrid account, a GPU, an Apple device: features that depend on them ship with what was and was not verified.
+- Product choices: who can see what, quotas, which sign-in providers to support, whether PostgreSQL is worth its cost.
