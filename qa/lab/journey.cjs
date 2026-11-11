@@ -169,7 +169,10 @@ async function main() {
     });
 
     await step("invitations are created for a child (kids' limit) and a friend", async () => {
+      // Nobody chose a registration policy on this server: it is invitation only, and a stranger's sign-up is refused.
+      assert.equal(await owner.api("POST", "/api/auth/signup", { email: "stranger@example.invalid", password: "lab-stranger-password-1", displayName: "Stranger" }), 403);
       await owner.page.goto(`${base}/admin/users`, { waitUntil: "networkidle" });
+      await until("the registration policy to show", async () => (await owner.page.getByRole("combobox", { name: "New account registration", exact: true }).inputValue().catch(() => "")) === "invite", 20_000, 300);
       const invite = async (who, limit, libraries) => {
         await owner.page.getByLabel("Invitation email", { exact: true }).fill(`${who}@example.invalid`);
         for (const library of ["Movies", "TV Shows"]) { const box = owner.page.getByRole("checkbox", { name: library }); if (libraries.includes(library)) await box.check(); else await box.uncheck(); }

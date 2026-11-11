@@ -30,7 +30,7 @@ the navbar for admin accounts). Non-admins are redirected away and every
 2. Admin → Providers → test connectivity to confirm the server can reach the
    debrid APIs.
 3. Open **Imports** and import what is finished in your debrid account (only the administrator imports).
-4. Choose invitation-only registration in Admin → Users, create invitation links,
+4. In Admin → Users (registration is invitation only unless you open it), create invitation links,
    then create libraries in Admin → Libraries and make them visible to everyone or to
    chosen people. Viewers do not need their own debrid keys.
 
