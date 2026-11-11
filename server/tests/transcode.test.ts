@@ -129,6 +129,37 @@ it("answers 503 while the server is already converting as many videos as it is s
   delete process.env.FFMPEG_PATH; delete process.env.TRANSCODE_MAX;
 });
 
+it("answers with the reason, not an empty video, when the conversion fails at once, and lets the player ask why", async () => {
+  const stub = join(dir, "failing-ffmpeg.sh"); writeFileSync(stub, "#!/bin/sh\necho 'Error opening input: Server returned 403 Forbidden for https://secret.example.invalid/file.mkv?token=abc' >&2\nexit 1\n", { mode: 0o755 });
+  process.env.FFMPEG_PATH = stub;
+  try {
+    const id = registerStream("https://secret.example.invalid/file.mkv?token=abc", "audio", "someone");
+    const failed = await request(app).get(`/api/stream/${id}`);
+    expect(failed.status).toBe(502); expect(failed.body.error).toMatch(/could not convert this video: .*403 Forbidden/); expect(JSON.stringify(failed.body)).not.toMatch(/secret\.example|token=abc/);
+    const why = await request(app).get(`/api/stream/${id}/status`);
+    expect(why.status).toBe(200); expect(why.body).toMatchObject({ known: true, running: false }); expect(why.body.lastError).toMatch(/403 Forbidden for <link>/); expect(JSON.stringify(why.body)).not.toMatch(/secret\.example|token=abc/);
+    expect((await request(app).get("/api/stream/aaaaaaaaaaaaaaaaaaaaaaaa/status")).body).toEqual({ known: false, lastError: null, running: false });
+    expect((await request(app).get("/api/stream/short/status")).status).toBe(400);
+  } finally { delete process.env.FFMPEG_PATH; }
+});
+
+it("lets the newest request for a stream replace the older one instead of counting both against the limit", async () => {
+  const stub = join(dir, "slow2-ffmpeg.sh"); writeFileSync(stub, "#!/bin/sh\nsleep 8\n", { mode: 0o755 });
+  process.env.FFMPEG_PATH = stub; process.env.TRANSCODE_MAX = "1";
+  const listener = app.listen(0); await new Promise(done => listener.once("listening", done));
+  const port = (listener.address() as { port: number }).port, id = registerStream("https://example.com/a.mkv", "audio", "x");
+  const first = new AbortController(), second = new AbortController();
+  const one = fetch(`http://127.0.0.1:${port}/api/stream/${id}`, { signal: first.signal }).then(res => res.status).catch(() => "closed");
+  await new Promise(done => setTimeout(done, 400));
+  const two = fetch(`http://127.0.0.1:${port}/api/stream/${id}`, { signal: second.signal }).then(res => res.status).catch(() => "closed");
+  await new Promise(done => setTimeout(done, 400));
+  const other = await fetch(`http://127.0.0.1:${port}/api/stream/${registerStream("https://example.com/b.mkv", "audio", "x")}`);   // still at the limit: one conversion is running
+  expect(other.status).toBe(503);
+  expect(await one).toBe("closed");    // the older request was replaced, not answered with an error
+  first.abort(); second.abort(); await two; await new Promise(done => listener.close(done));
+  delete process.env.FFMPEG_PATH; delete process.env.TRANSCODE_MAX;
+});
+
 // ---- The play route.
 let serial = 0;
 async function member(role: "admin" | "user") {
