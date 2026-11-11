@@ -57,13 +57,13 @@ it("builds ffmpeg arguments per mode without a shell, a protocol allow-list on, 
 const haveFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0 && spawnSync("ffprobe", ["-version"]).status === 0;
 const dir = mkdtempSync(join(tmpdir(), "streamrd-transcode-"));
 let server: Server, base = "";
-const make = (name: string, args: string[]) => { try { execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=3:s=320x240:r=15", "-f", "lavfi", "-i", "sine=d=3", "-t", "3", ...args, join(dir, name)], { stdio: "ignore" }); return true; } catch { return false; } };
+const make = (name: string, args: string[]) => { try { execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=3:s=160x120:r=10", "-f", "lavfi", "-i", "sine=d=3", "-t", "3", ...args, join(dir, name)], { stdio: "ignore" }); return true; } catch { return false; } };
 const fixtures: Record<string, boolean> = {};
 beforeAll(async () => {
   if (!haveFfmpeg) return;
-  fixtures.plain = make("plain.mp4", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"]);
+  fixtures.plain = make("plain.mp4", ["-preset", "ultrafast", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"]);
   fixtures.dts = make("ac3.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "ac3"]);
-  fixtures.remux = make("aac.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "15", "-c:a", "aac"]);
+  fixtures.remux = make("aac.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "10", "-c:a", "aac"]);
   fixtures.tenbit = make("ten.mkv", ["-c:v", "libx264", "-pix_fmt", "yuv420p10le", "-c:a", "ac3"]);
   server = createServer((req, res) => {
     const file = join(dir, (req.url ?? "").split("?")[0].replace(/[^a-z0-9.]/gi, ""));
@@ -75,7 +75,7 @@ beforeAll(async () => {
   });
   await new Promise<void>(done => server.listen(0, "127.0.0.1", done)); base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   process.env.TRANSCODE = "true"; process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS = "1";
-});
+}, 120_000);
 afterAll(async () => { process.env.TRANSCODE = "false"; delete process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS; delete process.env.TRANSCODE_MAX; delete process.env.FFMPEG_PATH; await new Promise(done => server?.close(done)); });
 const real = haveFfmpeg ? it : it.skip;
 const streams = (file: string) => JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,codec_name,pix_fmt", "-of", "json", file]).toString()).streams as Array<{ codec_type: string; codec_name: string; pix_fmt?: string }>;
