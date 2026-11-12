@@ -4,6 +4,24 @@ on:
     branches: [main, beta, dev]
   pull_request:
 jobs:
+  installer-bare:
+    name: Installer on a machine with no Docker (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "debian:12"]
+    steps:
+      - uses: actions/checkout@v6
+      - name: install.sh installs curl, tar, Docker and the Compose plugin, and starts Docker, on an image that has none of them
+        run: |
+          docker run --rm --privileged -v "$PWD:/src:ro" ${{ matrix.image }} bash -euxc '
+            ! command -v docker && ! command -v curl
+            bash /src/install.sh --yes --prepare
+            docker --version
+            docker compose version
+            docker info --format "{{.ServerVersion}}"
+          '
   bundle:
     name: Build and exercise the complete container
     runs-on: ubuntu-24.04

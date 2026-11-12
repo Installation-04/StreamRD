@@ -49,8 +49,8 @@ bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_API_TOKEN
 ```
 
 - **Free build, Real-Debrid only.** AllDebrid, Premiumize and the other providers need Zurg's sponsor build, which this does not set up.
-- **Linux host only** (needs `/dev/fuse` and mount propagation; Docker Desktop on Windows/macOS is not supported). The mount folder
-  `./mnt/zurg` must be a shared mount; `install.sh` does this when run as root, otherwise it prints the two commands. This does not survive a
+- **Linux host only** (needs `/dev/fuse`, which the installer installs FUSE for when it is missing, and mount propagation, which it sets up through sudo; Docker Desktop on Windows/macOS is not supported). The mount folder
+  `./mnt/zurg` must be a shared mount; `install.sh` does this itself (through sudo when you are not root; if neither works it prints the two commands). This does not survive a
   host reboot by itself: add `mount --bind` and `mount --make-rshared` for that folder to a boot-time unit before the containers start.
 - **Movies and shows only.** `zurg/config.yml` defines two directories: `shows` (has episodes) and `movies`, each requiring a video file and
   excluding obvious games, software, music and courses. Edit it freely and apply with `docker compose restart zurg`. The file holds your
