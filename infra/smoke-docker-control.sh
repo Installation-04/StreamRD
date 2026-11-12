@@ -26,6 +26,7 @@ fail() {
   { echo "-- containers"; docker ps -a --format '{{.Names}}  {{.Image}}  {{.Status}}'
     echo "-- $name (last lines)"; docker logs --tail 60 "$name" 2>&1
     for extra in "$name-updater" "$name-previous"; do docker inspect "$extra" >/dev/null 2>&1 && { echo "-- $extra"; docker logs --tail 40 "$extra" 2>&1; }; done
+    [ ! -s "${watch_file:-/nonexistent}" ] || { echo "-- the updater, as seen while it ran"; cat "$watch_file"; }
   } >&2 || true
   exit 1
 }
@@ -33,8 +34,20 @@ fail() {
 for existing in streamrd-jellyfin streamrd-plex; do
   if docker ps -a --format '{{.Names}}' | grep -qx "$existing"; then echo "Refusing to run: a container named $existing exists (the launch would replace it)." >&2; exit 1; fi
 done
+watch_file="$(mktemp)"; watcher=""
+# The updater is removed as soon as its account has been read, so what it printed is copied while it runs, to be shown if a step fails.
+watch_updater() {
+  ( while true; do
+      if docker inspect "$name-updater" >/dev/null 2>&1; then
+        { echo "[$(date +%T)] $(docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$name-updater" 2>&1)"; docker logs "$name-updater" 2>&1 | tail -n 30; } >> "$watch_file.new"
+        cp "$watch_file.new" "$watch_file"; : > "$watch_file.new"
+      fi; sleep 0.4; done ) &
+  watcher=$!
+}
 cleanup() {
   local code=$?; set +e
+  [ -z "$watcher" ] || kill "$watcher" >/dev/null 2>&1
+  rm -f "$watch_file" "$watch_file.new"
   docker rm -f "$name" "$name-previous" "$name-updater" streamrd-jellyfin "$registry" >/dev/null 2>&1
   docker volume rm "$config" "$data" >/dev/null 2>&1
   [ -z "${ref:-}" ] || docker rmi "$ref" >/dev/null 2>&1
@@ -145,6 +158,7 @@ signin login
 [ "$(inspect '{{.State.Running}}' streamrd-jellyfin)" = true ] || fail "the restart stopped Jellyfin"
 
 say "An update that does not become healthy is rolled back"
+watch_updater
 original_image="$(inspect '{{.Image}}' "$name")"
 printf 'FROM %s\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retries=1 CMD false\n' "$image" | docker build -q -t "$ref" - >/dev/null
 docker push "$ref" >/dev/null

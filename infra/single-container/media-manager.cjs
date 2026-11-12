@@ -339,12 +339,14 @@ function createManager(config) {
     if (found.status !== 200 || found.json?.Config?.Labels?.['streamrd.role'] !== 'updater') return null;
     const log = []; let result = '', error = '';
     for (const text of await output(name, LOG_LINES, false)) {
-      let entry; try { entry = JSON.parse(text); } catch { continue; }
-      if (!entry || typeof entry !== 'object') continue;
+      let entry; try { entry = JSON.parse(text); } catch { entry = null; }
+      // Anything the updater printed that is not its own account (a crash, a message from Node) is kept as a step, so a failure is never silent.
+      if (!entry || typeof entry !== 'object') { log.push({ time: new Date().toISOString(), message: redact(text).slice(0, 300) }); continue; }
       if (typeof entry.time === 'string' && typeof entry.message === 'string') log.push({ time: entry.time.slice(0, 40), message: redact(entry.message).slice(0, 300) });
       if (typeof entry.result === 'string') { result = entry.result; error = typeof entry.error === 'string' ? redact(entry.error).slice(0, 300) : ''; }
     }
     const state = found.json.State || {}, ended = ['exited', 'dead'].includes(state.Status);
+    if (ended && !result) error = `The updater stopped before it finished (exit code ${Number.isInteger(state.ExitCode) ? state.ExitCode : 'unknown'}${state.Error ? `: ${redact(state.Error).slice(0, 160)}` : ''})`;
     return { name, ended, result, error, finishedAt: ended && typeof state.FinishedAt === 'string' ? state.FinishedAt : null, log };
   }
   /** How the last update went. The embedded helper may be a new process in a new container: the updater's account is the record. */
@@ -356,7 +358,7 @@ function createManager(config) {
         if (!report.ended) { upd.state = 'running'; upd.handed = true; }
         else {
           upd.state = report.result === 'updated' ? 'done' : report.result === 'current' ? 'current' : 'failed';
-          upd.error = upd.state === 'failed' ? report.error || 'The updater stopped before it finished' : '';
+          upd.error = upd.state === 'failed' ? report.error || 'The updater failed' : '';
           upd.finishedAt = report.finishedAt || new Date().toISOString(); upd.handed = false;
           await docker('DELETE', `/containers/${report.name}?force=true`).catch(() => undefined);
         }

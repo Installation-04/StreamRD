@@ -185,10 +185,14 @@ it("reports an update still being finished when the new container's helper is as
   const impostor = docker.find("streamrd-updater")!; impostor.spec.Labels = { "streamrd.role": "updater" }; impostor.status = "running"; impostor.running = true;
   impostor.output = ['{"time":"2026-11-12T09:59:00Z","message":"Stopping StreamRD (it is back in a minute)"}', "not json", '{"time":"2026-11-12T09:59:30Z","message":"Waiting for the new version to start"}'];
   const during = await json("GET", "/update");
-  expect(during.state).toBe("running"); expect(during.log.map((line: { message: string }) => line.message)).toEqual(["Stopping StreamRD (it is back in a minute)", "Waiting for the new version to start"]);
+  expect(during.state).toBe("running"); expect(during.log.map((line: { message: string }) => line.message)).toEqual(["Stopping StreamRD (it is back in a minute)", "not json", "Waiting for the new version to start"]);   // what it printed besides its own account is kept: a crash is never silent
   expect(docker.find("streamrd-updater")).toBeDefined();   // not removed while it works
   impostor.running = false; impostor.status = "exited"; impostor.exitCode = 1; impostor.output.push('{"time":"2026-11-12T10:00:00Z","result":"failed","error":"The new version did not start properly. The previous version was restored; nothing was lost."}');
   const after = await json("GET", "/update");
   expect(after).toMatchObject({ state: "failed", error: "The new version did not start properly. The previous version was restored; nothing was lost.", finishedAt: "2026-11-12T10:00:00Z" });
   expect(docker.find("streamrd-updater")).toBeUndefined();
+  // An updater that ended without a result says how it ended.
+  docker.boxes.push({ id: "e".repeat(64), name: "streamrd-updater", image: "sha256:x", running: false, alive: true, status: "exited", exitCode: 137, finishedAt: "2026-11-12T11:00:00Z", output: ["Error: connect EACCES /var/run/docker.sock"], spec: { Labels: { "streamrd.role": "updater" } } });
+  const crashed = await (await helper()).json("GET", "/update");
+  expect(crashed).toMatchObject({ state: "failed", error: "The updater stopped before it finished (exit code 137)" }); expect(crashed.log.map((line: { message: string }) => line.message)).toEqual(["Error: connect EACCES /var/run/docker.sock"]);
 });
