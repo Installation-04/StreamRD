@@ -56,7 +56,7 @@ it("answers only requests that carry the shared secret", async () => {
   expect((await call("GET", "/status", undefined, null)).status).toBe(401);
   expect((await call("GET", "/status", undefined, "x".repeat(40))).status).toBe(401);
   expect((await call("GET", "/status", undefined, "")).status).toBe(401);
-  const ok = await call("GET", "/status"); expect(ok.status).toBe(200); expect((await body(ok)).servers).toEqual({ jellyfin: { state: "absent" }, plex: { state: "absent" } });
+  const ok = await call("GET", "/status"); expect(ok.status).toBe(200); expect((await body(ok)).servers).toEqual({ jellyfin: { state: "absent" }, plex: { state: "absent" }, prowlarr: { state: "absent" } });
 });
 
 it("launches Jellyfin from a fixed specification: its image, folders, user and network are not the caller's to choose", async () => {
@@ -130,7 +130,7 @@ it("adds the Real-Debrid mount only when Zurg is on, and stops and removes only 
   expect((await call("POST", "/servers/plex/stop")).status).toBe(200); expect((await body(await call("GET", "/status"))).servers.plex.state).toBe("stopped");
   expect((await call("DELETE", "/servers/plex")).status).toBe(200); expect((await body(await call("GET", "/status"))).servers.plex.state).toBe("absent");
   expect((await call("DELETE", "/servers/plex")).status).toBe(200); // already gone is fine
-  expect(docker.calls.filter(line => /\/containers\/(?!create)/.test(line)).every(line => line.includes("streamrd-plex") || line.includes("streamrd-jellyfin"))).toBe(true);
+  expect(docker.calls.filter(line => /\/containers\/(?!create)/.test(line)).every(line => /streamrd-(plex|jellyfin|prowlarr)/.test(line))).toBe(true);
 });
 
 it("reports a failed download or an unreachable Docker plainly, without internals", async () => {

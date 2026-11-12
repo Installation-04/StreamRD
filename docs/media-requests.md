@@ -33,6 +33,18 @@ automatically** turns this off, and then every request waits for administrator a
 request identifies the show; download progress refers to the specific release that is chosen,
 not an assurance that all seasons and episodes have been acquired.
 
+## Prowlarr finds the releases, and is installed by default
+
+Where Docker control is on (the installer's default), StreamRD starts [Prowlarr](https://prowlarr.com) by itself
+the first time it runs, in a container of its own next to StreamRD (the image from LinuxServer.io; Prowlarr is
+GPL-3.0 software that is run, not bundled or linked). It keeps the list of indexers that requests search:
+open it from **Admin → Request settings → Release search** (*Open Prowlarr*), add the sources you want
+under *Indexers*, and every enabled torrent indexer there becomes a source for the release search within ten
+minutes (or at *Sync now*). StreamRD reads Prowlarr's API key from its own settings folder, so there is
+nothing to copy. A fresh Prowlarr has no indexers; which ones to use is your choice, so none are added for you.
+*Remove* stops it and keeps it off; its settings stay in `config/prowlarr`. Without Docker control the page says
+so, and you can still add any Torznab URL (Prowlarr, Jackett, Zilean) by hand.
+
 ## Administrator approval
 
 Open **Admin → Requests**, inspect the title and choose a destination. **Leave the

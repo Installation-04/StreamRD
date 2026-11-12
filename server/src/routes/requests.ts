@@ -182,6 +182,7 @@ requestIndexersRouter.post("/:id/test", mutationLimit, action(async (req, res) =
 }));
 requestIndexersRouter.delete("/:id", mutationLimit, action(async (req, res) => {
   if (req.params.id === "zilean") throw new FinderError("Zilean comes from the installer (ZILEAN_URL). Run install.sh --no-zilean to remove it.", 409);
+  if (req.params.id.startsWith("prowlarr-")) throw new FinderError("This indexer comes from Prowlarr. Remove it in Prowlarr (Admin → Requests → Open Prowlarr).", 409);
   if (!await removeIndexer(parse(id, req.params.id))) throw new FinderError("Indexer not found.", 404);
   void logEvent("info", "admin_action", "Removed an indexer", { userId: req.session!.sub, meta: { indexerId: req.params.id } }).catch(() => undefined);
   res.json({ ok: true });

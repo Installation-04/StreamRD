@@ -54,7 +54,7 @@ it("works out where a folder inside the container lives on the machine, by its c
 
 it("finds its own container and gives a media server that container's folders, network and time zone, from a fixed specification", async () => {
   await start(); const { json, settled, call } = await helper();
-  expect(await json("GET", "/status")).toEqual({ servers: { jellyfin: { state: "absent" }, plex: { state: "absent" } }, embedded: true });
+  expect(await json("GET", "/status")).toEqual({ servers: { jellyfin: { state: "absent" }, plex: { state: "absent" }, prowlarr: { state: "absent" } }, embedded: true });
   expect((await call("POST", "/servers/jellyfin/launch", { port: 8097 })).status).toBe(202);
   expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: true, address: "172.17.0.10" });
   const spec = docker.find("streamrd-jellyfin")!.spec;
@@ -71,6 +71,21 @@ it("finds its own container and gives a media server that container's folders, n
   for (const folder of ["jellyfin/config", "jellyfin/cache", "streamrd/library", "phosphor/library"]) expect(fs.statSync(path.join(folders, "config", folder)).isDirectory(), folder).toBe(true);
   expect(fs.existsSync(path.join(folders, "config", "plex"))).toBe(false);
   expect(docker.calls.filter(entry => entry.startsWith("GET /containers/") && entry.includes(SELF_ID))).toHaveLength(1);   // it asked about itself once
+});
+
+it("starts Prowlarr from a fixed specification that gives it its own settings folder and nothing of the libraries or downloads", async () => {
+  await start(); const { call, settled, json } = await helper();
+  expect((await call("POST", "/servers/prowlarr/launch", {})).status).toBe(202);
+  expect(await settled("prowlarr")).toMatchObject({ state: "running", port: 9696, autostart: true });
+  const spec = docker.find("streamrd-prowlarr")!.spec;
+  expect(spec).toMatchObject({ Image: "lscr.io/linuxserver/prowlarr:latest", Env: ["TZ=Europe/Paris", "PUID=1000", "PGID=1000"], Labels: { "streamrd.managed": "true", "streamrd.server": "prowlarr" } });
+  expect(spec.User).toBeUndefined();   // the image drops to PUID itself
+  expect(spec.HostConfig).toMatchObject({ PortBindings: { "9696/tcp": [{ HostPort: "9696" }] }, RestartPolicy: { Name: "unless-stopped" }, NetworkMode: "streamrd_default" });
+  expect(mountsOf("streamrd-prowlarr")).toEqual([{ Type: "bind", Source: "/home/owner/streamrd/config/prowlarr/config", Target: "/config", ReadOnly: false }]);
+  expect(JSON.stringify(spec)).not.toMatch(/Privileged|docker\.sock|library|"\/data"/);
+  expect(fs.statSync(path.join(folders, "config", "prowlarr", "config")).isDirectory()).toBe(true);
+  expect(fs.existsSync(path.join(folders, "config", "jellyfin"))).toBe(false);   // nothing is made for the others
+  expect((await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message)).toContain("Started. It listens on port 9696");
 });
 
 it("refuses a settings folder that has been made a link, instead of giving ownership of whatever it points at", async () => {

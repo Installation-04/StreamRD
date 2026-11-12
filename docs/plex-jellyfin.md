@@ -87,7 +87,7 @@ nothing to start by hand: the pages do the rest.
 every start and handed to the two API processes alone (not to the web pages, not to the download client, not to the helper's own children). It
 does exactly these things, and nothing a caller says changes what they are:
 
-- start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`, from a fixed specification: the image, the folders mounted
+- start, stop and remove the containers `streamrd-jellyfin`, `streamrd-plex` and `streamrd-prowlarr` (the indexer manager that finds releases for requests, which is given only a folder for its own settings), from a fixed specification: the image, the folders mounted
   (your libraries and downloads read-only, and each server's own settings under `config/`), the user and every other setting are fixed in the helper;
 - replace the StreamRD container with a newer image of the reference it already runs, when you press **Update** (with a verified backup first and an
   automatic rollback). The helper cannot replace the container it lives in, so it starts a short-lived updater from the image that is running,
