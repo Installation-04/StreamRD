@@ -54,10 +54,13 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 DATA_DIR=/data
 WORKDIR /opt
 RUN mkdir -p /config /data && chown node:node /config /data
 COPY --from=bundle --chown=node:node /opt /opt
-COPY --chown=node:node infra/single-container/start.cjs infra/single-container/health.cjs infra/single-container/media-manager.cjs /opt/single-container/
+# The container's first program and the Docker helper run as root when Docker control is on (see init.cjs), so the user StreamRD runs
+# as must not be able to change them, nor swap the folder they are in.
+COPY --chown=root:root --chmod=0644 infra/single-container/init.cjs infra/single-container/start.cjs infra/single-container/health.cjs infra/single-container/media-manager.cjs /opt/single-container/
+RUN chown root:root /opt /opt/single-container && chmod 0755 /opt /opt/single-container
 USER node
 VOLUME ["/config", "/data"]
 EXPOSE 8080 8081 6881/tcp 6881/udp
 HEALTHCHECK --interval=30s --timeout=8s --start-period=90s --retries=3 CMD ["node", "/opt/single-container/health.cjs"]
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "/opt/single-container/start.cjs"]
+CMD ["node", "/opt/single-container/init.cjs"]

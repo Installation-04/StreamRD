@@ -9,8 +9,9 @@ import { backfillGroups } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
-import { recordUpdateOutcome } from "./routes/logs";
+import { recordUpdateOutcomeWhenKnown } from "./routes/logs";
 import { settleRegistrationDefault } from "./auth/access";
+import { loadRuntimeSettings } from "./runtime-settings";
 
 async function main() {
   await enableWal();
@@ -23,6 +24,7 @@ async function main() {
       data: { role: "admin" },
     });
   }
+  await loadRuntimeSettings(); // choices saved in Admin → Server take the place of their environment variables
   const app = createApp();
   app.listen(config.port, () => {
     setAccountImportHook(queueImportedMetadata);
@@ -33,7 +35,7 @@ async function main() {
     void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
-    void recordUpdateOutcome().catch(() => undefined); // how the last update or rollback went, as the update helper recorded it
+    recordUpdateOutcomeWhenKnown(); // how the last update or rollback went, as the update helper recorded it
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);
   });
 }

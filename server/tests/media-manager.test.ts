@@ -25,9 +25,11 @@ async function fakeDocker(): Promise<Fake> {
       if (request.method === "POST" && url.pathname === "/images/create") { if (fake.failPull) return reply(200, undefined, '{"status":"Pulling"}\n{"error":"pull access denied"}\n'); fake.images.add(`${url.searchParams.get("fromImage")}:${url.searchParams.get("tag")}`); return reply(200, undefined, '{"status":"Pulling"}\n{"status":"Download complete"}\n'); }
       if (request.method === "POST" && url.pathname === "/containers/create") { fake.created[url.searchParams.get("name")!] = JSON.parse(Buffer.concat(chunks).toString("utf8")); return reply(201, { Id: "abc" }); }
       if (request.method === "POST" && url.pathname.endsWith("/start")) { fake.running.add(name!); return reply(204); }
+      if (request.method === "POST" && url.pathname.endsWith("/update") && name) { const spec = fake.created[name]; if (!spec) return reply(404, { message: "no such container" }); (spec.HostConfig as Record<string, unknown>).RestartPolicy = JSON.parse(Buffer.concat(chunks).toString("utf8")).RestartPolicy; return reply(200, { Warnings: [] }); }
+      if (request.method === "POST" && url.pathname.endsWith("/restart") && name) return reply(204);
       if (request.method === "POST" && url.pathname.endsWith("/stop")) { fake.running.delete(name!); return reply(fake.created[name!] ? 204 : 404, fake.created[name!] ? undefined : { message: "no such container" }); }
       if (request.method === "DELETE" && name) { const existed = Boolean(fake.created[name]); delete fake.created[name]; fake.running.delete(name); return reply(existed ? 204 : 404, existed ? undefined : { message: "no such container" }); }
-      if (request.method === "GET" && url.pathname.endsWith("/json") && name) { const spec = fake.created[name]; return spec ? reply(200, { State: { Running: fake.running.has(name) }, HostConfig: { PortBindings: (spec.HostConfig as { PortBindings: unknown }).PortBindings } }) : reply(404, { message: "no such container" }); }
+      if (request.method === "GET" && url.pathname.endsWith("/json") && name) { const spec = fake.created[name]; return spec ? reply(200, { State: { Running: fake.running.has(name) }, HostConfig: { PortBindings: (spec.HostConfig as { PortBindings: unknown }).PortBindings, RestartPolicy: (spec.HostConfig as { RestartPolicy: unknown }).RestartPolicy } }) : reply(404, { message: "no such container" }); }
       reply(500, { message: `unexpected ${key}` });
     });
   });
@@ -38,7 +40,7 @@ async function fakeDocker(): Promise<Fake> {
 
 let docker: Fake, manager: http.Server, base: string;
 async function start(extra: Record<string, unknown> = {}, socketPath?: string) {
-  manager = createManager({ socketPath: socketPath ?? docker.socketPath, token: TOKEN, hostDir: HOST, network: "streamrd_default", tz: "UTC", ...extra }).server;
+  manager = createManager({ socketPath: socketPath ?? docker.socketPath, token: TOKEN, hostDir: HOST, network: "streamrd_default", tz: "UTC", restartDelayMs: 50, ...extra }).server;
   await new Promise<void>(done => manager.listen(0, "127.0.0.1", done));
   base = `http://127.0.0.1:${(manager.address() as { port: number }).port}`;
 }
@@ -59,7 +61,7 @@ it("answers only requests that carry the shared secret", async () => {
 
 it("launches Jellyfin from a fixed specification: its image, folders, user and network are not the caller's to choose", async () => {
   const response = await call("POST", "/servers/jellyfin/launch", { port: 8097 }); expect(response.status).toBe(202);
-  expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097 });
+  expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: true });
   const spec = docker.created["streamrd-jellyfin"] as { Image: string; User: string; Env: string[]; Labels: Record<string, string>; HostConfig: Record<string, unknown>; NetworkingConfig: unknown };
   expect(spec).toMatchObject({ Image: "jellyfin/jellyfin:latest", User: "1000:1000", Env: ["TZ=UTC"], Labels: { "streamrd.managed": "true", "streamrd.server": "jellyfin" } });
   expect(spec.HostConfig).toMatchObject({ PortBindings: { "8096/tcp": [{ HostPort: "8097" }] }, RestartPolicy: { Name: "unless-stopped" }, NetworkMode: "streamrd_default" });
@@ -69,6 +71,34 @@ it("launches Jellyfin from a fixed specification: its image, folders, user and n
   ]);
   expect(JSON.stringify(spec)).not.toMatch(/Privileged|docker\.sock|"NetworkMode":"host"|CapAdd|PidMode/);
   expect(docker.calls).toContain("POST /images/create"); // the image was missing, so it was pulled first
+});
+
+it("starts a server with the machine or not: chosen at launch, changed in place afterwards, and nothing else about the container changes", async () => {
+  expect((await call("POST", "/servers/jellyfin/autostart", { enabled: false })).status).toBe(409);   // not launched yet
+  await call("POST", "/servers/jellyfin/launch", { port: 8097, autostart: false });
+  expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: false });
+  expect((docker.created["streamrd-jellyfin"].HostConfig as { RestartPolicy: unknown }).RestartPolicy).toEqual({ Name: "no" });
+  const before = JSON.stringify({ ...docker.created["streamrd-jellyfin"], HostConfig: { ...(docker.created["streamrd-jellyfin"].HostConfig as object), RestartPolicy: null } });
+  const on = await call("POST", "/servers/jellyfin/autostart", { enabled: true }); expect(on.status).toBe(200); expect(await body(on)).toEqual({ ok: true, autostart: true });
+  expect((await body(await call("GET", "/status"))).servers.jellyfin).toEqual({ state: "running", port: 8097, autostart: true });
+  expect((docker.created["streamrd-jellyfin"].HostConfig as { RestartPolicy: unknown }).RestartPolicy).toEqual({ Name: "unless-stopped" });
+  expect(JSON.stringify({ ...docker.created["streamrd-jellyfin"], HostConfig: { ...(docker.created["streamrd-jellyfin"].HostConfig as object), RestartPolicy: null } })).toBe(before);
+  expect((await call("POST", "/servers/jellyfin/autostart", { enabled: "yes" })).status).toBe(400);
+  expect((await call("POST", "/servers/jellyfin/launch", { port: 8097, autostart: "no" })).status).toBe(400);
+  expect((await call("POST", "/servers/emby/autostart", { enabled: true })).status).toBe(404);
+  expect((await call("POST", "/servers/jellyfin/autostart", { enabled: true }, null)).status).toBe(401);
+  const log = (await body(await call("GET", "/servers/jellyfin/logs"))).deploy.map((entry: { message: string }) => entry.message);
+  expect(log).toContain("Set to start again by itself after a restart of this machine");
+});
+
+it("restarts the StreamRD container and nothing else, answering before it does", async () => {
+  expect((await call("GET", "/restart")).status).toBe(405);
+  expect((await call("POST", "/restart", undefined, null)).status).toBe(401);
+  const accepted = await call("POST", "/restart"); expect(accepted.status).toBe(202); expect(await body(accepted)).toEqual({ restarting: true });
+  expect(docker.calls).not.toContain("POST /containers/streamrd/restart");   // the answer went out first
+  expect((await call("POST", "/restart")).status).toBe(409);                 // one at a time
+  await new Promise(done => setTimeout(done, 120));
+  expect(docker.calls.filter(entry => /\/restart$/.test(entry))).toEqual(["POST /containers/streamrd/restart"]);
 });
 
 it("passes a Plex claim token to the container once, and never repeats it", async () => {

@@ -24,6 +24,8 @@ jobs:
           QA_SINGLE_BROWSER: "1"
           QA_ARTIFACT_DIR: ${{ runner.temp }}/single-container-qa
         run: bash infra/smoke-single-container.sh
+      - name: Docker control against a real Docker daemon (launch, restart, update, rollback)
+        run: bash infra/smoke-docker-control.sh streamrd-all-in-one:local
       - uses: actions/upload-artifact@v6
         if: always()
         with:
