@@ -1,6 +1,6 @@
 import { createServer, Server } from "node:http";
 import request from "supertest";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { app, auth, resetDb, adminAndUser } from "./helpers";
 import { db } from "../src/db";
 import { recordUpdateOutcome, recordUpdateOutcomeWhenKnown, redact } from "../src/routes/logs";
@@ -81,7 +81,7 @@ it("builds a diagnostic bundle for administrators with the stuck requests and re
   expect(bundle.logs.length).toBeGreaterThanOrEqual(8);
   expect(bundle.logs.some((row: { message: string }) => row.message.includes("https://api.example.net/<…>"))).toBe(true);
   for (const secret of ["SUPERSECRETKEY123", "owner@example.org", "btih", "abc.def.ghi", admin.email ?? "admin@", process.env.JWT_SECRET ?? "\u0000"]) expect(response.text).not.toContain(secret);
-  expect(await db.logEvent.count({ where: { type: "admin_action", message: "Downloaded a diagnostic bundle" } })).toBe(1);
+  await vi.waitFor(async () => expect(await db.logEvent.count({ where: { type: "admin_action", message: "Downloaded a diagnostic bundle" } })).toBe(1), { timeout: 5000, interval: 20 });   // logged in the background
 });
 
 it("records failed sign-ins, so repeated guesses can be seen", async () => {

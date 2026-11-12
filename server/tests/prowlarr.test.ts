@@ -3,11 +3,15 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { app, auth, resetDb, adminAndUser, TestUser } from "./helpers";
 import { db } from "../src/db";
 import { ensureProwlarr, prowlarrApiKey, prowlarrView, syncIndexers } from "../src/prowlarr";
 import { listIndexers } from "../src/requests/finder";
+
+// The server writes its log lines in the background, so a test waits for the line to be there instead of reading the table at once.
+const logged = (message: string) => db.logEvent.count({ where: { message } });
+const sees = (message: string, times: number) => vi.waitFor(async () => expect(await logged(message)).toBe(times), { timeout: 5000, interval: 20 });
 
 // Prowlarr keeps the indexers requests search. The Docker helper starts it (on by default); StreamRD reads its key from the shared settings
 // folder and turns each enabled torrent indexer into a source for the release search.
@@ -58,7 +62,7 @@ it("starts Prowlarr by itself when Docker control is on, once, and stays out of 
   const asked = await helper({ state: "absent" });
   expect(await ensureProwlarr()).toBe("started");
   expect(asked).toEqual(["GET /status", "POST /servers/prowlarr/launch"]);
-  expect(await db.logEvent.count({ where: { message: "Starting Prowlarr, which finds releases for requests" } })).toBe(1);
+  await sees("Starting Prowlarr, which finds releases for requests", 1);
   asked.length = 0; await helper({ state: "pulling" }); expect(await ensureProwlarr()).toBe("starting");   // it is on its way: nothing more is asked
 });
 
@@ -87,8 +91,8 @@ it("turns every enabled torrent indexer in Prowlarr into a source for the releas
   expect(JSON.stringify(listed.body)).not.toContain(KEY);          // the key is never sent to the page
   const refused = await request(app).delete("/api/admin/request-indexers/prowlarr-1").set(auth(admin.token));
   expect(refused.status).toBe(409); expect(refused.body.error).toMatch(/comes from Prowlarr/);
-  expect(await db.logEvent.count({ where: { message: "Prowlarr has 2 indexers for release search" } })).toBe(1);
-  await syncIndexers(); expect(await db.logEvent.count({ where: { message: "Prowlarr has 2 indexers for release search" } })).toBe(1);   // said once, not at every sync
+  await sees("Prowlarr has 2 indexers for release search", 1);
+  await syncIndexers(); await new Promise(done => setTimeout(done, 150)); expect(await logged("Prowlarr has 2 indexers for release search")).toBe(1);   // said once, not at every sync
 });
 
 it("says nothing is known when Prowlarr cannot be asked: no key yet, no answer, or an answer that is not a list", async () => {
