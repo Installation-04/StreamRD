@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/web",
-  "version": "0.25.1",
+  "version": "0.25.2",
   "private": true,
   "description": "StreamRD web client: user UI and admin dashboard.",
   "scripts": {
