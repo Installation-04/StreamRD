@@ -1,4 +1,5 @@
 import { startRequestWorker } from "./requests/worker";
+import { startAutomaticApprovals } from "./requests/approval";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
@@ -34,6 +35,7 @@ async function main() {
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
+    startAutomaticApprovals();
     void ensureZileanIndexer().catch(() => undefined);
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
     recordUpdateOutcomeWhenKnown(); // how the last update or rollback went, as the update helper recorded it

@@ -23,8 +23,14 @@ Several people can follow one request without submitting several downloads.
 **My requests** shows only the requests you follow; the administrator can review
 all requests. Stopping tracking removes your subscription, not provider content.
 
-Every request waits for administrator approval. A show request identifies the
-show; download progress refers to the specific release the administrator chooses,
+A request is approved by the server itself, by default (v0.24.1): when it arrives, StreamRD
+finds the best release (see below) and sends it to the first administrator who has a working
+cloud download account and an enabled shared library for that kind of title. The request's
+history says what it did. Where it cannot (no indexer yet, no release found, no cloud
+account, no library), the request waits for an administrator and the history says why; the
+server tries it again every fifteen minutes for two weeks. **Admin → Server → Approve requests
+automatically** turns this off, and then every request waits for administrator approval. A show
+request identifies the show; download progress refers to the specific release that is chosen,
 not an assurance that all seasons and episodes have been acquired.
 
 ## Administrator approval
