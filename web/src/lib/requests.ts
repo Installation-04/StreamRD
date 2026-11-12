@@ -39,6 +39,9 @@ export interface DiscoveryDetail {
         kind: "private" | "shared";
         name: string;
         href: string;
+        /** Which library the title is in, and which copy of it: what tells several buttons apart. */
+        library?: string;
+        label?: string;
     }[];
     request: MediaRequest | null;
 }

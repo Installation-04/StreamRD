@@ -32,7 +32,9 @@ const normalize = (name: string) => name.normalize("NFKC").toLocaleLowerCase("en
 function sameLegacy(media: MetadataDetails, other: { name: string; type: string; year: number | null }) {
   return media.year !== null && media.year === other.year && media.type === other.type && normalize(media.name) === normalize(other.name);
 }
-export interface Availability { kind: "private" | "shared" | "catalog"; name: string; href: string }
+/** `library` and `label` tell the buttons apart: which library the title is in, and which copy of it (a title can be there more than once). */
+export interface Availability { kind: "private" | "shared" | "catalog"; name: string; href: string; library?: string; label?: string }
+const tidyName = (name: string) => name.replace(/[._]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
 /** Search metadata identities, never arbitrary names across other users' private storage. */
 async function matchingMetadata(media: MetadataDetails, targetType: string, owners?: string[]) {
   if (owners && !owners.length) return [];
@@ -60,13 +62,15 @@ export async function mediaAvailability(userId: string, media: MetadataDetails):
     const row = records.find(record => record.targetId === item.id && record.ownerId === item.userId), metadata = row ? storedMetadata(row.data) : null;
     return metadata ? sameIdentity(media, metadata) : sameLegacy(media, item);
   };
+  const listed = new Set<string>();   // an item the account already opens as its own is not offered again through a library it shares
   for (const item of own.filter(valid)) {
-    if (await db.accountMedia.count({ where: { id: item.id, AND: [await currentAccountMediaFilter(userId)], phase: "finished" } })) availability.push({ kind: "private", name: item.name, href: `/library/${encodeURIComponent(item.id)}` });
+    if (await db.accountMedia.count({ where: { id: item.id, AND: [await currentAccountMediaFilter(userId)], phase: "finished" } })) { availability.push({ kind: "private", name: item.name, href: `/library/${encodeURIComponent(item.id)}`, library: "My library", label: tidyName(item.name) }); listed.add(item.id); };
     if (availability.length >= 5) break;
   }
   for (const { library, items } of shared) {
     for (const item of items.filter(valid)) {
-      if (await db.sharedLibrary.findFirst({ where: { id: library.id, updatedAt: library.updatedAt, ...visibleSharedLibraryWhere(userId) }, select: { id: true } }) && await db.accountMedia.count({ where: { id: item.id, phase: "finished", AND: [await sharedMediaWhere(library)] } })) availability.push({ kind: "shared", name: library.name, href: `/shared-libraries/${encodeURIComponent(library.id)}/${encodeURIComponent(item.id)}` });
+      if (listed.has(item.id)) continue;
+      if (await db.sharedLibrary.findFirst({ where: { id: library.id, updatedAt: library.updatedAt, ...visibleSharedLibraryWhere(userId) }, select: { id: true } }) && await db.accountMedia.count({ where: { id: item.id, phase: "finished", AND: [await sharedMediaWhere(library)] } })) availability.push({ kind: "shared", name: library.name, href: `/shared-libraries/${encodeURIComponent(library.id)}/${encodeURIComponent(item.id)}`, library: library.name, label: tidyName(item.name) });
       if (availability.length >= 5) break;
     }
     if (availability.length >= 5) break;
@@ -80,11 +84,11 @@ export async function requestAvailability(request: MediaRequest, userId: string)
   if (request.sharedLibraryId) {
     const library = await db.sharedLibrary.findFirst({ where: { id: request.sharedLibraryId, ...visibleSharedLibraryWhere(userId) } });
     if (library && library.sourceUserId === request.sourceUserId && ["all", request.mediaType].includes(library.mediaType)) {
-      const item = await db.accountMedia.findFirst({ where: { AND: [source, await sharedMediaWhere(library)] }, select: { id: true } });
+      const item = await db.accountMedia.findFirst({ where: { AND: [source, await sharedMediaWhere(library)] }, select: { id: true, name: true } });
       const record = item ? await db.metadataRecord.findUnique({ where: { targetType_targetId: { targetType: "account", targetId: item.id } } }) : null;
       const matched = record?.ownerId === request.sourceUserId ? storedMetadata(record.data) : null, requested = storedMetadata(request.metadata);
       if (matched && requested && !sameIdentity(requested, matched)) return [];
-      if (item && await db.sharedLibrary.findFirst({ where: { id: library.id, updatedAt: library.updatedAt, ...visibleSharedLibraryWhere(userId) }, select: { id: true } }) && await db.accountMedia.count({ where: { id: item.id, AND: [source, await sharedMediaWhere(library)] } })) return [{ kind: "shared", name: library.name, href: `/shared-libraries/${encodeURIComponent(library.id)}/${encodeURIComponent(item.id)}` }];
+      if (item && await db.sharedLibrary.findFirst({ where: { id: library.id, updatedAt: library.updatedAt, ...visibleSharedLibraryWhere(userId) }, select: { id: true } }) && await db.accountMedia.count({ where: { id: item.id, AND: [source, await sharedMediaWhere(library)] } })) return [{ kind: "shared", name: library.name, href: `/shared-libraries/${encodeURIComponent(library.id)}/${encodeURIComponent(item.id)}`, library: library.name, label: tidyName(item.name) }];
     }
   }
   if (userId === request.sourceUserId) {
@@ -92,7 +96,7 @@ export async function requestAvailability(request: MediaRequest, userId: string)
     if (item) {
       const record = await db.metadataRecord.findUnique({ where: { targetType_targetId: { targetType: "account", targetId: item.id } } });
       const matched = record?.ownerId === userId ? storedMetadata(record.data) : null, requested = storedMetadata(request.metadata);
-      if ((!matched || !requested || sameIdentity(requested, matched)) && await db.accountMedia.count({ where: { id: item.id, AND: [source, await currentAccountMediaFilter(userId)] } })) return [{ kind: "private", name: item.name, href: `/library/${encodeURIComponent(item.id)}` }];
+      if ((!matched || !requested || sameIdentity(requested, matched)) && await db.accountMedia.count({ where: { id: item.id, AND: [source, await currentAccountMediaFilter(userId)] } })) return [{ kind: "private", name: item.name, href: `/library/${encodeURIComponent(item.id)}`, library: "My library", label: tidyName(item.name) }];
     }
   }
   return [];
