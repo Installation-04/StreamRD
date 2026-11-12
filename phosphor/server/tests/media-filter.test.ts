@@ -7,10 +7,12 @@ import { mediaHint } from "../src/account-library";
 
 const KEEP = ["Crank 2006 Director's Cut 1080p BluRay DTS x264-CtrlHD.mkv", "The Hunger Games 2012 1080p BluRay x264", "Game of Thrones S01E02 720p HDTV x264", "Parker", "Safe", "G20",
   "Windows on the World 2010 720p WEB-DL", "Movie 2020 1080p WEB-DL REPACK", "Switch 2023 1080p WEB-DL", "Dune 2021 2160p UHD BluRay x265 HDR", "Wonder Woman 1984", "Steam Boy 2004 BDRip",
-  "Playstation Network Hackers documentary 2012 WEB-DL"];
+  "Playstation Network Hackers documentary 2012 WEB-DL",
+  // Release names that end in an audio codec are movies, not audio files.
+  "Sintel.2010.1080p.WEB-DL.H264.AAC", "Tears.of.Steel.2012.720p.DVDRip.XviD.MP3", "Some.Film.2014.1080p.BluRay.x264.FLAC", "A.Show.S02E05.720p.HDTV.x264.OGG"];
 const SKIP: Array<[string, string]> = [["XBOX Master Game Collection [CCI", "game"], ["3424e951679a42e7ad891930319ce1df[EZTV x to", "unreadable"], ["Cyberpunk 2077 FitGirl Repack", "game"],
   ["God.of.War.PS4-DUPLEX", "game"], ["Super Mario Collection Nintendo Switch NSW", "game"], ["Adobe Photoshop 2024 v25 Crack", "software"], ["Windows 11 Pro x64 Activated", "software"],
-  ["Pink Floyd Discography MP3 320kbps", "music"], ["Learn Python Udemy Course 2023", "book"], ["Some Game Setup.exe", "file"], ["manual.pdf", "file"], ["Best PC Games Collection 2020", "game"]];
+  ["Pink Floyd Discography MP3 320kbps", "music"], ["Learn Python Udemy Course 2023", "book"], ["Some Game Setup.exe", "file"], ["manual.pdf", "file"], ["01 - Opening Theme.mp3", "file"], ["Artist - Live Album.flac", "file"], ["Film.2010.1080p.BluRay.x264.srt", "file"], ["Best PC Games Collection 2020", "game"]];
 beforeEach(async () => { await resetDb(); });
 
 it("keeps movies and shows and skips games, software, music, books and unreadable names", () => {
@@ -23,6 +25,10 @@ it("applies the filter when importing account items and still derives type, year
   expect(mediaHint(item("3424e951679a42e7ad891930319ce1df[EZTV x to"))).toBeNull();
   expect(mediaHint(item("Crank.2006.Directors.Cut.1080p.BluRay.DTS.x264-CtrlHD.mkv"))).toMatchObject({ name: "Crank", type: "movie", year: 2006 });
   expect(mediaHint(item("Show.Name.S02E05.720p.HDTV.x264"))).toMatchObject({ name: "Show Name", type: "series" });
+  // A release name that ends in an audio codec was dropped as if it were an audio file.
+  expect(mediaHint(item("Sintel.2010.1080p.WEB-DL.H264.AAC"))).toMatchObject({ name: "Sintel", type: "movie", year: 2010 });
+  expect(mediaHint(item("Tears.of.Steel.2012.720p.DVDRip.XviD.MP3"))).toMatchObject({ name: "Tears of Steel", type: "movie", year: 2012 });
+  for (const name of ["01 - Opening Theme.mp3", "cover.jpg", "Film.2010.1080p.BluRay.x264.srt", "readme.nfo", "setup.exe"]) expect(mediaHint(item(name)), name).toBeNull();
 });
 
 async function seed(userId: string, names: string[]) {

@@ -46,10 +46,11 @@ is limited by Docker's bridge network; set `network_mode: host` on the `plex` se
 ## Start Plex or Jellyfin from StreamRD's Setup page
 
 Instead of choosing at install time, you can start them later from **Setup → Plex or Jellyfin** (Admin → Plex / Jellyfin). Enter the port and the
-tokens, press **Launch**, and the server starts next to StreamRD with the same mappings as above. Turn it on once:
+tokens, press **Launch**, and the server starts next to StreamRD with the same mappings as above. This needs the media manager helper, which
+the installer includes unless you decline it. An install from before the helper existed gets it by running the installer once more:
 
 ```bash
-bash install.sh --media-manager        # or choose option 5 in the installer's Advanced menu
+bash install.sh                        # add --media-manager if you declined the helper earlier
 ```
 
 What you enter on the page:
@@ -67,12 +68,12 @@ seconds while it starts. **Copy log** puts it on the clipboard for a bug report.
 before it leaves the helper.
 
 **What the media manager is, and why it is separate.** Starting a container needs access to the Docker socket, which is the same as root on the
-machine. StreamRD never gets it. `--media-manager` adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
+machine. StreamRD never gets it. The installer adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
 three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`, plus one more since v0.23.0: replace the StreamRD container with a newer image of itself when you press **Update** in Admin → System (with an automatic rollback). It listens only on the internal Docker network (no published
 port), answers only requests carrying a secret generated into your `.env`, and the image, the folders mounted (your libraries and downloads, read-only, and
 each server's own settings under `config/`), the user and every other container setting are fixed in the helper, not chosen by the caller. It runs
-read-only with all capabilities dropped. Even so, anyone who can control the helper controls Docker on that machine, so it is off unless you ask for it:
-`bash install.sh --no-media-manager` removes it. Containers it started keep running (stop them from Setup first, or `docker rm -f streamrd-plex streamrd-jellyfin`);
+read-only with all capabilities dropped. Even so, anyone who can control the helper controls Docker on that machine, so you can decline it:
+`bash install.sh --no-media-manager` removes it and keeps it off on later runs, until you pass `--media-manager`. Containers it started keep running (stop them from Setup first, or `docker rm -f streamrd-plex streamrd-jellyfin`);
 their settings stay in `config/jellyfin` and `config/plex`.
 
 Without the helper the page still saves your tokens, rescans and tests connections for a Plex or Jellyfin you started another way (set `PLEX_URL` or

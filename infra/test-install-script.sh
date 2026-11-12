@@ -12,7 +12,11 @@ absent() { ! grep -q "$2" "$1" || { echo "FAIL: $1 has: $2" >&2; exit 1; }; }
 d0="$work/default"; run --dir "$d0"
 check "$d0/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.manager.yml$'; check "$d0/.env" '^MEDIA_MANAGER_TOKEN=[0-9a-f]\{48\}$'
 run --dir "$d0" --no-media-manager; absent "$d0/.env" manager.yml
-d0b="$work/kept"; run --dir "$d0b" --no-media-manager; run --dir "$d0b"; absent "$d0b/.env" manager.yml   # an existing install keeps its choice
+d0b="$work/kept"; run --dir "$d0b" --no-media-manager; run --dir "$d0b"; absent "$d0b/.env" manager.yml   # declined stays declined
+check "$d0b/.env" '^MEDIA_MANAGER_OPTOUT=1$'; run --dir "$d0b" --media-manager; check "$d0b/.env" 'docker-compose.manager.yml'; check "$d0b/.env" '^MEDIA_MANAGER_OPTOUT=0$'
+# An install from before the helper existed, or one that never chose, gets it on a re-run; "no" to an older installer's question still stands.
+d0c="$work/older"; run --dir "$d0c" --no-media-manager; sed -i '/^MEDIA_MANAGER_OPTOUT=/d' "$d0c/.env"; run --dir "$d0c"; check "$d0c/.env" 'docker-compose.manager.yml'; check "$d0c/.env" '^MEDIA_MANAGER_TOKEN=[0-9a-f]\{48\}$'
+d0d="$work/asked"; run --dir "$d0d" --no-media-manager; sed -i '/^MEDIA_MANAGER_OPTOUT=/d' "$d0d/.env"; echo 'MEDIA_MANAGER_ASKED=1' >> "$d0d/.env"; run --dir "$d0d"; absent "$d0d/.env" manager.yml
 
 d="$work/a"; run --dir "$d" --no-media-manager
 check "$d/.env" '^COMPOSE_FILE=docker-compose.yml$'; absent "$d/.env" jellyfin
@@ -30,7 +34,7 @@ run --dir "$d" --media-server jellyfin
 check "$d/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.jellyfin.yml$'
 run --dir "$d" --media-server none
 check "$d/.env" '^COMPOSE_FILE=docker-compose.yml$'; [ -d "$d/config/jellyfin" ]   # settings are kept
-# The media manager helper: opt-in, a fixed locked-down overlay, a generated secret kept across runs, and removable again.
+# The media manager helper: on unless declined, a fixed locked-down overlay, a generated secret kept across runs, and removable again.
 run --dir "$d" --media-manager
 check "$d/.env" 'docker-compose.manager.yml'; check "$d/.env" '^MEDIA_MANAGER_TOKEN=[0-9a-f]\{48\}$'; check "$d/.env" "^HOST_INSTALL_DIR=$d\$"
 check "$d/docker-compose.manager.yml" 'user: "0:0"'; check "$d/docker-compose.manager.yml" 'read_only: true'; check "$d/docker-compose.manager.yml" 'cap_drop: \[ALL\]'

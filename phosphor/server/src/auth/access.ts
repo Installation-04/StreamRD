@@ -12,14 +12,30 @@ export class AccessError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
-/** Missing settings preserve existing installations; malformed settings fail closed. */
+/**
+ * A server whose administrator never chose is invitation only: a private server stays private until its owner opens it, and nobody who
+ * merely finds the address can create an account. The first account, which sets the server up, never needs an invitation.
+ * Malformed settings fail closed.
+ */
+export const DEFAULT_REGISTRATION: RegistrationMode = "invite";
 export async function registrationMode(client: AccessDb = db): Promise<RegistrationMode> {
   const row = await client.setting.findUnique({ where: { key: REGISTRATION_KEY } });
-  if (!row) return "open";
+  if (!row) return DEFAULT_REGISTRATION;
   try {
     const mode: unknown = JSON.parse(row.value).mode;
     return mode === "open" || mode === "invite" || mode === "closed" ? mode : "closed";
   } catch { return "closed"; }
+}
+
+/**
+ * Run once at start. A server that already has accounts and never saved a policy was open until this default existed. The choice is
+ * written down so the administrator sees it in Admin → Users, and the returned sentence goes into the log so the change is not silent.
+ */
+export async function settleRegistrationDefault(client: AccessDb = db): Promise<string | null> {
+  const [row, accounts] = await Promise.all([client.setting.findUnique({ where: { key: REGISTRATION_KEY } }), client.user.count()]);
+  if (row || accounts === 0) return null;
+  await client.setting.create({ data: { key: REGISTRATION_KEY, value: JSON.stringify({ mode: DEFAULT_REGISTRATION }) } });
+  return "New accounts now need an invitation, because no registration choice had been saved on this server. Invite people from Admin → Users, or choose Open registration there.";
 }
 
 /** Share the signup write lock with policy updates and invitation issuance. */

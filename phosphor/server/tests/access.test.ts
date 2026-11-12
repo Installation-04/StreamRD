@@ -5,7 +5,7 @@ import { db } from "../src/db";
 import { signSession } from "../src/auth/jwt";
 import { hashPassword } from "../src/auth/passwords";
 import * as passwords from "../src/auth/passwords";
-import { invitationHash, REGISTRATION_KEY } from "../src/auth/access";
+import { invitationHash, REGISTRATION_KEY, settleRegistrationDefault } from "../src/auth/access";
 import { app, auth, resetDb } from "./helpers";
 
 let passwordHash: string;
@@ -30,12 +30,37 @@ async function invite(email="invited@access.test") {
   return result.body as {inviteToken:string;invitation:{id:string;email:string;status:string}};
 }
 
-it("preserves open registration for existing installations",async()=>{
+it("keeps registration open where the administrator chose it",async()=>{
   const status=await request(app).get("/api/auth/registration");
   expect(status.body).toEqual({mode:"open",bootstrapAvailable:false});
   expect(status.headers["cache-control"]).toContain("no-store");
   const created=await request(app).post("/api/auth/signup").send(signupBody());
   expect(created.status).toBe(201);expect(created.body.user.role).toBe("user");
+});
+
+it("is invitation only where nobody chose: the first account sets the server up, everyone after needs an invitation",async()=>{
+  await db.setting.deleteMany({where:{key:"auth.registration"}});
+  expect((await request(app).get("/api/auth/registration")).body).toEqual({mode:"invite",bootstrapAvailable:false});
+  expect((await request(app).get("/api/admin/access").set(auth(admin.token))).body.mode).toBe("invite");
+  const refused=await request(app).post("/api/auth/signup").send(signupBody());
+  expect(refused.status).toBe(403);expect(refused.body.error).toBe("An invitation is required to create an account");
+  const {inviteToken}=await invite("invited@access.test");
+  const joined=await request(app).post("/api/auth/signup").send({...signupBody("invited@access.test"),inviteToken});
+  expect(joined.status).toBe(201);expect(joined.body.user.role).toBe("user");
+  // A brand-new server: no policy saved, no accounts. The owner creates the first account without an invitation and becomes the administrator.
+  await db.invitation.deleteMany();await db.user.deleteMany();
+  expect((await request(app).get("/api/auth/registration")).body).toEqual({mode:"invite",bootstrapAvailable:true});
+  const owner=await request(app).post("/api/auth/signup").send(signupBody("owner@access.test"));
+  expect(owner.status).toBe(201);expect(owner.body.user.role).toBe("admin");
+  expect((await request(app).post("/api/auth/signup").send(signupBody("next@access.test"))).status).toBe(403);
+  // A server with accounts and no saved choice gets the default written down once, with a sentence for the log; a saved choice is left alone.
+  await db.setting.deleteMany({where:{key:"auth.registration"}});
+  expect(await settleRegistrationDefault()).toMatch(/New accounts now need an invitation/);
+  expect(JSON.parse((await db.setting.findUniqueOrThrow({where:{key:"auth.registration"}})).value)).toEqual({mode:"invite"});
+  expect(await settleRegistrationDefault()).toBeNull();
+  // The administrator can still open it.
+  expect((await request(app).put("/api/admin/access").set({Authorization:`Bearer ${owner.body.token}`}).send({mode:"open"})).status).toBe(200);
+  expect((await request(app).post("/api/auth/signup").send(signupBody("next@access.test"))).status).toBe(201);
 });
 
 it("limits policy, invitation and session administration to admins",async()=>{
@@ -124,7 +149,7 @@ it("closed registration refuses valid invitations and new issuance but preserves
 });
 
 it("fails closed for malformed registration settings",async()=>{
-  await db.setting.create({data:{key:REGISTRATION_KEY,value:"null"}});
+  await db.setting.upsert({where:{key:REGISTRATION_KEY},create:{key:REGISTRATION_KEY,value:"null"},update:{value:"null"}});
   expect((await request(app).get("/api/auth/registration")).body.mode).toBe("closed");
   expect((await request(app).post("/api/auth/signup").send(signupBody())).status).toBe(403);
 });
@@ -167,7 +192,7 @@ it("admin session revocation invalidates every existing token without deactivati
 
 it("bootstraps a first admin despite closed policy then closes further signups",async()=>{
   await resetDb();
-  await db.setting.create({data:{key:REGISTRATION_KEY,value:JSON.stringify({mode:"closed"})}});
+  await db.setting.upsert({where:{key:REGISTRATION_KEY},create:{key:REGISTRATION_KEY,value:JSON.stringify({mode:"closed"})},update:{value:JSON.stringify({mode:"closed"})}});
   expect((await request(app).get("/api/auth/registration")).body).toEqual({mode:"closed",bootstrapAvailable:true});
   const first=await request(app).post("/api/auth/signup").send(signupBody("owner@access.test"));
   expect(first.status).toBe(201);expect(first.body.user.role).toBe("admin");
@@ -176,7 +201,7 @@ it("bootstraps a first admin despite closed policy then closes further signups",
 
 it("reserves restricted-mode bootstrap for ADMIN_EMAIL when configured",async()=>{
   await resetDb();config.adminEmail="owner@access.test";
-  await db.setting.create({data:{key:REGISTRATION_KEY,value:JSON.stringify({mode:"invite"})}});
+  await db.setting.upsert({where:{key:REGISTRATION_KEY},create:{key:REGISTRATION_KEY,value:JSON.stringify({mode:"invite"})},update:{value:JSON.stringify({mode:"invite"})}});
   expect((await request(app).post("/api/auth/signup").send(signupBody("unrelated@access.test"))).status).toBe(403);
   const first=await request(app).post("/api/auth/signup").send(signupBody("owner@access.test"));
   expect(first.status).toBe(201);expect(first.body.user.role).toBe("admin");

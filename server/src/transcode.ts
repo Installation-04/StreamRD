@@ -127,12 +127,25 @@ export function streamStatus(id: string): { known: boolean; lastError: string | 
   return entry && entry.expires >= Date.now() ? { known: true, lastError: entry.lastError ?? null, running: Boolean(entry.stop) } : { known: false, lastError: null, running: false };
 }
 /**
+ * forceVideo: browsers decode strictly. A stream whose picture is copied starts at the nearest earlier keyframe, and in many H.264 files
+ * (Blu-ray style "open GOP" encodes) that keyframe is not a clean entry point: the frames after it still refer to pictures from before it.
+ * ffmpeg and desktop players conceal that; a browser stops with a decode error. Playing from the very start is not affected.
+ */
+const VIDEO_OFF = "This video only plays here if its picture is converted too, and that is turned off on this server (TRANSCODE_VIDEO).";
+/**
  * Streams a converted file to the response. Returns false (and answers) when the id is unknown or the server is busy.
  * Nothing is sent until ffmpeg has produced its first bytes, so a conversion that fails at once answers with the reason instead of an empty video.
  */
-export function streamConverted(id: string, startSeconds: number, res: Response): boolean {
+export function streamConverted(id: string, startSeconds: number, res: Response, forceVideo = false): boolean {
   const entry = streams.get(id);
   if (!entry || entry.expires < Date.now()) { res.status(404).json({ error: "This stream has expired. Open the video again." }); return false; }
+  // A copied picture can be undecodable from where it starts (see the note on forceVideo below). The player then asks for the picture to be
+  // re-encoded, which decodes the source leniently and hands the browser a clean stream.
+  const mode: Exclude<Mode, "direct"> = forceVideo ? "video" : entry.mode;
+  if (forceVideo && entry.mode !== "video") {
+    if (!videoTranscodeEnabled()) { entry.lastError = VIDEO_OFF; res.status(409).json({ error: VIDEO_OFF }); return false; }
+    void logEvent("info", "playback", `The browser could not decode the copied picture (${entry.mode}) at ${Math.floor(startSeconds)}s; re-encoding it instead.`, { userId: entry.userId }).catch(() => undefined);
+  }
   // A browser often opens several requests for one video (to sniff it, then to play it): the newest request for a stream replaces the older one
   // instead of using up the limit on conversions nobody is watching.
   entry.stop?.();
@@ -140,12 +153,12 @@ export function streamConverted(id: string, startSeconds: number, res: Response)
   active += 1; entry.lastError = undefined;
   let released = false, started = false, replaced = false, errorText = "";
   const release = () => { if (!released) { released = true; active -= 1; } };
-  const child: ChildProcess = spawn(ffmpegBin(), ffmpegArgs(entry.url, entry.mode, startSeconds), { stdio: ["ignore", "pipe", "pipe"] });
+  const child: ChildProcess = spawn(ffmpegBin(), ffmpegArgs(entry.url, mode, startSeconds), { stdio: ["ignore", "pipe", "pipe"] });
   const stop = () => { replaced = true; if (child.exitCode === null) child.kill("SIGKILL"); release(); if (entry.stop === stop) entry.stop = undefined; };
   entry.stop = stop;
   const fail = (message: string, status = 502) => {
     entry.lastError = message; release(); if (entry.stop === stop) entry.stop = undefined;
-    void logEvent("error", "playback", `Video conversion failed (${entry.mode}): ${message}`, { userId: entry.userId }).catch(() => undefined);
+    void logEvent("error", "playback", `Video conversion failed (${mode}): ${message}`, { userId: entry.userId }).catch(() => undefined);
     if (!res.headersSent) res.status(status).json({ error: `The server could not convert this video: ${message}` }); else res.destroy();
   };
   child.stderr!.on("data", chunk => { errorText = (errorText + chunk).slice(-4000); });
@@ -159,7 +172,7 @@ export function streamConverted(id: string, startSeconds: number, res: Response)
     release(); if (entry.stop === stop) entry.stop = undefined;
     if (replaced) { if (!res.writableEnded && !res.destroyed) res.destroy(); return; }   // a newer request for this stream took over
     if (!started) { if (res.writableEnded || res.destroyed) return; fail(tidy(errorText) || `ffmpeg stopped (exit ${code}) before producing any video`); return; }
-    if (code !== 0 && code !== null && !res.destroyed) { entry.lastError = tidy(errorText) || `ffmpeg stopped (exit ${code})`; void logEvent("warn", "playback", `Video conversion ended early (${entry.mode}): ${entry.lastError}`, { userId: entry.userId }).catch(() => undefined); }
+    if (code !== 0 && code !== null && !res.destroyed) { entry.lastError = tidy(errorText) || `ffmpeg stopped (exit ${code})`; void logEvent("warn", "playback", `Video conversion ended early (${mode}): ${entry.lastError}`, { userId: entry.userId }).catch(() => undefined); }
     res.end();
   });
   res.on("close", () => { if (child.exitCode === null) { child.kill("SIGKILL"); } release(); if (entry.stop === stop) entry.stop = undefined; });

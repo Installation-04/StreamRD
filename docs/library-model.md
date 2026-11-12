@@ -42,7 +42,7 @@ Release order: v0.17.0 (versions, released) → v0.18.0 (retire the catalogue an
 
 ## What is left, and what each step needs from you
 
-1. **Merging the old surfaces into libraries** (the roadmap's phases B, D and E). Two surfaces still sit beside the libraries:
+1. **Merging the old surfaces into libraries** (the roadmap's *shows, seasons and episodes* phase). Two surfaces still sit beside the libraries:
    - the **curated catalogue** (`Title`, with hand-added link and magnet sources and its own profiles, favourites and My List);
    - **personal imports** that members made from their own debrid accounts before v0.11.0 (hidden from the menu since then, still stored).
 2. **Decisions only you can make.** For the catalogue: keep it as a separate shelf, convert its titles into library items, or retire it.

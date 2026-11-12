@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { api, authFetch } from "@/lib/api";
 import { LogEntry, PROVIDER_IDS } from "@/lib/types";
 
-const TYPES = ["", "signup", "login", "logout", "playback", "provider_error", "admin_action", "system"];
+const TYPES = ["", "signup", "login", "logout", "playback", "request", "library", "provider_error", "admin_action", "system"];
 const LEVELS = ["", "info", "warn", "error"];
 const PAGE_SIZES = [100, 250, 500, 1000];
 const FORMATS = [{ id: "txt", label: "Text (.log)" }, { id: "ndjson", label: "JSON lines (.ndjson)" }, { id: "csv", label: "CSV (.csv)" }] as const;
@@ -63,11 +63,23 @@ export default function AdminLogsPage() {
       setNotice(`Downloaded ${name} (up to 50,000 matching entries).`);
     } catch { setError("The download failed. Check your session and try again."); }
   }
+  /** One file for a bug report: version, setup (no credentials), the last update, stuck requests and the recent log, with links and keys removed. */
+  async function bundle() {
+    setNotice("");
+    try {
+      const response = await authFetch("/api/admin/logs/bundle?days=7");
+      if (!response.ok) throw new Error("bundle");
+      const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "diagnostics.json";
+      const url = URL.createObjectURL(await response.blob()), a = document.createElement("a");
+      a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      setNotice(`Downloaded ${name}: the last 7 days, with links, addresses and keys removed. Read it before you share it.`);
+    } catch { setError("The diagnostic bundle could not be made. Check your session and try again."); }
+  }
   const filtered = Boolean(type || level || provider || search || from || to);
   return (
     <>
       <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap", alignItems: "end" }}>
-        <input type="search" aria-label="Search log messages" placeholder="Search messages…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} style={{ ...field, minWidth: 220 }} />
+        <input type="search" aria-label="Search log messages and details" placeholder="Search messages, titles, request ids…" value={q} maxLength={200} onChange={e => setQ(e.target.value)} style={{ ...field, minWidth: 220 }} />
         <select aria-label="Type" value={type} onChange={e => setType(e.target.value)}>{TYPES.map(v => <option key={v} value={v}>{v || "All types"}</option>)}</select>
         <select aria-label="Level" value={level} onChange={e => setLevel(e.target.value)}>{LEVELS.map(v => <option key={v} value={v}>{v || "All levels"}</option>)}</select>
         <select aria-label="Provider" value={provider} onChange={e => setProvider(e.target.value)}><option value="">All providers</option>{PROVIDER_IDS.map(p => <option key={p} value={p}>{p}</option>)}</select>
@@ -81,6 +93,7 @@ export default function AdminLogsPage() {
         <select aria-label="Download format" defaultValue="" onChange={e => { if (e.target.value) void download(e.target.value); e.target.value = ""; }}>
           <option value="">Download all matching…</option>{FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
         </select>
+        <button type="button" className="btn btn-secondary" onClick={() => void bundle()}>Diagnostic bundle</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void load(false)}>{busy ? "Loading…" : "Refresh"}</button>
         <label className="dim" style={{ fontSize: 12 }}><input type="checkbox" checked={live} onChange={e => setLive(e.target.checked)} /> Live (every 10 s)</label>
         <span className="dim" style={{ fontSize: 12 }} role="status">{notice || `${logs.length} entries shown${cursor ? " · more available" : ""}`}</span>

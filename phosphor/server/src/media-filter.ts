@@ -11,7 +11,10 @@ const GAME = /(?:^|[^a-z0-9])(?:xbox(?:[ ._-]?(?:360|one|series(?:[ ._-]?[xs])?)
 const SOFTWARE = /(?:^|[^a-z0-9])(?:adobe|photoshop|illustrator|premiere|after[ ._-]?effects|autocad|office[ ._-]?(?:365|20\d\d)|windows[ ._-]?(?:7|8|10|11|server)|macos|mac[ ._-]?os[ ._-]?x|ubuntu|linux|keygen|cracked?|activator|patch(?:ed)?|portable|software|installer|setup|vst3?|ableton|fl[ ._-]?studio|nulled|apk|msi|x64[ ._-]?x86|sfx|plugins?)(?:[^a-z0-9]|$)/i;
 const MUSIC = /(?:^|[^a-z0-9])(?:discography|discografia|mp3|320[ ._-]?kbps|album|flac[ ._-]?(?:16|24)|lossless)(?:[^a-z0-9]|$)/i;
 const BOOK = /(?:^|[^a-z0-9])(?:e-?books?|epub|mobi|cbz|cbr|comics?|audiobooks?|udemy|coursera|skillshare|masterclass|tutorials?|courses?)(?:[^a-z0-9]|$)/i;
-const FILE = /\.(?:zip|rar|7z|tar|gz|apk|msi|pkg|exe|dmg|bin|nfo|txt|srt|ass|sub|ssa|vtt|pdf|epub|mobi|mp3|flac|wav|ogg|aac|jpe?g|png|webp|gif)$/i;
+const FILE = /\.(?:zip|rar|7z|tar|gz|apk|msi|pkg|exe|dmg|bin|nfo|txt|srt|ass|sub|ssa|vtt|pdf|epub|mobi|jpe?g|png|webp|gif)$/i;
+// These endings are audio files, and also how many movie releases end ("Film.2010.1080p.WEB-DL.H264.AAC", "Film.2012.DVDRip.XviD.MP3"):
+// a name that ends this way is a file only when nothing else in it says video.
+const AUDIO_FILE = /\.(?:mp3|flac|wav|ogg|aac)$/i;
 // A bare info-hash (or hash plus site tag) names nothing; there is no title to match.
 const UNREADABLE = /^[\[(]?[a-f0-9]{32,40}[\])]?(?:[ ._\[(-]|$)/i;
 
@@ -20,6 +23,7 @@ export function classifyTitle(original: string): MediaVerdict {
   if (FILE.test(name)) return { keep: false, reason: "file" };
   if (UNREADABLE.test(name)) return { keep: false, reason: "unreadable" };
   if (VIDEO_TAGS.test(name)) return { keep: true };
+  if (AUDIO_FILE.test(name)) return { keep: false, reason: "file" };
   if (GAME.test(name)) return { keep: false, reason: "game" };
   if (SOFTWARE.test(name)) return { keep: false, reason: "software" };
   if (MUSIC.test(name)) return { keep: false, reason: "music" };
