@@ -58,8 +58,9 @@ signin() {
   token="$(printf '%s' "$body" | jq -r '.token // empty')"; [ -n "$token" ] || fail "could not $route: $body"
 }
 healthy() { docker exec "$name" node /opt/single-container/health.cjs; }
-helper() {   # helper METHOD PATH: asks the helper from inside the container, with the secret only StreamRD's API processes hold
-  docker exec -i "$name" node - "$@" <<'NODE'
+helper() {   # helper METHOD PATH: asks the helper from inside the container, as StreamRD does: as user 1000, with the secret only its API processes hold
+  # (root in a container may not read another user's process environment, so this must be user 1000, as the API is)
+  docker exec -u 1000 -i "$name" node - "$@" <<'NODE'
 const fs = require('node:fs');
 let token = '';
 for (const pid of fs.readdirSync('/proc').filter(entry => /^\d+$/.test(entry))) {
@@ -147,7 +148,8 @@ say "An update that does not become healthy is rolled back"
 original_image="$(inspect '{{.Image}}' "$name")"
 printf 'FROM %s\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retries=1 CMD false\n' "$image" | docker build -q -t "$ref" - >/dev/null
 docker push "$ref" >/dev/null
-helper POST /update | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted"
+accepted="$(helper POST /update 2>&1)" || fail "the update was not accepted: $accepted"
+echo "$accepted" | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted: $accepted"
 # While the container is being replaced nothing answers; only a finished state counts.
 finished() { local now; now="$(helper GET /update 2>/dev/null | jq -r '.state' 2>/dev/null || true)"; [ "$now" = failed ] || [ "$now" = done ] || [ "$now" = current ]; }
 until_true 360 "the update to finish" finished
@@ -166,7 +168,8 @@ say "An update that works is applied"
 printf 'FROM %s\nLABEL streamrd.smoke.update=applied\n' "$image" | docker build -q -t "$ref" - >/dev/null
 docker push "$ref" >/dev/null
 new_image="$(docker image inspect -f '{{.Id}}' "$ref")"
-helper POST /update | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted"
+accepted="$(helper POST /update 2>&1)" || fail "the update was not accepted: $accepted"
+echo "$accepted" | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted: $accepted"
 has_new_image() { [ "$(inspect '{{.Image}}' "$name")" = "$new_image" ]; }
 until_true 420 "the new container" has_new_image
 until_true 300 "the new version to be healthy" healthy
