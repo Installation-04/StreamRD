@@ -18,9 +18,12 @@ const KEY = "media.servers", NAMES = ["jellyfin", "plex"] as const;
 type Name = (typeof NAMES)[number];
 const DEFAULT_PORT: Record<Name, number> = { jellyfin: 8096, plex: 32400 };
 const port = z.number().int().min(1024).max(65535);
-interface Stored { jellyfin: { port: number; secret: string }; plex: { port: number; secret: string } }
-const empty = (): Stored => ({ jellyfin: { port: DEFAULT_PORT.jellyfin, secret: "" }, plex: { port: DEFAULT_PORT.plex, secret: "" } });
-const storedSchema = z.object({ jellyfin: z.object({ port, secret: z.string().max(1500) }), plex: z.object({ port, secret: z.string().max(1500) }) });
+// autostart: whether the server comes back by itself after the machine restarts (on unless the administrator turns it off).
+interface One { port: number; secret: string; autostart: boolean }
+interface Stored { jellyfin: One; plex: One }
+const empty = (): Stored => ({ jellyfin: { port: DEFAULT_PORT.jellyfin, secret: "", autostart: true }, plex: { port: DEFAULT_PORT.plex, secret: "", autostart: true } });
+const oneSchema = z.object({ port, secret: z.string().max(1500), autostart: z.boolean().default(true) });
+const storedSchema = z.object({ jellyfin: oneSchema, plex: oneSchema });
 
 async function readStored(): Promise<Stored> {
   const row = await db.setting.findUnique({ where: { key: KEY } });
@@ -45,7 +48,7 @@ async function manager<T>(method: string, route: string, body?: unknown): Promis
   if (!response.ok) throw new ManagerError(typeof json.error === "string" ? json.error : "The media manager refused the request.", response.status >= 400 && response.status < 500 ? 400 : 502);
   return json as T;
 }
-type ServerState = { state: "absent" | "stopped" | "running" | "pulling" | "starting" | "failed"; port?: number; error?: string };
+type ServerState = { state: "absent" | "stopped" | "running" | "pulling" | "starting" | "failed"; port?: number; error?: string; autostart?: boolean };
 async function managerStatus(): Promise<{ available: boolean; servers: Partial<Record<Name, ServerState>> }> {
   const { url, token } = managerConfig();
   if (!url || !token) return { available: false, servers: {} };
@@ -101,7 +104,7 @@ mediaServersRouter.use(requireAuth, requireAdmin, (_req, res, next) => { res.set
 mediaServersRouter.param("server", (_req, res, next, value: string) => { if ((NAMES as readonly string[]).includes(value)) next(); else res.status(404).json({ error: "Unknown media server." }); });
 async function view() {
   const [stored, status] = await Promise.all([readStored(), managerStatus()]);
-  const one = (key: Name) => ({ port: stored[key].port, state: (status.servers[key]?.state ?? (status.available ? "absent" : "unknown")) as ServerState["state"] | "unknown", ...(status.servers[key]?.error ? { error: status.servers[key]!.error } : {}), secretHint: hint(secretOf(stored, key)) });
+  const one = (key: Name) => ({ port: stored[key].port, autostart: status.servers[key]?.autostart ?? stored[key].autostart, state: (status.servers[key]?.state ?? (status.available ? "absent" : "unknown")) as ServerState["state"] | "unknown", ...(status.servers[key]?.error ? { error: status.servers[key]!.error } : {}), secretHint: hint(secretOf(stored, key)) });
   return { manager: { available: status.available }, servers: { jellyfin: one("jellyfin"), plex: one("plex") } };
 }
 mediaServersRouter.get("/", asyncHandler(async (_req, res) => { res.json(await view()); }));
@@ -120,13 +123,14 @@ mediaServersRouter.put("/", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandl
 }));
 mediaServersRouter.post("/:server/launch", rateLimit({ windowMs: 60_000, max: 12 }), asyncHandler(async (req, res) => {
   const key = name.parse(req.params.server);
-  const body = parseBody(z.object({ port: port.optional(), claim: z.string().trim().max(120).optional() }).strict(), req.body ?? {}, res);
+  const body = parseBody(z.object({ port: port.optional(), claim: z.string().trim().max(120).optional(), autostart: z.boolean().optional() }).strict(), req.body ?? {}, res);
   if (!body) return;
-  const stored = await readStored(); if (body.port !== undefined) { stored[key].port = body.port; await writeStored(stored); }
+  const stored = await readStored();
+  if (body.port !== undefined || body.autostart !== undefined) { if (body.port !== undefined) stored[key].port = body.port; if (body.autostart !== undefined) stored[key].autostart = body.autostart; await writeStored(stored); }
   try {
     // The claim token goes to the launch and nowhere else: it is not saved, logged or returned.
-    const job = await manager<{ state: string }>("POST", `/servers/${key}/launch`, { port: stored[key].port, ...(key === "plex" && body.claim ? { claim: body.claim } : {}) });
-    void logEvent("info", "admin_action", `Started ${key}`, { userId: req.session!.sub, meta: { port: stored[key].port } });
+    const job = await manager<{ state: string }>("POST", `/servers/${key}/launch`, { port: stored[key].port, autostart: stored[key].autostart, ...(key === "plex" && body.claim ? { claim: body.claim } : {}) });
+    void logEvent("info", "admin_action", `Started ${key}`, { userId: req.session!.sub, meta: { port: stored[key].port, autostart: stored[key].autostart } });
     res.status(202).json({ state: job.state });
   } catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
 }));
@@ -137,6 +141,19 @@ for (const [method, suffix, route] of [["post", "/:server/stop", "stop"], ["dele
     catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
   }));
 }
+/** Start with the machine or not. The choice is remembered for the next launch; a server that already exists is changed in place. */
+mediaServersRouter.put("/:server/autostart", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandler(async (req, res) => {
+  const key = name.parse(req.params.server);
+  const body = parseBody(z.object({ enabled: z.boolean() }).strict(), req.body, res);
+  if (!body) return;
+  const stored = await readStored(); stored[key].autostart = body.enabled; await writeStored(stored);
+  const status = await managerStatus();
+  try {
+    if (status.available && status.servers[key] && ["running", "stopped"].includes(status.servers[key]!.state)) await manager("POST", `/servers/${key}/autostart`, { enabled: body.enabled });
+    void logEvent("info", "admin_action", `${key} ${body.enabled ? "starts again by itself" : "stays stopped"} after a restart of the machine`, { userId: req.session!.sub });
+    res.json(await view());
+  } catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
+}));
 mediaServersRouter.get("/:server/logs", rateLimit({ windowMs: 60_000, max: 120 }), asyncHandler(async (req, res) => {
   const { tail } = parseBody(z.object({ tail: z.coerce.number().int().min(1).max(200).default(100) }).strict(), req.query, res) ?? {};
   if (tail === undefined) return;

@@ -30,7 +30,7 @@ it("is for the administrator only", async () => {
 
 it("shows the defaults and explains that launching needs the media manager when it is not installed", async () => {
   const view = await get(); expect(view.status).toBe(200);
-  expect(view.body).toEqual({ manager: { available: false }, servers: { jellyfin: { port: 8096, state: "unknown", secretHint: null }, plex: { port: 32400, state: "unknown", secretHint: null } } });
+  expect(view.body).toEqual({ manager: { available: false }, servers: { jellyfin: { port: 8096, autostart: true, state: "unknown", secretHint: null }, plex: { port: 32400, autostart: true, state: "unknown", secretHint: null } } });
   const launch = await request(app).post("/api/admin/media-servers/plex/launch").set(auth(admin.token)).send({});
   expect(launch.status).toBe(409); expect(launch.body.error).toMatch(/media manager/i);
 });
@@ -53,13 +53,32 @@ it("launches through the manager with the saved port, and passes a Plex claim to
   const launched = await request(app).post("/api/admin/media-servers/plex/launch").set(auth(admin.token)).send({ claim: "claim-secretvalue123" });
   expect(launched.status).toBe(202); expect(launched.body).toEqual({ state: "pulling" });
   const call = fake.seen.find(entry => entry.url === "/servers/plex/launch")!;
-  expect(call.headers.authorization).toBe(`Bearer ${TOKEN}`); expect(JSON.parse(call.body)).toEqual({ port: 32401, claim: "claim-secretvalue123" });
+  expect(call.headers.authorization).toBe(`Bearer ${TOKEN}`); expect(JSON.parse(call.body)).toEqual({ port: 32401, autostart: true, claim: "claim-secretvalue123" });
   expect(JSON.stringify(launched.body)).not.toContain("claim-");
   expect(JSON.stringify(await db.setting.findMany())).not.toContain("claim-secretvalue123");
   const jellyfin = await request(app).post("/api/admin/media-servers/jellyfin/launch").set(auth(admin.token)).send({ port: 8100, claim: "claim-ignored" });
-  expect(jellyfin.status).toBe(202); expect(JSON.parse(fake.seen.filter(entry => entry.url === "/servers/jellyfin/launch")[0].body)).toEqual({ port: 8100 });
+  expect(jellyfin.status).toBe(202); expect(JSON.parse(fake.seen.filter(entry => entry.url === "/servers/jellyfin/launch")[0].body)).toEqual({ port: 8100, autostart: true });
   const view = await get(); expect(view.body.manager.available).toBe(true); expect(view.body.servers.plex).toMatchObject({ state: "running", port: 32401 }); expect(view.body.servers.jellyfin).toMatchObject({ state: "absent", port: 8100 });
   expect(JSON.stringify(view.body)).not.toContain("claim-");
+});
+
+it("remembers whether a server starts with the machine, changes a server that exists in place, and launches with that choice", async () => {
+  let servers: Record<string, unknown> = { jellyfin: { state: "running", port: 8096, autostart: true }, plex: { state: "absent" } };
+  const fake = await keep(serve(request => request.url === "/status" ? { json: { servers } } : request.url?.endsWith("/autostart") ? { json: { ok: true } } : { status: 202, json: { state: "pulling" } }));
+  process.env.MEDIA_MANAGER_URL = fake.url; process.env.MEDIA_MANAGER_TOKEN = TOKEN;
+  const off = await request(app).put("/api/admin/media-servers/jellyfin/autostart").set(auth(admin.token)).send({ enabled: false });
+  expect(off.status).toBe(200);
+  expect(JSON.parse(fake.seen.find(entry => entry.url === "/servers/jellyfin/autostart")!.body)).toEqual({ enabled: false });   // the running server is changed in place
+  servers = { jellyfin: { state: "running", port: 8096, autostart: false }, plex: { state: "absent" } };
+  expect((await get()).body.servers.jellyfin.autostart).toBe(false);
+  // Plex has not been launched: nothing to change yet, the choice is kept for the launch.
+  expect((await request(app).put("/api/admin/media-servers/plex/autostart").set(auth(admin.token)).send({ enabled: false })).status).toBe(200);
+  expect(fake.seen.some(entry => entry.url === "/servers/plex/autostart")).toBe(false);
+  expect((await get()).body.servers.plex.autostart).toBe(false);
+  await request(app).post("/api/admin/media-servers/plex/launch").set(auth(admin.token)).send({});
+  expect(JSON.parse(fake.seen.find(entry => entry.url === "/servers/plex/launch")!.body)).toEqual({ port: 32400, autostart: false });
+  expect((await request(app).put("/api/admin/media-servers/plex/autostart").set(auth(admin.token)).send({ enabled: "yes" })).status).toBe(400);
+  expect((await request(app).put("/api/admin/media-servers/plex/autostart").set(auth(member.token)).send({ enabled: true })).status).toBe(403);
 });
 
 it("says plainly when the manager refuses or cannot be reached", async () => {

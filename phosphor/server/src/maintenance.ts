@@ -1,3 +1,4 @@
+import { runtime } from "./runtime-settings";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -124,9 +125,31 @@ export function cancelRestore(): boolean {
   fs.rmSync(marker);
   return true;
 }
-/** Exit so the container supervisor restarts the process. Only when the operator declared one. */
-export function restartSupported(): boolean { return process.env.ADMIN_RESTART === "true"; }
+/**
+ * A restart from the web page is offered where something will bring the server back: the helper, which restarts the container whatever
+ * its restart policy is, or a supervisor the operator declared (ADMIN_RESTART=true), for which the process simply exits.
+ */
+function helper(): { base: string; token: string } | null {
+  const raw = process.env.MEDIA_MANAGER_URL, token = process.env.MEDIA_MANAGER_TOKEN;
+  if (!raw || !token) return null;
+  try { const url = new URL(raw); return ["http:", "https:"].includes(url.protocol) ? { base: url.origin, token } : null; } catch { return null; }
+}
+export function restartSupported(): boolean { return process.env.ADMIN_RESTART === "true" || helper() !== null; }
 export function restartSoon(): void { setTimeout(() => process.exit(0), 800).unref(); }
+/** Asks for the restart and returns once it is certain to happen; the caller answers the browser before the server goes away. */
+export async function requestRestart(): Promise<void> {
+  const via = helper();
+  if (via) {
+    let status = 0;
+    try { const response = await fetch(`${via.base}/restart`, { method: "POST", headers: { Authorization: `Bearer ${via.token}` }, signal: AbortSignal.timeout(8000), redirect: "error" }); status = response.status; await response.body?.cancel(); }
+    catch { /* decided below */ }
+    if (status === 202) return;
+    if (status === 409) throw new MaintenanceError("The server is already restarting or updating. Give it a minute.", 409);
+    if (process.env.ADMIN_RESTART !== "true") throw new MaintenanceError("The helper that restarts the server did not answer. Check that its container (streamrd-media-manager) is running.", 502);
+  }
+  if (process.env.ADMIN_RESTART !== "true" && !via) throw new MaintenanceError("Restart is not available here. Restart the container or service yourself.", 409);
+  restartSoon();
+}
 
 // ---- Update checks and the operator-configured update hook ----
 export interface UpdateInfo {
@@ -158,7 +181,7 @@ export function updateTarget(): { url: URL; token: string; helper: boolean } | n
   try { const url = new URL("/update", base); return ["http:", "https:"].includes(url.protocol) ? { url, token, helper: true } : null; } catch { return null; }
 }
 export async function checkForUpdates(force = false): Promise<UpdateInfo> {
-  const base: UpdateInfo = { current: version, latest: null, updateAvailable: false, publishedAt: null, url: null, checkEnabled: process.env.UPDATE_CHECK !== "false", checkedAt: null, error: null, canApply: updateTarget() !== null, updater: updateTarget() ? (updateTarget()!.helper ? "helper" : "webhook") : null };
+  const base: UpdateInfo = { current: version, latest: null, updateAvailable: false, publishedAt: null, url: null, checkEnabled: runtime().updateCheck, checkedAt: null, error: null, canApply: updateTarget() !== null, updater: updateTarget() ? (updateTarget()!.helper ? "helper" : "webhook") : null };
   if (!base.checkEnabled) return base;
   const repository = process.env.UPDATE_REPOSITORY ?? "Installation-04/StreamRD";
   if (!UPDATE_SLUG.test(repository)) return { ...base, error: "UPDATE_REPOSITORY is not a valid owner/name." };

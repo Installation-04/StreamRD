@@ -8,9 +8,22 @@ losing data. Sizes are rough (S = days, M = a week or two, L = several weeks of 
 Shipped: one Library page and library sharing (v0.11.0), the home page (v0.12.0, v0.13.0), viewing limits for kids' accounts (v0.14.0),
 invitations that carry library access (v0.15.0), the full-page player (v0.16.0), one card per title with versions (v0.17.0), a single
 administrator-managed library (v0.18.0), link health checks (v0.19.0), My List (v0.20.0), watched marks (v0.21.0), conversion while you
-watch (v0.22.0), the Update button (v0.23.0), and conversion that survives resuming and seeking (v0.23.2).
+watch (v0.22.0), the Update button (v0.23.0), and converted playback that works, with the whole product tested in a real browser (v0.23.2).
 
 The remaining data-model decisions are in [library-model.md](library-model.md).
+
+## Now: the server is run from its web page, in one container
+
+After the one-time install, nothing should need a command or a file on the server.
+
+| Release | What changes for the owner | Size | Database |
+|---|---|---|---|
+| v0.24.0 | Server settings that were environment variables are choices in Admin → Server; Restart from Admin → System; Plex and Jellyfin start again with the machine, or not, as chosen; the launch shows a live log | M | none |
+| v0.24.0 | The helper that launches Plex and Jellyfin and runs updates lives inside the StreamRD container: one container, no extra script, updates from the page or with plain Docker | L | none |
+| next | Zilean and Zurg started and stopped from the page; Phosphor and the bundled download client switched on and off from the page | M | none |
+
+Plex and Jellyfin stay in containers of their own, started from the page: they are large separate programs with their own releases.
+What cannot move to the page: the first install, and adding access to Docker to an install that was made without it.
 
 ## Phase 1: playback you can rely on
 
@@ -19,12 +32,12 @@ Playing a video is the product, so it comes first.
 | Release | What changes for the viewer | Size | Database |
 |---|---|---|---|
 | v0.23.2 | A converted video no longer stops when resumed or sought; a refused stream says why | S | none |
-| v0.24.0 | Instant seeking in converted videos, a real duration and buffer, the server converts only what your browser cannot play | L | none |
-| v0.24.x | Choose the audio track; subtitles; a quality menu (Original, 1080p, 720p, 480p) | M | none |
-| v0.24.x | The administrator sees who is watching and can stop a stream; a limit per viewer | S | none |
+| v0.25.0 | Instant seeking in converted videos, a real duration and buffer, the server converts only what your browser cannot play | L | none |
+| v0.25.x | Choose the audio track; subtitles; a quality menu (Original, 1080p, 720p, 480p) | M | none |
+| v0.25.x | The administrator sees who is watching and can stop a stream; a limit per viewer | S | none |
 | later | Optional hardware acceleration and correct colours for HDR sources | M | none |
 
-How v0.24.0 is built, in pull requests:
+How v0.25.0 is built, in pull requests:
 1. The browser tells the server what it can decode; the server decides between playing the file as it is, repackaging it, converting the
    audio, or converting the picture, and logs the reason.
 2. Converted video is delivered in short segments with a playlist that knows the full length. Segments are made on demand, a little
@@ -50,7 +63,7 @@ Not verifiable in CI: Safari, hardware acceleration. Those are recorded manual r
 | Signed images | Each published image carries a signature, a list of its contents and a record of how it was built | S |
 | Encryption key rotation | A command that re-encrypts stored credentials under a new key | S |
 
-Database: one additive table for rate limiting. Release: v0.25.0.
+Database: one additive table for rate limiting. Release: v0.26.0.
 
 ## Phase 3: one codebase, one API description
 

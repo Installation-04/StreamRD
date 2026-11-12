@@ -4,11 +4,12 @@ import { z } from "zod";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 import { asyncHandler } from "../http";
 import { logEvent } from "../logger";
+import { runtime, runtimeSettingsPatch, runtimeSources, saveRuntimeSettings } from "../runtime-settings";
 import { systemStatus } from "../system";
 import { rateLimit } from "../util/rateLimit";
 import {
   MaintenanceError, backupPath, cancelRestore, checkForUpdates, createBackup, deleteBackup, listBackups, pendingRestore,
-  requestUpdate, restartSoon, restartSupported, stageRestore, validBackupName, verifyBackup,
+  requestUpdate, requestRestart, restartSupported, stageRestore, validBackupName, verifyBackup,
 } from "../maintenance";
 export const systemRouter = Router();
 systemRouter.use(requireAuth, requireAdmin);
@@ -24,6 +25,16 @@ function guarded(run: (req: Request, res: Response) => Promise<unknown>) {
 const audit = (req: Request, message: string, meta: Record<string, unknown> = {}) => logEvent("info", "admin_action", message, { userId: req.session!.sub, meta });
 const heavy = () => rateLimit({ windowMs: 60_000, max: 20 });
 const name = (req: Request) => { if (!validBackupName(req.params.name)) throw new MaintenanceError("Backup not found.", 404); return req.params.name; };
+
+/** Settings that used to be environment variables: read them, with where each value comes from, and change them without a restart. */
+systemRouter.get("/settings", guarded(async (_req, res) => { res.json({ settings: runtime(), sources: runtimeSources() }); }));
+systemRouter.put("/settings", heavy(), guarded(async (req, res) => {
+  const parsed = runtimeSettingsPatch.safeParse(req.body);
+  if (!parsed.success) throw new MaintenanceError("These settings could not be read. Conversions at once must be a whole number from 1 to 8; the others are on or off.");
+  const changed = await saveRuntimeSettings(parsed.data), settings = runtime();
+  if (changed.length) await audit(req, "Changed server settings", { changed: Object.fromEntries(changed.map(name => [name, settings[name]])) });
+  res.json({ settings, sources: runtimeSources(), changed });
+}));
 
 systemRouter.get("/maintenance", guarded(async (_req, res) => {
   res.json({ backups: listBackups(), pendingRestore: pendingRestore(), restartSupported: restartSupported() });
@@ -51,9 +62,9 @@ systemRouter.post("/backups/:name/restore", heavy(), guarded(async (req, res) =>
   if (!parsed.success) throw new MaintenanceError('Type RESTORE to confirm. Restoring replaces all current data after a safety backup.');
   const staged = await stageRestore(name(req), req.session!.sub);
   await audit(req, "Staged a database restore", { backup: req.params.name, safetyBackup: staged.preRestoreBackup.name });
-  const restarting = parsed.data.restart === true && restartSupported();
+  let restarting = parsed.data.restart === true && restartSupported();
+  if (restarting) { try { await requestRestart(); } catch { restarting = false; } }   // the restore stays staged; it is applied at the next start
   res.status(202).json({ ...staged, restarting });
-  if (restarting) restartSoon();
 }));
 systemRouter.delete("/restore", guarded(async (req, res) => {
   const cancelled = cancelRestore();
@@ -63,8 +74,8 @@ systemRouter.delete("/restore", guarded(async (req, res) => {
 systemRouter.post("/restart", heavy(), guarded(async (req, res) => {
   if (!restartSupported()) throw new MaintenanceError("Restart is not available here. Restart the container or service yourself.", 409);
   await audit(req, "Requested a server restart");
+  await requestRestart();
   res.status(202).json({ restarting: true });
-  restartSoon();
 }));
 systemRouter.get("/update", heavy(), guarded(async (req, res) => { res.json(await checkForUpdates(req.query.refresh === "1")); }));
 systemRouter.post("/update", heavy(), guarded(async (req, res) => {

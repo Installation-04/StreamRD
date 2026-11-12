@@ -8,6 +8,7 @@
  *   LAB_DIR=/some/dir                where the database and logs live (default: a folder under the system temp dir)
  *   LAB_MEDIA_DIR=/some/dir          where the generated videos are kept between runs (about 300 MB; made once, in a minute or two)
  *   LAB_FRESH=1                      start from an empty database
+ *   LAB_HELPER=0                     run without the helper that launches Plex and Jellyfin (it runs against a stand-in for Docker)
  * Sign-in details are yours to choose on the first-run page. Debrid key: lab-debrid-key-0123456789. Indexer: http://127.0.0.1:47990/torznab/api
  * with key lab-indexer-key.
  */
@@ -77,6 +78,13 @@ async function ready(url) { for (let attempt = 0; attempt < 120; attempt++) { tr
     TMDB_DEFAULT_API_KEY: "lab-tmdb-key-0123456789", STREAMRD_LAB: "1", LAB_ORIGIN: `http://127.0.0.1:${ports.origin}`, LAB_MEDIA: media, LAB_ORIGIN_PORT: String(ports.origin), LAB_OUTBOUND_LOG: path.join(lab, "outbound.log") };
   fs.mkdirSync(env.MEDIA_SOURCE_ROOT, { recursive: true });
   run(server, process.execPath, ["scripts/prepare-db.cjs"], env);
+  if (process.env.LAB_HELPER !== "0") {
+    // The real helper, against a stand-in for Docker: Launch, the deploy log, auto-start and Restart can be tried from the pages.
+    const socket = path.join(lab, "docker.sock");
+    Object.assign(env, { MEDIA_MANAGER_URL: "http://127.0.0.1:8099", MEDIA_MANAGER_TOKEN: secret("helper-token") });
+    start("docker", __dirname, ["fake-docker.cjs"], { LAB_DOCKER_SOCKET: socket });
+    start("helper", root, [path.join("infra", "single-container", "media-manager.cjs")], { DOCKER_SOCKET: socket, MEDIA_MANAGER_TOKEN: env.MEDIA_MANAGER_TOKEN, HOST_INSTALL_DIR: lab, PORT: "8099", STREAMRD_CONTAINER: "streamrd" });
+  }
   start("origin", __dirname, ["origin.cjs"], env);
   start("api", server, ["--require", path.join(__dirname, "preload.cjs"), "dist/src/index.js"], env);
   start("web", standalone, ["server.js"], { NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PORT: String(ports.web), HOSTNAME: "127.0.0.1" });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authFetch, get, post, put } from "@/lib/api";
+import ServerSettingsPanel from "@/components/ServerSettingsPanel";
 import { PROVIDER_IDS, PROVIDER_NAMES, ProviderId, ServerSettings } from "@/lib/types";
 
 export default function AdminServerPage() {
@@ -72,7 +73,9 @@ export default function AdminServerPage() {
   };
 
   return (
-    <form onSubmit={save} style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 720 }}>
+    <ServerSettingsPanel conversion />
+    <form onSubmit={save}>
       <div className="card" style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 16, marginBottom: 14 }}>Global provider order & availability</h2>
         {settings.providerOrder.map((id, i) => (
@@ -158,5 +161,6 @@ export default function AdminServerPage() {
         </button>
       </div>
     </form>
+    </div>
   );
 }

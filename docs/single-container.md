@@ -179,9 +179,9 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
 | `STREAMRD_DATA_KEY`, `PHOSPHOR_DATA_KEY` | Optional explicit keys (at least 16 characters) for encrypting stored credentials; otherwise generated under `/config/secrets` |
-| `LINK_HEALTH` | Set to `false` to turn off the background check of every imported link (on by default; see [the release notes](releases/v0.19.0.md)) |
+| `LINK_HEALTH` | Set to `false` to turn off the background check of every imported link (on by default). Also a choice in **Admin → Server**; a choice saved there takes the place of this variable |
 | `LINK_HEALTH_BATCH` | How many imports are checked per minute (default 3, at most 20) |
-| `TRANSCODE` | Set to `false` to stop converting files a browser cannot play (on by default; see [the release notes](releases/v0.22.0.md)) |
+| `TRANSCODE` | Set to `false` to stop converting files a browser cannot play (on by default). Like the three below, also a choice in **Admin → Server**, in force at once; a choice saved there takes the place of the variable |
 | `TRANSCODE_VIDEO` | Set to `false` to allow only the light conversions (repackaging and audio), never re-encoding video |
 | `TRANSCODE_MAX` | How many videos may be converted at once (default 2, at most 8); more get a "try again" |
 | `TRANSCODE_ALLOW_PRIVATE_HOSTS` | Set to `true` only if your media links are on your own network (a local address); off by default |

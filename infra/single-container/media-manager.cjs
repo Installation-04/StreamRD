@@ -10,7 +10,9 @@
 //     user it runs as and every other setting of the container are fixed here, not chosen by the caller;
 //   - never logs or stores the claim token;
 //   - updates only the one container named by STREAMRD_CONTAINER (default streamrd), only to a newer image of the reference that container
-//     already uses; the caller chooses nothing. The old container is kept until the new one is healthy and put back if it is not.
+//     already uses; the caller chooses nothing. The old container is kept until the new one is healthy and put back if it is not;
+//   - restarts only that same container (the Restart button, and applying a staged restore);
+//   - sets one thing on a media server after it was made: whether Docker starts it again by itself after the machine restarts.
 const http = require('node:http');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -45,7 +47,7 @@ function specFor(name, options, config) {
   return {
     Image: `${server.image}:${server.tag}`, Env: env, ExposedPorts: { [port]: {} }, ...(name === 'jellyfin' ? { User: '1000:1000' } : {}),
     Labels: { 'streamrd.managed': 'true', 'streamrd.server': name },
-    HostConfig: { Mounts: mounts, PortBindings: { [port]: [{ HostPort: String(options.port) }] }, RestartPolicy: { Name: 'unless-stopped' }, ...(config.network ? { NetworkMode: config.network } : {}) },
+    HostConfig: { Mounts: mounts, PortBindings: { [port]: [{ HostPort: String(options.port) }] }, RestartPolicy: { Name: options.autostart === false ? 'no' : 'unless-stopped' }, ...(config.network ? { NetworkMode: config.network } : {}) },
     ...(config.network ? { NetworkingConfig: { EndpointsConfig: { [config.network]: { Aliases: [containerName(name)] } } } } : {}),
   };
 }
@@ -72,7 +74,15 @@ function createManager(config) {
     if (response.status === 404) return { state: 'absent' };
     if (response.status !== 200) throw new Error(`Docker answered ${response.status}`);
     const bindings = response.json?.HostConfig?.PortBindings?.[`${SERVERS[name].internal}/tcp`];
-    return { state: response.json?.State?.Running ? 'running' : 'stopped', port: Number(bindings?.[0]?.HostPort) || SERVERS[name].port };
+    // autostart: Docker starts the server again by itself after the machine or Docker restarts, unless it was stopped on purpose.
+    return { state: response.json?.State?.Running ? 'running' : 'stopped', port: Number(bindings?.[0]?.HostPort) || SERVERS[name].port, autostart: !['', 'no'].includes(response.json?.HostConfig?.RestartPolicy?.Name ?? 'unless-stopped') };
+  }
+  /** Changes whether an existing server comes back by itself after a restart of the machine. Nothing else about the container changes. */
+  async function setAutostart(name, enabled) {
+    const response = await docker('POST', `/containers/${containerName(name)}/update`, { RestartPolicy: { Name: enabled ? 'unless-stopped' : 'no' } });
+    if (response.status === 404) throw Object.assign(new Error('That server has not been launched yet'), { status: 409 });
+    if (response.status !== 200) throw new Error(`Docker answered ${response.status}`);
+    note(name, enabled ? 'Set to start again by itself after a restart of this machine' : 'Set to stay stopped after a restart of this machine');
   }
   /** Pulls an image, reading Docker's progress as it arrives so the deploy log can say how far along it is. */
   function pull(name, server) { return pullImage(server.image, server.tag, message => note(name, message)); }
@@ -120,7 +130,7 @@ function createManager(config) {
   }
   async function launch(name, options) {
     if (jobs[name] && jobs[name].state !== 'failed') return jobs[name];
-    jobs[name] = { state: 'pulling' }; note(name, `Launch requested on port ${options.port}${options.claim ? ' with a claim token' : ''}`);
+    jobs[name] = { state: 'pulling' }; note(name, `Launch requested on port ${options.port}${options.claim ? ' with a claim token' : ''}${options.autostart === false ? ', not started again after a restart of this machine' : ''}`);
     (async () => {
       try {
         await ensureImage(name); jobs[name] = { state: 'starting' }; note(name, 'Starting the container');
@@ -210,6 +220,17 @@ function createManager(config) {
     unote('Updated. The previous image is kept on this machine until you prune it.');
     return 'updated';
   }
+  /**
+   * Restarts the StreamRD container, for the Restart button and for applying a staged restore. The answer goes out first: the caller is
+   * inside the container that is about to stop.
+   */
+  let restarting = false;
+  function startRestart() {
+    if (restarting || upd.state === 'running') return { restarting: false, reason: upd.state === 'running' ? 'An update is running' : 'A restart is already under way' };
+    restarting = true;
+    setTimeout(() => { docker('POST', `/containers/${STREAMRD}/restart?t=30`).catch(() => undefined).finally(() => { restarting = false; }); }, config.restartDelayMs === undefined ? 1000 : config.restartDelayMs);
+    return { restarting: true };
+  }
   function startUpdate() {
     if (upd.state === 'running') return { state: 'running' };
     Object.assign(upd, { state: 'running', log: [], error: '', startedAt: new Date().toISOString(), finishedAt: null });
@@ -238,7 +259,11 @@ function createManager(config) {
         if (request.method === 'GET') return send(200, { state: upd.state, error: upd.error, startedAt: upd.startedAt, finishedAt: upd.finishedAt, log: upd.log.slice(-50) });
         return send(405, { error: 'Method not allowed' });
       }
-      const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs))?$/.exec(url.pathname);
+      if (url.pathname === '/restart') {
+        if (request.method !== 'POST') return send(405, { error: 'Method not allowed' });
+        const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
+      }
+      const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs|autostart))?$/.exec(url.pathname);
       if (request.method === 'GET' && url.pathname === '/status') return send(200, { servers: await status() });
       if (!match || !SERVERS[match[1]]) return send(404, { error: 'Unknown server' });
       const name = match[1];
@@ -250,7 +275,13 @@ function createManager(config) {
         const body = await readBody(request), port = body.port === undefined ? SERVERS[name].port : body.port;
         if (!Number.isInteger(port) || port < 1024 || port > 65535) return send(400, { error: 'Choose a port between 1024 and 65535' });
         if (body.claim !== undefined && body.claim !== '' && (name !== 'plex' || typeof body.claim !== 'string' || !CLAIM.test(body.claim))) return send(400, { error: 'That is not a Plex claim token (it starts with claim-)' });
-        return send(202, await launch(name, { port, claim: body.claim || '' }));
+        if (body.autostart !== undefined && typeof body.autostart !== 'boolean') return send(400, { error: 'autostart is true or false' });
+        return send(202, await launch(name, { port, claim: body.claim || '', autostart: body.autostart !== false }));
+      }
+      if (request.method === 'POST' && match[2] === 'autostart') {
+        const body = await readBody(request);
+        if (typeof body.enabled !== 'boolean') return send(400, { error: 'enabled is true or false' });
+        await setAutostart(name, body.enabled); return send(200, { ok: true, autostart: body.enabled });
       }
       if (request.method === 'POST' && match[2] === 'stop') { await stop(name); return send(200, { ok: true }); }
       if (request.method === 'DELETE' && !match[2]) { await remove(name); return send(200, { ok: true }); }

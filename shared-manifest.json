@@ -42,6 +42,7 @@
         "routes/health.ts",
         "routes/library.ts",
         "routes/metadata.ts",
+        "runtime-settings.ts",
         "routes/logs.ts",
         "routes/requests.ts",
         "routes/system.ts",
@@ -96,6 +97,7 @@
         "requests.test.ts",
         "session-cookie.test.ts",
         "logs-activity.test.ts",
+        "server-control.test.ts",
         "system.test.ts",
         "title-versions.test.ts"
       ]
@@ -140,6 +142,7 @@
         "components/PlaybackHelp.tsx",
         "components/IndexersPanel.tsx",
         "components/Requests.module.css",
+        "components/ServerSettingsPanel.tsx",
         "components/SharedLibraries.module.css",
         "components/SystemMaintenance.module.css",
         "components/SystemMaintenance.tsx",

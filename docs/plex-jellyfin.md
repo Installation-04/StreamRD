@@ -53,6 +53,13 @@ the installer includes unless you decline it. An install from before the helper 
 bash install.sh                        # add --media-manager if you declined the helper earlier
 ```
 
+While it starts, a log box under the buttons follows the deployment: the image download with its progress, the start of the
+container, then the server's own output. **Copy log** puts it on the clipboard.
+
+**Start again by itself when this machine restarts** is ticked by default: after a reboot, or a restart of Docker, the media server
+comes back without you. Untick it to keep the server stopped until you launch it from the page. A server you stopped from the page stays
+stopped either way.
+
 What you enter on the page:
 
 | Field | Where it comes from | What it is used for |

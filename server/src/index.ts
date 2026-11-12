@@ -11,6 +11,7 @@ import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
 import { recordUpdateOutcome } from "./routes/logs";
 import { settleRegistrationDefault } from "./auth/access";
+import { loadRuntimeSettings } from "./runtime-settings";
 
 async function main() {
   await enableWal();
@@ -23,6 +24,7 @@ async function main() {
       data: { role: "admin" },
     });
   }
+  await loadRuntimeSettings(); // choices saved in Admin → Server take the place of their environment variables
   const app = createApp();
   app.listen(config.port, () => {
     setAccountImportHook(queueImportedMetadata);

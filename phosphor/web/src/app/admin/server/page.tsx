@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authFetch, get, post, put } from "@/lib/api";
+import ServerSettingsPanel from "@/components/ServerSettingsPanel";
 import { PROVIDER_NAMES, ProviderId, ServerSettings } from "@/lib/types";
 
 export default function AdminServerPage() {
@@ -70,7 +71,9 @@ export default function AdminServerPage() {
   };
 
   return (
-    <form onSubmit={save} style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 720 }}>
+    <ServerSettingsPanel />
+    <form onSubmit={save}>
       <div className="panel" style={{ marginBottom: 20 }}>
         <div className="panel-title">Global provider order &amp; availability</div>
         {settings.providerOrder.map((id, i) => (
@@ -140,5 +143,6 @@ export default function AdminServerPage() {
         <button type="button" className="btn" onClick={importConfig} disabled={!importText.trim()}>import</button>
       </div>
     </form>
+    </div>
   );
 }

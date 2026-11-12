@@ -91,6 +91,13 @@ export default function SystemMaintenance() {
       {updating && <p className={styles.copy} role="status"><span aria-hidden="true">⏳ </span>Updating to v{updating}… do not close this page.</p>}
       {update?.updateAvailable && update.canApply && confirmUpdate && <div className={styles.confirm}><p className={styles.copy}>{update.updater === "helper" ? <>This creates a verified backup, downloads v{update.latest}, restarts StreamRD into it and checks that it starts; if it does not, the previous version is put back automatically. Your settings and downloads are kept. Everyone is briefly disconnected.</> : <>This creates a verified backup, then asks your updater to roll out v{update.latest}. The server restarts and applies database upgrades on startup. Users are briefly disconnected.</>}</p><div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void applyUpdate()}>{busy === "update" ? "Backing up…" : "Back up and update"}</button><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => setConfirmUpdate(false)}>Cancel</button></div></div>}
     </section>
+    <section className={styles.panel} aria-labelledby="restart-heading">
+      <div className={styles.heading}><div><p className={styles.eyebrow}>SERVER</p><h3 id="restart-heading">Restart</h3></div>
+        {maintenance?.restartSupported && <div className={styles.actions}><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => void restart()}>{busy === "restart" ? "Restarting…" : "Restart the server"}</button></div>}</div>
+      <p className={styles.copy}>{!maintenance ? "Checking…" : maintenance.restartSupported
+        ? "Restarts StreamRD and everything that runs with it. Everyone is disconnected for about a minute; nothing is lost. A restore you staged is applied when it starts again."
+        : "This server cannot be restarted from here yet: that needs the helper that also starts Plex and Jellyfin and runs updates. Until it is added, restart the container yourself."}</p>
+    </section>
     <section className={styles.panel} aria-labelledby="backup-restore-heading">
       <div className={styles.heading}><div><p className={styles.eyebrow}>RECOVERY</p><h3 id="backup-restore-heading">Backups &amp; restore</h3></div>
         <div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void createBackup()}>{busy === "create" ? "Creating backup…" : "Create backup"}</button></div></div>
