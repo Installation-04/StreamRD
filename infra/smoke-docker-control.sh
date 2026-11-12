@@ -145,6 +145,40 @@ until_true 60 "Prowlarr to be removed" test -z "$(docker ps -aq --filter name=st
 until_true 300 "Prowlarr to be started again" prowlarr_up || true
 [ "$(prowlarr_view | jq -r '.reachable')" = true ] || fail "Prowlarr did not come back: $(prowlarr_view)"
 
+say "Prowlarr is updated from the page: an older image runs, a check finds the newer one and changes nothing, the update keeps its settings"
+module_field() { call GET /api/admin/modules | jq -r --arg name "$1" ".modules[] | select(.name == \$name) | $2"; }
+module_settled() { [ "$(module_field "$1" '.update.state')" != running ]; }
+key_of_prowlarr() { docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/prowlarr/config/config.xml; }
+key_before="$(key_of_prowlarr)"; [ -n "$key_before" ] || fail "Prowlarr has not written its key"
+call DELETE /api/admin/prowlarr >/dev/null; until_true 60 "Prowlarr to be removed" test -z "$(docker ps -aq --filter name=streamrd-prowlarr)"
+# A stand-in for an older release: the same program with one extra label, under the name the helper starts it from. Pulling that name from
+# the registry moves it back to the real image, exactly as a newer release would.
+printf 'FROM lscr.io/linuxserver/prowlarr:latest\nLABEL streamrd.smoke=older\n' | docker build -q -t lscr.io/linuxserver/prowlarr:latest - >/dev/null || fail "could not build the stand-in older image"
+[ "$(call POST /api/admin/prowlarr/start | jq -r '.prowlarr.declined')" = false ] || fail "Prowlarr could not be started from the older image"
+until_true 300 "the older Prowlarr to start" prowlarr_up || true
+[ "$(inspect '{{index .Config.Labels "streamrd.smoke"}}' streamrd-prowlarr)" = older ] || fail "Prowlarr did not start from the older image"
+older_id="$(inspect '{{.Id}}' streamrd-prowlarr)"
+call POST /api/admin/modules/prowlarr/check | jq -e '.control.mode == "embedded"' >/dev/null || fail "the check was refused"
+until_true 300 "the check to finish" module_settled prowlarr
+[ "$(module_field prowlarr '.update.state')" = available ] || fail "the check did not find the newer image: $(call GET /api/admin/modules | jq -c '.modules[] | select(.name == "prowlarr")')"
+[ "$(module_field prowlarr '.updateAvailable')" = true ] || fail "the check was not kept"
+[ "$(inspect '{{.Id}}' streamrd-prowlarr)" = "$older_id" ] || fail "a check changed the container"
+[ "$(inspect '{{index .Config.Labels "streamrd.smoke"}}' streamrd-prowlarr)" = older ] || fail "a check changed what Prowlarr runs"
+call POST /api/admin/modules/prowlarr/update | jq -e '.modules | length == 3' >/dev/null || fail "the update was refused"
+until_true 300 "the update to finish" module_settled prowlarr
+[ "$(module_field prowlarr '.update.state')" = updated ] || fail "the update did not finish: $(call GET /api/admin/modules | jq -c '.modules[] | select(.name == "prowlarr")'); $(helper GET /servers/prowlarr/logs | jq -c '.deploy[-6:]')"
+[ -z "$(inspect '{{index .Config.Labels "streamrd.smoke"}}' streamrd-prowlarr)" ] || fail "Prowlarr still runs the older image"
+[ "$(inspect '{{.Id}}' streamrd-prowlarr)" != "$older_id" ] || fail "the container was not made again"
+[ -z "$(docker ps -aq --filter name=streamrd-prowlarr-previous)" ] || fail "the old container was not removed"
+[ "$(inspect '{{.HostConfig.RestartPolicy.Name}}' streamrd-prowlarr)" = unless-stopped ] || fail "the update lost Prowlarr's start-with-the-machine choice"
+docker inspect streamrd-prowlarr | jq -e '.[0].Mounts | length == 1 and .[0].Destination == "/config"' >/dev/null || fail "the new Prowlarr was given more than its own folder"
+until_true 300 "the updated Prowlarr to answer" prowlarr_up || true
+[ "$(prowlarr_view | jq -r '.reachable and .keyFound')" = true ] || fail "Prowlarr is not up and wired after the update: $(prowlarr_view)"
+[ "$(key_of_prowlarr)" = "$key_before" ] || fail "the update changed Prowlarr's settings (its key is not the same)"
+[ "$(module_field prowlarr '.updateAvailable')" = false ] || fail "the page still offers an update after it"
+call POST /api/admin/modules/prowlarr/check >/dev/null; until_true 300 "the second check to finish" module_settled prowlarr
+[ "$(module_field prowlarr '.update.state')" = current ] || fail "a second check did not say it is up to date: $(call GET /api/admin/modules | jq -c '.modules[] | select(.name == "prowlarr")')"
+
 say "Launch Jellyfin from the web API"
 call POST /api/admin/media-servers/jellyfin/launch "{\"port\":$media_port}" | jq -e '.state' >/dev/null || fail "the launch was refused"
 state() { call GET /api/admin/media-servers | jq -r '.servers.jellyfin.state'; }

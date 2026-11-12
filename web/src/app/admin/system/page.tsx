@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
+import ModuleUpdates from "@/components/ModuleUpdates";
 import SystemMaintenance from "@/components/SystemMaintenance";
 import styles from "./system.module.css";
 
@@ -116,6 +117,7 @@ export default function SystemPage() {
         </section>
       </div>
       <SystemMaintenance />
+      <ModuleUpdates />
       <footer className={styles.footer}><div><h3>Operate deliberately.</h3><p>Keep migration recovery and private backups under your control. Provider connection tests remain on their own settings pages.</p></div><Link href="/admin/library">Manage optional media exports <Symbol name="arrow" size={14} /></Link></footer>
     </div>}
   </div>;
