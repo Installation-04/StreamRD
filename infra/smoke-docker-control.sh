@@ -27,6 +27,7 @@ fail() {
     echo "-- $name (last lines)"; docker logs --tail 60 "$name" 2>&1
     for extra in "$name-updater" "$name-previous"; do docker inspect "$extra" >/dev/null 2>&1 && { echo "-- $extra"; docker logs --tail 40 "$extra" 2>&1; }; done
     [ ! -s "${watch_file:-/nonexistent}" ] || { echo "-- the updater, as seen while it ran"; cat "$watch_file"; }
+    if declare -F extra_diag >/dev/null; then extra_diag; fi
   } >&2 || true
   exit 1
 }
@@ -179,6 +180,7 @@ printf 'FROM %s\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retr
 docker push "$ref" >/dev/null
 accepted="$(helper POST /update 2>&1)" || fail "the update was not accepted: $accepted"
 echo "$accepted" | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted: $accepted"
+extra_diag() { echo "-- what the helper says about the update now"; helper GET /update 2>&1 | head -c 800; echo; docker top "$name" -eo pid,user,args 2>&1 | head -20; }
 # While the container is being replaced nothing answers; only a finished state counts.
 finished() { local now; now="$(helper GET /update 2>/dev/null | jq -r '.state' 2>/dev/null || true)"; [ "$now" = failed ] || [ "$now" = done ] || [ "$now" = current ]; }
 until_true 360 "the update to finish" finished
