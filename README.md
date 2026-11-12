@@ -105,6 +105,7 @@ installation script as root when Docker is missing ([what that means](docs/singl
 
 - The installer turns on Docker control (decline it with `--no-media-manager`): the **Setup** page launches Plex or Jellyfin beside StreamRD, with a log of the deployment and an option to start them again after a reboot, and **Admin → System** updates and restarts StreamRD. You paste the tokens (the Plex claim token is used once and never stored) and press Launch; there is no second container and no script to run. It works by giving the container Docker's socket and running one small helper in it, apart from StreamRD; read [what it can do and what it does not protect against](docs/plex-jellyfin.md#docker-control).
 - `install.sh --media-server jellyfin|plex|both` runs Jellyfin and/or Plex next to StreamRD with the library folders and your downloads already mapped (read-only); you only add the libraries in their setup. See [Plex and Jellyfin](docs/plex-jellyfin.md#built-in-jellyfin-and-plex).
+- **Admin → Add-ons** installs [Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, Prowlarr, FlareSolverr and Maintainerr](docs/add-ons.md) with one button each (they need Docker control, on by default).
 - `install.sh --phosphor` also runs [Phosphor](#-also-in-the-box-phosphor); it is off unless you ask for it.
 - `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor (use it with `--phosphor`).
 - `install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).

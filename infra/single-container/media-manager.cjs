@@ -1,7 +1,7 @@
 'use strict';
-// The helper: the one part of StreamRD that talks to Docker. It starts, stops, updates and removes exactly three containers (Jellyfin,
-// Plex and Prowlarr) next to StreamRD, replaces the StreamRD container with a newer image of its own, and restarts it, so the web pages
-// can do all of that.
+// The helper: the one part of StreamRD that talks to Docker. It starts, stops, updates and removes the containers of a fixed catalog
+// (Jellyfin, Plex, and the add-ons: Prowlarr, Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, FlareSolverr, Maintainerr) next to StreamRD,
+// replaces the StreamRD container with a newer image of its own, and restarts it, so the web pages can do all of that.
 //
 // It runs in one of two places, with the same rules:
 //   - inside the StreamRD container (--embedded, the default). The container's first program (init.cjs) starts it as root and runs
@@ -13,7 +13,7 @@
 //
 // To keep what it can do small it:
 //   - answers only requests carrying MEDIA_MANAGER_TOKEN;
-//   - accepts only a server name (jellyfin, plex or prowlarr), a port and an optional Plex claim token; the image, the folders it mounts, the
+//   - accepts only a name from that catalog, a port and an optional Plex claim token; the image, the folders it mounts, the
 //     user it runs as and every other setting of the container are fixed here, not chosen by the caller;
 //   - never logs or stores the claim token;
 //   - updates only the StreamRD container, only to a newer image of the reference that container already uses; the caller chooses
@@ -29,12 +29,33 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+// The catalog. Everything about a container is written here and nowhere else: the caller picks a name from it, a port and whether it starts
+// with the machine, never an image, a folder, a user or a setting. Each entry says:
+//   folders  what it keeps, [folder under StreamRD's settings folder, where it is inside the container]; made and owned before it starts
+//   kind     'media' servers see StreamRD's exported libraries and the downloads (read-only); 'addon' programs see only their own folders
+//   data     the add-on also gets StreamRD's data folder (downloads and media) with write access, at the same path StreamRD sees it at
+//   publish  false: reachable from StreamRD and the other containers by name only, no port on the machine
+//   user, env, init  how the image wants to be run
+// These are separate programs with their own licences and releases; none of their code is part of StreamRD, and each image is pulled
+// from its maker on the machine's own request.
+const APP = ['PUID=1000', 'PGID=1000'];
 const SERVERS = {
-  jellyfin: { image: 'jellyfin/jellyfin', tag: 'latest', port: 8096, internal: 8096 },
-  plex: { image: 'plexinc/pms-docker', tag: 'latest', port: 32400, internal: 32400 },
-  // Prowlarr finds releases for requests (it keeps the list of indexers). It is a separate program with its own licence and releases,
-  // started from a fixed specification like the media servers, but it is given only a folder for its own settings, nothing of the libraries.
-  prowlarr: { image: 'lscr.io/linuxserver/prowlarr', tag: 'latest', port: 9696, internal: 9696 },
+  jellyfin: { image: 'jellyfin/jellyfin', tag: 'latest', port: 8096, internal: 8096, kind: 'media', user: '1000:1000', folders: [['jellyfin/config', '/config'], ['jellyfin/cache', '/cache']] },
+  plex: { image: 'plexinc/pms-docker', tag: 'latest', port: 32400, internal: 32400, kind: 'media', env: ['PLEX_UID=1000', 'PLEX_GID=1000'], folders: [['plex/config', '/config'], ['plex/transcode', '/transcode']] },
+  // Prowlarr finds releases for requests (it keeps the list of indexers).
+  prowlarr: { image: 'lscr.io/linuxserver/prowlarr', tag: 'latest', port: 9696, internal: 9696, kind: 'addon', env: APP, folders: [['prowlarr/config', '/config']] },
+  // Organise and fetch: the Servarr programs. They write what they import under StreamRD's data folder.
+  sonarr: { image: 'lscr.io/linuxserver/sonarr', tag: 'latest', port: 8989, internal: 8989, kind: 'addon', env: APP, data: true, folders: [['sonarr/config', '/config']] },
+  radarr: { image: 'lscr.io/linuxserver/radarr', tag: 'latest', port: 7878, internal: 7878, kind: 'addon', env: APP, data: true, folders: [['radarr/config', '/config']] },
+  lidarr: { image: 'lscr.io/linuxserver/lidarr', tag: 'latest', port: 8686, internal: 8686, kind: 'addon', env: APP, data: true, folders: [['lidarr/config', '/config']] },
+  bazarr: { image: 'lscr.io/linuxserver/bazarr', tag: 'latest', port: 6767, internal: 6767, kind: 'addon', env: APP, data: true, folders: [['bazarr/config', '/config']] },
+  // Requests from people, and what is being watched.
+  seerr: { image: 'ghcr.io/seerr-team/seerr', tag: 'latest', port: 5055, internal: 5055, kind: 'addon', user: '1000:1000', init: true, folders: [['seerr/config', '/app/config']] },
+  tautulli: { image: 'lscr.io/linuxserver/tautulli', tag: 'latest', port: 8181, internal: 8181, kind: 'addon', env: APP, folders: [['tautulli/config', '/config']] },
+  // Helps Prowlarr reach indexers that sit behind a browser check. Nothing to open: Prowlarr talks to it by name.
+  flaresolverr: { image: 'ghcr.io/flaresolverr/flaresolverr', tag: 'latest', port: 8191, internal: 8191, kind: 'addon', publish: false, env: ['LOG_LEVEL=info'], folders: [] },
+  // Rules that clean up what nobody watches.
+  maintainerr: { image: 'ghcr.io/maintainerr/maintainerr', tag: 'latest', port: 6246, internal: 6246, kind: 'addon', user: '1000:1000', folders: [['maintainerr/data', '/opt/data']] },
 };
 // What the deploy log and a server's own output may show: tokens are blanked before anything leaves the manager.
 const redact = text => String(text)
@@ -76,7 +97,9 @@ function ownLayout(mounts, dirs) {
 // mounts them: Docker would otherwise make them as root and the servers could not write.
 // The settings folder is written by StreamRD's user and this runs as root, so a folder that is a link (which StreamRD's user could point
 // anywhere) is refused rather than followed, and ownership is only ever given to a folder that is really one, never to what a link names.
-const FOLDERS = { jellyfin: ['jellyfin/config', 'jellyfin/cache'], plex: ['plex/config', 'plex/transcode'], prowlarr: ['prowlarr/config'], both: ['streamrd/library', 'phosphor/library'] };
+const LIBRARY_FOLDERS = ['streamrd/library', 'phosphor/library'];
+/** The folders a server needs under the settings folder, before Docker mounts them. */
+const foldersOf = name => [...SERVERS[name].folders.map(folder => folder[0]), ...(SERVERS[name].kind === 'media' ? LIBRARY_FOLDERS : [])];
 function ownFolder(base, relative, uid, gid) {
   let current = base;
   for (const part of relative.split('/')) {
@@ -93,23 +116,20 @@ function ownFolder(base, relative, uid, gid) {
 function specFor(name, options, config, layout) {
   const server = SERVERS[name], mounts = [], settings = layout.settings;
   const bind = (source, target, readOnly, propagation) => mounts.push({ Type: 'bind', Source: source, Target: target, ReadOnly: readOnly, ...(propagation ? { BindOptions: { Propagation: propagation } } : {}) });
-  if (name === 'jellyfin') { bind(`${settings}/jellyfin/config`, '/config', false); bind(`${settings}/jellyfin/cache`, '/cache', false); }
-  else if (name === 'prowlarr') bind(`${settings}/prowlarr/config`, '/config', false);
-  else { bind(`${settings}/plex/config`, '/config', false); bind(`${settings}/plex/transcode`, '/transcode', false); }
-  if (name !== 'prowlarr') {   // the media servers see the libraries and the downloads (read-only); Prowlarr sees neither
+  for (const [folder, target] of server.folders) bind(`${settings}/${folder}`, target, false);
+  if (server.kind === 'media') {   // the media servers see the libraries and the downloads (read-only); the add-ons see neither
     bind(`${settings}/streamrd/library`, '/library/streamrd', true);
     bind(`${settings}/phosphor/library`, '/library/phosphor', true);
     bind(layout.data.source, layout.data.target, true);
     if (layout.zurg) bind(layout.zurg, '/mnt/zurg', true, 'rslave');
-  }
-  const env = [`TZ=${config.tz || 'UTC'}`];
-  if (name === 'prowlarr') env.push('PUID=1000', 'PGID=1000');
-  if (name === 'plex') { env.push('PLEX_UID=1000', 'PLEX_GID=1000'); if (options.claim) env.push(`PLEX_CLAIM=${options.claim}`); }
+  } else if (server.data) bind(layout.data.source, layout.data.target, false);   // downloads and media, where StreamRD has them
+  const env = [`TZ=${config.tz || 'UTC'}`, ...(server.env || [])];
+  if (name === 'plex' && options.claim) env.push(`PLEX_CLAIM=${options.claim}`);
   const port = `${server.internal}/tcp`, network = layout.network;
   return {
-    Image: `${server.image}:${server.tag}`, Env: env, ExposedPorts: { [port]: {} }, ...(name === 'jellyfin' ? { User: '1000:1000' } : {}),
+    Image: `${server.image}:${server.tag}`, Env: env, ExposedPorts: { [port]: {} }, ...(server.user ? { User: server.user } : {}),
     Labels: { 'streamrd.managed': 'true', 'streamrd.server': name },
-    HostConfig: { Mounts: mounts, PortBindings: { [port]: [{ HostPort: String(options.port) }] }, RestartPolicy: { Name: options.autostart === false ? 'no' : 'unless-stopped' }, ...(network ? { NetworkMode: network } : {}) },
+    HostConfig: { Mounts: mounts, ...(server.publish === false ? {} : { PortBindings: { [port]: [{ HostPort: String(options.port) }] } }), ...(server.init ? { Init: true } : {}), RestartPolicy: { Name: options.autostart === false ? 'no' : 'unless-stopped' }, ...(network ? { NetworkMode: network } : {}) },
     ...(network ? { NetworkingConfig: { EndpointsConfig: { [network]: { Aliases: [containerName(name)] } } } } : {}),
   };
 }
@@ -160,7 +180,7 @@ function createManager(config) {
   /** The embedded helper shares StreamRD's settings folder, so it makes the folders a server is about to be given, owned by the servers' user. */
   function prepareFolders(name) {
     if (!config.embedded) return;
-    for (const folder of [...FOLDERS[name], ...(name === 'prowlarr' ? [] : FOLDERS.both)]) ownFolder(config.dirs.config, folder, config.appUid ?? 1000, config.appGid ?? 1000);
+    for (const folder of foldersOf(name)) ownFolder(config.dirs.config, folder, config.appUid ?? 1000, config.appGid ?? 1000);
   }
 
   async function inspect(name) {
@@ -238,7 +258,7 @@ function createManager(config) {
         if (created.status !== 201) throw new Error(`The container could not be created (${created.status}${created.json?.message ? `: ${String(created.json.message).slice(0, 160)}` : ''})`);
         const started = await docker('POST', `/containers/${containerName(name)}/start`);
         if (![204, 304].includes(started.status)) throw new Error(`The container could not be started (${started.status}${started.json?.message ? `: ${String(started.json.message).slice(0, 160)}` : ''})`);
-        delete jobs[name]; note(name, `Started. It listens on port ${options.port}`);
+        delete jobs[name]; note(name, SERVERS[name].publish === false ? 'Started. Only StreamRD and the other containers can reach it, by name' : `Started. It listens on port ${options.port}`);
       } catch (error) { const message = error instanceof Error ? error.message : 'Launch failed'; jobs[name] = { state: 'failed', error: message }; note(name, `Failed: ${message}`); }
     })();
     return jobs[name];
@@ -563,7 +583,7 @@ function createManager(config) {
   return { server, status, update: doUpdate, updateState: () => upd, updateView, swapNow, self };
 }
 
-module.exports = { createManager, SERVERS, containerIdFrom, hostPath, ownLayout, fixedLayout };
+module.exports = { createManager, SERVERS, foldersOf, containerIdFrom, hostPath, ownLayout, fixedLayout };
 
 if (require.main === module) {
   const need = key => { const value = process.env[key]; if (!value) { console.error(`${key} is required`); process.exit(1); } return value; };

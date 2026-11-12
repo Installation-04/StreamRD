@@ -173,7 +173,7 @@ until_true 300 "the check to finish" module_settled prowlarr
 [ "$(module_field prowlarr '.updateAvailable')" = true ] || fail "the check was not kept"
 [ "$(inspect '{{.Id}}' streamrd-prowlarr)" = "$older_id" ] || fail "a check changed the container"
 [ "$(inspect '{{index .Config.Labels "streamrd.smoke"}}' streamrd-prowlarr)" = older ] || fail "a check changed what Prowlarr runs"
-call POST /api/admin/modules/prowlarr/update | jq -e '.modules | length == 3' >/dev/null || fail "the update was refused"
+call POST /api/admin/modules/prowlarr/update | jq -e '.modules | length >= 3' >/dev/null || fail "the update was refused"
 until_true 300 "the update to finish" module_settled prowlarr
 [ "$(module_field prowlarr '.update.state')" = updated ] || fail "the update did not finish: $(call GET /api/admin/modules | jq -c '.modules[] | select(.name == "prowlarr")'); $(helper GET /servers/prowlarr/logs | jq -c '.deploy[-6:]')"
 [ -z "$(inspect '{{index .Config.Labels "streamrd.smoke"}}' streamrd-prowlarr)" ] || fail "Prowlarr still runs the older image"

@@ -10,7 +10,7 @@ import { manager, ManagerError } from "./media-servers";
 import { rateLimit } from "./util/rateLimit";
 
 /**
- * The programs StreamRD runs next to itself (Prowlarr, Jellyfin, Plex) have their own releases, and a StreamRD release is not the way
+ * The programs StreamRD runs next to itself (the media servers and the add-ons) have their own releases, and a StreamRD release is not the way
  * they get newer. From here an administrator checks whether a newer version of one exists and updates it; the Docker helper does the work:
  * it downloads the image the module's fixed reference points to now, and when that is not the image running, makes the container again
  * from the same specification (same port, same folders), keeping the old container until the new one runs and putting it back if it does not.
@@ -22,6 +22,14 @@ export const MODULES = {
   prowlarr: { label: "Prowlarr", what: "keeps the indexers that requests search" },
   jellyfin: { label: "Jellyfin", what: "media server" },
   plex: { label: "Plex", what: "media server" },
+  sonarr: { label: "Sonarr", what: "organises TV shows" },
+  radarr: { label: "Radarr", what: "organises movies" },
+  lidarr: { label: "Lidarr", what: "organises music" },
+  bazarr: { label: "Bazarr", what: "finds subtitles" },
+  seerr: { label: "Seerr", what: "takes requests" },
+  tautulli: { label: "Tautulli", what: "shows what is watched" },
+  flaresolverr: { label: "FlareSolverr", what: "helps Prowlarr reach protected indexers" },
+  maintainerr: { label: "Maintainerr", what: "cleans up what nobody watches" },
 } as const;
 export type ModuleName = keyof typeof MODULES;
 const NAMES = Object.keys(MODULES) as ModuleName[];
