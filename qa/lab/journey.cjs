@@ -247,6 +247,29 @@ async function main() {
       await friend.open("Movies", "Cosmos Laundromat"); await friend.play("Cosmos Laundromat");
     });
 
+    await step("the three dots on a poster mark a title watched (a check shows) and show its details; the library page lists nothing that is being watched", async () => {
+      await friend.page.goto(`${base}/shared-libraries`, { waitUntil: "networkidle" });
+      assert.ok(!/Continue watching|Pick up where you left off/.test(await friend.text()), "the library page must not list what is being watched: that row is on the dashboard");
+      await friend.page.getByRole("link", { name: "Open library Movies" }).click();
+      await until("the library's titles", async () => friend.page.getByRole("button", { name: /More for Cosmos Laundromat/ }).count().then(count => count > 0), 20_000);
+      const more = friend.page.getByRole("button", { name: /More for Cosmos Laundromat/ }), watchedCheck = friend.page.getByRole("img", { name: "Watched" });
+      await more.click(); await friend.page.getByRole("menuitem", { name: "Mark as watched" }).click();
+      await until("the check on the poster", async () => (await watchedCheck.count()) > 0, 15_000);
+      await friend.shot("poster-watched-check");
+      await more.click(); assert.ok(await friend.page.getByRole("menuitem", { name: "Mark as unwatched" }).isVisible(), "the menu offers the opposite once a title is watched");
+      await friend.shot("poster-menu-open");
+      assert.equal(await friend.page.getByRole("menuitem", { name: "Fix match…" }).count(), 0, "only an administrator can fix a match");
+      await friend.page.getByRole("menuitem", { name: "Get info" }).click();
+      const info = friend.page.getByRole("dialog", { name: /About Cosmos Laundromat/ }); await info.waitFor();
+      const facts = await info.innerText(); assert.match(facts, /Quality\s*\n?\s*1080p/); assert.match(facts, /From\s*\n?\s*Real-Debrid/); assert.match(facts, /Watched\s*\n?\s*Yes/);
+      await friend.shot("poster-menu-info"); await info.getByRole("button", { name: "Close" }).click();
+      await more.click(); await friend.page.getByRole("menuitem", { name: "Mark as unwatched" }).click();
+      await until("the check to go", async () => (await watchedCheck.count()) === 0, 15_000);
+      await owner.page.goto(`${base}/shared-libraries`, { waitUntil: "networkidle" }); await owner.page.getByRole("link", { name: "Open library Movies" }).click();
+      const ownerMore = owner.page.getByRole("button", { name: /More for Cosmos Laundromat/ }); await ownerMore.waitFor(); await ownerMore.click();
+      assert.ok(await owner.page.getByRole("menuitem", { name: "Fix match…" }).isVisible(), "an administrator can fix the match from the poster");
+    });
+
     await step("the log tells the request's story, and the diagnostic bundle carries no secrets", async () => {
       await owner.page.goto(`${base}/admin/logs`, { waitUntil: "networkidle" });
       await owner.page.getByLabel("Search log messages and details").fill("Cosmos Laundromat");
