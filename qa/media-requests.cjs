@@ -152,7 +152,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
     const seriesResponse = viewer.waitForResponse(value => value.url().endsWith('/api/requests') && value.request().method() === 'POST');
     await viewer.getByRole('button', { name: 'Request show', exact: true }).click();
     const series = await (await seriesResponse).json(); assert.equal(series.request.type, 'series'); assert.equal(series.request.status, 'requested');
-    await viewer.getByText('Show requests track the release your administrator selects.', { exact: false }).waitFor();
+    await viewer.getByText('Show requests track the release that is selected for them.', { exact: false }).waitFor();
     await viewerShot('request-show');
     await viewer.getByRole('link', { name: 'View my request →', exact: true }).click();
     await viewer.getByRole('list', { name: 'Request history', exact: true }).waitFor();
