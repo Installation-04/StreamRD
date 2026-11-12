@@ -46,7 +46,10 @@ async function main() {
     const plays = []; page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/play")) plays.push(Date.now()); });
     const text = async () => (await page.locator("body").innerText()).replace(/\s*\n+\s*/g, " / ");
     const shot = file => page.screenshot({ path: path.join(artifacts, `${file}.png`) }).catch(() => undefined);
-    const video = () => page.evaluate(() => { const v = document.querySelector("video"); if (!v) return null; const source = v.querySelector("source");
+    // Converted video is played through the browser's streaming API, so the element's own source is a blob: the stream being read is the last one asked for.
+    const streams = []; page.on("request", request => { const url = new URL(request.url()); if (/^\/api\/stream\/[\w-]+$/.test(url.pathname)) streams.push(url.pathname + url.search); });
+    const video = async () => { const state = await rawVideo(); return state && state.src.startsWith("blob:") ? { ...state, src: streams.at(-1) ?? state.src } : state; };
+    const rawVideo = () => page.evaluate(() => { const v = document.querySelector("video"); if (!v) return null; const source = v.querySelector("source");
       return { at: v.currentTime, paused: v.paused, error: v.error ? `${v.error.code} ${v.error.message}` : null, src: (source?.src || v.src).replace(/^https?:\/\/[^/]+/, ""), width: v.videoWidth }; });
     const api = (method, route, body) => page.evaluate(async ([m, r, b]) => { const response = await fetch(r, { method: m, credentials: "include", headers: { "Content-Type": "application/json" }, ...(b ? { body: JSON.stringify(b) } : {}) }); return response.status; }, [method, route, body]);
     const open = async (library, title) => {
@@ -124,7 +127,7 @@ async function main() {
       await owner.page.getByLabel("Version", { exact: true }).selectOption({ index: 1 }); await sleep(1000);   // the 1080p version
       owner.plays.length = 0;
       const state = await owner.play("Big Buck Bunny (DTS)");
-      assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0$/);
+      assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0(\.000)?$/);
       await sleep(3000);
       assert.equal(owner.plays.length, 1, `the player asked the server to play ${owner.plays.length} times; a converted stream must not make it start over`);
       assert.match(await owner.text(), /Audio converted for your browser/);
@@ -133,7 +136,7 @@ async function main() {
 
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);
-      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=(5\d|6\d)/.test(now.src) ? now : null; }, 45_000, 500);
+      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=6[01]\b/.test(now.src) ? now : null; }, 45_000, 500);   // the second that was asked for, not where the copied picture began
       assert.equal(state.error, null);
       assert.match(state.src, /&video=1$/, "this file's copied picture cannot be decoded part-way in, so the player should have asked for it to be converted");
       assert.match(await owner.text(), /Converted for your browser/);

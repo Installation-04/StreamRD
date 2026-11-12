@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mseSupported, startMse } from "@/lib/mse-playback";
 import { api, API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, AccountPlayResult, accountMediaName, safeMediaUrl } from "@/lib/account-library";
@@ -36,6 +37,49 @@ export default function SharedPlayer() {
   // A copied picture can be undecodable from where a resumed or sought stream starts (open-GOP H.264): the browser reports a decode error.
   // The player then asks the server once to re-encode the picture from that moment, and keeps doing so for the rest of this video.
   const [forceVideo, setForceVideo] = useState(false);
+  // Where a converted stream really starts. A copied picture can only start on a keyframe, at or before the asked second; the server cuts the
+  // sound from the same place, so both begin together, and tells the player where that is. The position shown is this plus the stream's own
+  // clock, and the player then moves ahead inside the stream to the second that was asked for, once enough of it has arrived.
+  const [landing, setLanding] = useState<{ at: number; start: number } | null>(null), [skipping, setSkipping] = useState(false), [buffering, setBuffering] = useState(true);
+  // Through the browser's streaming API (Chrome, Firefox, Safari on a computer or iPad) the video has a real clock, so positions are the video's own;
+  // otherwise the stream is a plain <video src> that is opened again at each skip and is asked where it starts.
+  const [mseCapable, setMseCapable] = useState(false), [mseBroken, setMseBroken] = useState(false);
+  useEffect(() => { setMseCapable(mseSupported()); }, []);
+  const useMse = Boolean(converted) && mseCapable && !mseBroken && (converted?.durationSeconds ?? 0) > 0;
+  const base = converted && !useMse ? (landing && landing.at === startAt ? landing.start : startAt) : 0;
+  const baseRef = useRef(0); baseRef.current = base;
+  const holding = useRef(false);   // the player has paused the video itself, to move it ahead: not a pause by the viewer
+  useEffect(() => {
+    setLanding(null); if (!converted?.url || useMse) return;
+    const controller = new AbortController();
+    fetch(`${API_BASE}${converted.url}/start?at=${startAt}${forceVideo ? "&video=1" : ""}`, { credentials: "include", signal: controller.signal }).then(response => response.ok ? response.json() : Promise.reject(new Error("no answer")))
+      .then((answer: { start?: number }) => setLanding({ at: startAt, start: typeof answer.start === "number" && answer.start >= 0 && answer.start <= startAt ? answer.start : startAt }))
+      .catch(() => { if (!controller.signal.aborted) setLanding({ at: startAt, start: startAt }); });
+    return () => controller.abort();
+  }, [converted?.url, startAt, forceVideo, useMse]);
+  useEffect(() => {
+    const element = video.current; setSkipping(false);
+    if (!converted || useMse || !element || !landing || landing.at !== startAt) return;
+    const offset = landing.at - landing.start; if (offset <= 0.3) return;
+    let finished = false; setSkipping(true); holding.current = true; element.pause();
+    const done = () => { finished = true; holding.current = false; setSkipping(false); void element.play().catch(() => undefined); };
+    const land = () => {
+      if (finished) return; const ranges = element.buffered, end = ranges.length ? ranges.end(ranges.length - 1) : 0;
+      if (end < offset + 0.5 && !element.ended) return;
+      element.currentTime = Math.max(0, Math.min(offset, end - 0.1)); done();
+    };
+    const timer = setInterval(land, 200), giveUp = setTimeout(() => { if (!finished) done(); }, 20_000);   // never hold the video for good
+    return () => { clearInterval(timer); clearTimeout(giveUp); if (!finished) { holding.current = false; setSkipping(false); } };
+  }, [converted, landing, startAt, useMse]);
+  const startRef = useRef(0); startRef.current = startAt;
+  useEffect(() => {
+    const element = video.current; if (!useMse || !element || !converted?.url) return;
+    const url = converted.url; setVideoError(false);
+    const handle = startMse({ video: element, duration: converted.durationSeconds, initial: startRef.current, forceVideo,
+      streamUrl: (start, force) => `${API_BASE}${url}?start=${start.toFixed(3)}${force ? "&video=1" : ""}`, startUrl: (at, force) => `${API_BASE}${url}/start?at=${at.toFixed(3)}${force ? "&video=1" : ""}`,
+      onProblem: (kind, message) => { if (kind === "unsupported") setMseBroken(true); else { setReason(message); setVideoError(true); } } });
+    return () => handle.destroy();
+  }, [useMse, converted?.url, converted?.durationSeconds, forceVideo]);
   // When a converted video fails to play, ask the server why (its own message; never the link).
   useEffect(() => {
     if (!videoError || !converted?.url) { setReason(""); return; }
@@ -49,7 +93,7 @@ export default function SharedPlayer() {
 
   const saveProgress = useCallback((force = false) => {
     const element = video.current, now = session.current; if (!now) return;
-    if (converted && converted.durationSeconds > 0) { now.position = Math.min(startAt + (element?.currentTime ?? 0), converted.durationSeconds); now.duration = converted.durationSeconds; }
+    if (converted && converted.durationSeconds > 0) { now.position = Math.min(baseRef.current + (element?.currentTime ?? 0), converted.durationSeconds); now.duration = converted.durationSeconds; }
     else if (element && Number.isFinite(element.duration) && element.duration > 0) { now.position = Math.min(element.currentTime, element.duration); now.duration = element.duration; }
     if (now.duration <= 0 || now.position <= 0) return;
     const at = Date.now(); if (!force && at - now.sentAt < 15000) return;
@@ -111,7 +155,12 @@ export default function SharedPlayer() {
     return () => clearTimeout(timer);
   }, [ended, next, countdown, play]);
 
-  const jump = useCallback((seconds: number) => { saveProgress(true); setStartAt(Math.max(0, Math.floor(seconds))); setScrub(null); setEnded(false); setVideoError(false); }, [saveProgress]);
+  const jump = useCallback((seconds: number) => {
+    saveProgress(true); setScrub(null); setEnded(false); setVideoError(false);
+    const element = video.current;
+    if (useMse && element) element.currentTime = Math.max(0, Math.floor(seconds));   // the streaming player opens the stream there itself when it has to
+    else setStartAt(Math.max(0, Math.floor(seconds)));
+  }, [saveProgress, useMse]);
   // A seek in a converted stream restarts the conversion, so the position being chosen is kept here (not only in state, which a quick click
   // or tap can outrun) and sent once: at the end of a drag, or a moment after the last key press instead of once per press.
   const seeking = useRef<{ target: number | null; timer?: ReturnType<typeof setTimeout> }>({ target: null });
@@ -132,7 +181,7 @@ export default function SharedPlayer() {
       if (onSeekBar && /^(?:Arrow|Home$|End$|Page)/.test(event.key)) return;
       if (event.key === "Escape") { if (!document.fullscreenElement) leave(); return; }
       if (!element) return;
-      const seek = (seconds: number) => { if (converted && converted.durationSeconds > 0) { aimSeek(Math.max(0, Math.min(converted.durationSeconds - 1, (seeking.current.target ?? startAt + element.currentTime) + seconds))); commitSeek(450); } else element.currentTime = Math.max(0, Math.min(element.duration || Infinity, element.currentTime + seconds)); };
+      const seek = (seconds: number) => { if (converted && converted.durationSeconds > 0) { aimSeek(Math.max(0, Math.min(converted.durationSeconds - 1, (seeking.current.target ?? baseRef.current + element.currentTime) + seconds))); commitSeek(450); } else element.currentTime = Math.max(0, Math.min(element.duration || Infinity, element.currentTime + seconds)); };
       switch (event.key.toLowerCase()) {
         case " ": case "k": if (target?.tagName === "BUTTON" && event.key === " ") return; element.paused ? void element.play() : element.pause(); break;
         case "j": case "arrowleft": seek(-10); break;
@@ -152,7 +201,9 @@ export default function SharedPlayer() {
   const name = item ? accountMediaName(item) : "", backdrop = safeMediaUrl(item?.metadata?.backdropUrl) ?? safeMediaUrl(item?.metadata?.posterUrl);
   const shown = files.filter(file => file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[forceVideo ? "video" : converted.mode] : null].filter(Boolean).join(" · ");
-  const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownTotal = converted ? converted.durationSeconds : position.total, shownAt = Math.min(scrub ?? (converted ? startAt + position.at : position.at), shownTotal > 0 ? shownTotal : Infinity);
+  const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownTotal = converted ? converted.durationSeconds : position.total, shownAt = Math.min(scrub ?? (converted ? base + position.at : position.at), shownTotal > 0 ? shownTotal : Infinity);
+  const playKey = useMse && converted ? `mse:${converted.url}:${forceVideo}` : source;
+  useEffect(() => { setBuffering(true); }, [playKey]);   // a stream just opened is buffering until it plays
   if (authLoading || !user) return <div className={styles.page}><p role="status" className={styles.status}>Checking your account…</p></div>;
   return <div ref={root} className={`${styles.page} ${visible || paused || !stream ? "" : styles.idle}`} onMouseMove={wake} onTouchStart={wake} onFocus={wake}>
     <header className={styles.bar}>
@@ -161,16 +212,18 @@ export default function SharedPlayer() {
       {files.length > 1 && stream && <button type="button" className={styles.bar_button} onClick={() => { video.current?.pause(); saveProgress(true); setChoosing(true); }}>Videos</button>}
       <button type="button" className={styles.bar_button} aria-label="Fullscreen (F)" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.().catch(() => undefined); }}>⛶</button>
     </header>
-    {stream && <video ref={video} key={source} className={styles.video} controls={!converted} autoPlay playsInline preload="metadata" aria-label={`Playing ${name}`}
+    {stream && <video ref={video} key={playKey} className={styles.video} controls={!converted} autoPlay playsInline preload={converted ? "auto" : "metadata"} aria-label={`Playing ${name}`}
       onError={event => {
         const element = event.currentTarget, code = element.error?.code;
-        if (converted && converted.mode !== "video" && !forceVideo && (code === 3 || code === 4)) { saveProgress(true); setStartAt(Math.max(0, Math.floor(startAt + element.currentTime))); setForceVideo(true); return; }
+        /* While the player is still on its way to the asked second, the picture is converted from that second, not from where the copied stream began. */
+        if (converted && converted.mode !== "video" && !forceVideo && (code === 3 || code === 4)) { saveProgress(true); setStartAt(Math.max(0, Math.floor(holding.current ? startAt : baseRef.current + element.currentTime))); setForceVideo(true); return; }
         setVideoError(true);
-      }} onPlay={() => { setPaused(false); wake(); }} onPause={() => { setPaused(true); setVisible(true); saveProgress(true); }}
+      }} onPlay={() => { setPaused(false); wake(); }} onPause={() => { if (holding.current) return; setPaused(true); setVisible(true); saveProgress(true); }}
+      onWaiting={() => setBuffering(true)} onPlaying={() => setBuffering(false)} onSeeked={() => setBuffering(false)}
       onLoadedMetadata={event => { if (converted) return; const resume = session.current?.resume ?? 0, element = event.currentTarget; if (resume > 5 && resume < element.duration - 5) element.currentTime = resume; }}
       onTimeUpdate={event => { saveProgress(); setPosition({ at: event.currentTarget.currentTime, total: converted ? 0 : event.currentTarget.duration || 0 }); }}
       onEnded={() => { saveProgress(true); setEnded(true); if (next) setCountdown(NEXT_SECONDS); }}>
-      <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} onError={() => setVideoError(true)} />Your browser cannot play this video.</video>}
+      {!useMse && <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} onError={() => setVideoError(true)} />}Your browser cannot play this video.</video>}
     {stream && converted && !choosing && <div className={`${styles.controls} ${visible || paused ? "" : styles.controlsIdle}`} role="group" aria-label="Playback controls">
       <button type="button" className={styles.bar_button} aria-label={paused ? "Play" : "Pause"} onClick={() => { const element = video.current; if (element) element.paused ? void element.play() : element.pause(); }}>{paused ? "▶" : "❚❚"}</button>
       <span className={styles.clock}>{clock(shownAt)}</span>
@@ -183,6 +236,7 @@ export default function SharedPlayer() {
     {!stream && backdrop && <img className={styles.backdrop} src={backdrop} alt="" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = "none"; }} />}
     <div className={styles.layer}>
       {busy && !choosing && !playError && pending === null && <div className={styles.center} role="status"><span className={styles.spinner} aria-hidden="true" /><p>Preparing your video…</p></div>}
+      {stream && converted && (buffering || skipping) && !busy && !videoError && !choosing && !ended && !playError && pending === null && <div className={styles.center} role="status"><span className={styles.spinner} aria-hidden="true" /><p>{skipping ? `Skipping to ${clock(startAt)}…` : "Buffering…"}</p></div>}
       {loadError && <div className={styles.card} role="alert"><h2>This title is unavailable.</h2><p>{loadError}</p><button type="button" className="btn btn-secondary" onClick={leave}>Back</button></div>}
       {playError && <div className={styles.card} role="alert"><h2>We couldn’t start this video.</h2><p>{playError}</p><div className={styles.actions}><button type="button" className="btn" disabled={busy} onClick={() => void play(current ?? undefined)}>Try again</button><button type="button" className="btn btn-secondary" onClick={leave}>Back</button></div></div>}
       {pending !== null && <div className={styles.card} role="status"><h2>The server’s provider is still preparing this video.</h2><p>Reported progress: {pending}%. Try again when the transfer is complete. No new torrent was added.</p><div className={styles.actions}><button type="button" className="btn" disabled={busy} onClick={() => void play(current ?? undefined)}>Check again</button><button type="button" className="btn btn-secondary" onClick={leave}>Back</button></div></div>}

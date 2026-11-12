@@ -48,7 +48,7 @@ it("builds ffmpeg arguments per mode without a shell, a protocol allow-list on, 
   const url = "https://download.example.com/a b;rm -rf.mkv";
   const remux = ffmpegArgs(url, "remux", 0), audio = ffmpegArgs(url, "audio", 125.5), video = ffmpegArgs(url, "video", 0);
   expect(remux).toContain(url); expect(remux.join(" ")).toMatch(/-protocol_whitelist http,https,tcp,tls,crypto/); expect(remux).not.toContain("-ss");
-  expect(remux.join(" ")).toMatch(/-c:v copy -c:a copy/); expect(audio.join(" ")).toMatch(/-ss 125\.500 -i/); expect(audio.join(" ")).toMatch(/-c:v copy -c:a aac/);
+  expect(remux.join(" ")).toMatch(/-c:v copy -c:a copy/); expect(audio.join(" ")).toMatch(/-ss 125\.500 -noaccurate_seek -i/); expect(ffmpegArgs(url, "video", 125.5).join(" ")).toMatch(/-ss 125\.500 -i/);   // copied: the sound is cut where the picture is; converted: exactly expect(audio.join(" ")).toMatch(/-c:v copy -c:a aac/);
   expect(video.join(" ")).toMatch(/-c:v libx264/); expect(video.join(" ")).toMatch(/scale=w='min\(1920,iw\)':h=-2/);
   for (const args of [remux, audio, video]) { expect(args.at(-1)).toBe("pipe:1"); expect(args.join(" ")).toMatch(/frag_keyframe\+empty_moov/); }
   expect(ffmpegArgs(url, "audio", -4)).not.toContain("-ss");
@@ -127,6 +127,26 @@ real("re-encodes the picture when the player says the browser could not decode t
   expect(streams(forced).map(stream => `${stream.codec_type}:${stream.codec_name}`).sort()).toEqual(["audio:aac", "video:h264"]);
   const log = await db.logEvent.findFirst({ where: { type: "playback", level: "info" }, orderBy: { createdAt: "desc" } });
   expect(log?.message).toMatch(/could not decode the copied picture \(audio\) at 6s/); expect(log?.message).not.toMatch(/127\.0\.0\.1|opengop/);
+}, 60_000);
+
+real("starts a copied-picture stream on a keyframe and starts the sound with it, so the sound follows the picture after a skip ahead", async () => {
+  if (!fixtures.openGop) return;
+  const grab = (id: string, query: string) => request(app).get(`/api/stream/${id}${query}`).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on("data", chunk => chunks.push(chunk)); res.on("end", () => done(null, Buffer.concat(chunks))); });
+  const id = registerStream(`${base}/opengop.mkv`, "audio", "someone");
+  const where = await request(app).get(`/api/stream/${id}/start?at=7`); expect(where.status).toBe(200);
+  expect(where.body.start).toBeGreaterThan(5.9); expect(where.body.start).toBeLessThanOrEqual(7);          // the keyframe at or before 7 s (every 2 s in this file)
+  expect((await request(app).get(`/api/stream/${id}/start?at=0`)).body).toEqual({ start: 0 });
+  expect((await request(app).get(`/api/stream/${id}/start?at=3&video=1`)).body).toEqual({ start: 3 });      // a re-encoded picture starts exactly where it is asked to
+  expect((await request(app).get(`/api/stream/${"x".repeat(30)}/start?at=3`)).status).toBe(404);
+  expect((await request(app).get(`/api/stream/${id}/start?at=-1`)).status).toBe(400);
+  const response = await grab(id, "?start=7"); expect(response.status).toBe(200);
+  const file = join(dir, "aligned.mp4"); writeFileSync(file, response.body);
+  // Where the first picture and the first real sound (not the encoder's priming packet) begin in the stream's own time.
+  const packets = JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=index,codec_type:packet=stream_index,pts_time,duration_time", "-of", "json", file]).toString()) as { streams: Array<{ index: number; codec_type: string }>; packets: Array<{ stream_index: number; pts_time: string; duration_time?: string }> };
+  const kind = (index: number) => packets.streams.find(stream => stream.index === index)!.codec_type;
+  const firstVideo = Number(packets.packets.find(packet => kind(packet.stream_index) === "video")!.pts_time);
+  const firstSound = Number(packets.packets.find(packet => kind(packet.stream_index) === "audio" && packet.duration_time !== undefined)!.pts_time);
+  expect(Math.abs(firstSound - firstVideo)).toBeLessThan(0.25);   // before: the picture began at the keyframe and the sound a second later (up to a whole GOP on real files)
 }, 60_000);
 
 it("says why when the player asks for the picture to be converted and that is turned off", async () => {
