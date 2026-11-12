@@ -159,8 +159,12 @@ module.exports = async function serverSharing({ product, page, url, api, admin, 
     assert.ok(resumed && resumed.positionSeconds > 0 && resumed.libraryId === libraryId && resumed.item.id === sintel.id, 'Paused playback should create a Continue watching entry');
     assert.doesNotMatch(JSON.stringify(resumed), /example\.invalid|private/i, 'Continue watching must not expose provider links or references');
     assert.equal((await call(api, '/api/shared-libraries/continue', null, admin.token)).items.length, 0, 'Progress is per viewer');
+    // What is being watched is on the dashboard only: the library page lists libraries, not progress.
     await viewer.goto(`${url}/shared-libraries`, { waitUntil: 'networkidle' });
-    await viewer.getByRole('link', { name: 'Continue watching Sintel', exact: true }).waitFor();
+    assert.equal(await viewer.getByRole('region', { name: 'Continue watching' }).count(), 0, 'The library page must not list what is being watched');
+    assert.equal(await viewer.getByRole('link', { name: /Continue watching Sintel|Resume Sintel/ }).count(), 0, 'The library page must not offer to resume a title');
+    await viewer.goto(`${url}/`, { waitUntil: 'networkidle' });
+    await viewer.getByRole('region', { name: 'Continue watching' }).getByRole('link', { name: 'Resume Sintel', exact: true }).waitFor();
     await viewerNoOverflow('desktop continue watching'); await viewerShot('shared-continue-watching');
     await viewer.setViewportSize({ width: 390, height: 844 }); await viewerNoOverflow('mobile continue watching'); await viewerShot('shared-continue-watching-mobile'); await viewer.setViewportSize({ width: 1440, height: 1050 });
     const again = await fetch(`http://127.0.0.1:${api}/api/shared-libraries/${libraryId}/items/${sintel.id}/play`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${viewerToken}` }, body: JSON.stringify({ fileToken: undefined }) });

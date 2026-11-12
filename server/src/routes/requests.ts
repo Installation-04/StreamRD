@@ -11,9 +11,10 @@ import { PROVIDER_IDS } from "../providers/types";
 import { assertRequestActor, canonicalMediaKey, lockRequests, mediaAvailability, requestAvailability, requestEvents, requestView, RequestError, REQUEST_STATUSES, ACTIVE_REQUEST_STATUSES } from "../requests/media";
 import { RequestClientError, validateMagnet } from "../requests/clients";
 import { addIndexer, FinderError, findBest, findReleases, listIndexers, publicIndexer, removeIndexer, testIndexer } from "../requests/finder";
-import { qbitContext } from "../requests/config";
-import { cloudContext, resumeRequestPolling } from "../requests/worker";
+import { resumeRequestPolling } from "../requests/worker";
+import { approveAutomatically, approveRequest } from "../requests/approval";
 import { rateLimit } from "../util/rateLimit";
+import { runtime } from "../runtime-settings";
 
 export const discoveryRouter = Router(), requestsRouter = Router(), adminRequestsRouter = Router();
 const noStore = (_req: Request, res: Response, next: () => void) => { res.setHeader("Cache-Control", "private, no-store"); next(); };
@@ -73,13 +74,14 @@ requestsRouter.post("/", mutationLimit, action(async (req, res) => {
     }
     if (!existing && await tx.mediaRequest.count({ where: { status: { in: ACTIVE_REQUEST_STATUSES } } }) >= 2000) throw new RequestError("The server request queue is full", 409);
     const request = existing ?? await tx.mediaRequest.create({ data: { canonicalKey, provider: media.provider, externalId: media.id, mediaType: media.type,
-      name: media.name, year: media.year, metadata: JSON.stringify(media), events: { create: { status: "requested", message: "Request received. Waiting for administrator approval." } } } });
+      name: media.name, year: media.year, metadata: JSON.stringify(media), events: { create: { status: "requested", message: runtime().requestsAutoApprove ? "Request received. The server is looking for a release." : "Request received. Waiting for administrator approval." } } } });
     await tx.requestFollower.upsert({ where: { requestId_userId: { requestId: request.id, userId: req.session!.sub } }, create: { requestId: request.id, userId: req.session!.sub }, update: {} });
     if (existing && !alreadyFollowing && existing.status === "available") {
       await tx.mediaRequest.update({ where: { id: request.id }, data: { updatedAt: new Date(), events: { create: { status: "available", message: "Another member is tracking this title; library access may be needed." } } } });
     }
     return { request, created: !existing };
   }, { maxWait: 10000, timeout: 10000 });
+  if (result.created) void approveAutomatically(result.request.id);   // unless the server is set to wait for an administrator (Admin → Server)
   res.status(result.created ? 201 : 200).json({ request: await requestView(result.request, req.session!.sub) });
 }));
 requestsRouter.get("/", action(async (req, res) => {
@@ -137,24 +139,8 @@ adminRequestsRouter.post("/:id/approve", mutationLimit, action(async (req, res) 
     if (!cfg || !PROVIDER_IDS.includes(cfg.primaryProvider as typeof PROVIDER_IDS[number])) throw new RequestError("Configure a cloud provider before approving", 409);
     providerId = cfg.primaryProvider as typeof PROVIDER_IDS[number];
   }
-  if (body.destination === "local" && providerId) throw new RequestError("Local downloads use qBittorrent rather than a debrid provider");
-  const context = body.destination === "cloud" ? await cloudContext(req.session!.sub, providerId!) : await qbitContext(req.session!.sub);
-  const request = await db.$transaction(async tx => {
-    await lockRequests(tx); await assertRequestActor(req.session!, tx, true);
-    const existing = await tx.mediaRequest.findUnique({ where: { id: requestId } });
-    if (!existing) throw new RequestError("Media request not found", 404);
-    const approvalBlocked = existing.status === "attention" && existing.downloadState === "approval_blocked" && !existing.startedAt && !existing.providerRef;
-    if ((!approvalBlocked && !["requested", "rejected", "cancelled"].includes(existing.status)) || existing.startedAt || existing.providerRef) throw new RequestError("This request has already entered download processing", 409);
-    if (body.sharedLibraryId) {
-      const library = await tx.sharedLibrary.findFirst({ where: { id: body.sharedLibraryId, sourceUserId: req.session!.sub, enabled: true } });
-      if (!library || !["all", existing.mediaType].includes(library.mediaType)) throw new RequestError("Choose one of your enabled libraries with a matching media type", 400);
-    }
-    const updated = await tx.mediaRequest.update({ where: { id: requestId }, data: { status: "approved", destination: body.destination, sourceUserId: req.session!.sub,
-      sharedLibraryId: body.sharedLibraryId ?? null, sourceUrl, providerId: providerId ?? null, sourceFingerprint: context.fingerprint,
-      providerRef: null, progress: null, downloadState: null, error: null, attempts: 0, leaseUntil: null, nextPollAt: new Date(), revision: { increment: 1 },
-      events: { create: { status: "approved", message: chosen ? `Administrator approved; the best release was chosen automatically (${chosen}) for ${body.destination === "cloud" ? "cloud" : "local qBittorrent"} download.` : `Administrator approved a selected release for ${body.destination === "cloud" ? "cloud" : "local qBittorrent"} download.` } } } });
-    return updated;
-  }, { maxWait: 10000, timeout: 10000 });
+  const request = await approveRequest({ requestId, actorId: req.session!.sub, destination: body.destination, providerId: providerId ?? null, sourceUrl, sharedLibraryId: body.sharedLibraryId, chosen,
+    check: tx => assertRequestActor(req.session!, tx, true) });
   res.json({ request: await requestView(request, req.session!.sub, true) });
 }));
 for (const status of ["rejected", "cancelled"] as const) adminRequestsRouter.post(`/:id/${status === "rejected" ? "reject" : "cancel"}`, mutationLimit, action(async (req, res) => {
@@ -196,6 +182,7 @@ requestIndexersRouter.post("/:id/test", mutationLimit, action(async (req, res) =
 }));
 requestIndexersRouter.delete("/:id", mutationLimit, action(async (req, res) => {
   if (req.params.id === "zilean") throw new FinderError("Zilean comes from the installer (ZILEAN_URL). Run install.sh --no-zilean to remove it.", 409);
+  if (req.params.id.startsWith("prowlarr-")) throw new FinderError("This indexer comes from Prowlarr. Remove it in Prowlarr (Admin → Requests → Open Prowlarr).", 409);
   if (!await removeIndexer(parse(id, req.params.id))) throw new FinderError("Indexer not found.", 404);
   void logEvent("info", "admin_action", "Removed an indexer", { userId: req.session!.sub, meta: { indexerId: req.params.id } }).catch(() => undefined);
   res.json({ ok: true });

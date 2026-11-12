@@ -23,3 +23,28 @@
 .alertBad, .alertWarn { padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #fff; background: #c0392b; border: 1px solid rgba(255, 255, 255, 0.35); }
 .alertWarn { background: #b7791f; }
 .resolutionTag { padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #111; background: #ff8a1f; }
+
+/* The card's menu (three dots at the foot of the poster), the check on watched titles, and the windows the menu opens. */
+.posterOverlay { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 2 / 3; z-index: 4; pointer-events: none; }
+.posterOverlay > * { pointer-events: auto; }
+.watchedCheck { position: absolute; top: 56px; right: 15px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 999px; background: #ff8a1f; color: #111; font-size: 15px; font-weight: 800; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); pointer-events: none !important; }
+.menuButton { position: absolute; right: 10px; bottom: 10px; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 999px; cursor: pointer; color: #f4f2ef; background: rgba(10, 10, 10, 0.78); border: 1px solid rgba(255, 255, 255, 0.24); backdrop-filter: blur(6px); opacity: 0; transition: opacity 120ms ease, background 120ms ease; }
+.cardWrap:hover .menuButton, .cardWrap:focus-within .menuButton, .menuButton[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .menuButton { opacity: 1; } }
+.menuButton:hover { background: rgba(255, 138, 31, 0.35); }
+.menuButton:focus-visible { outline: 2px solid #ff8a1f; outline-offset: 2px; }
+.menu { position: absolute; right: 10px; bottom: 52px; min-width: 190px; max-width: calc(100% - 20px); display: grid; gap: 2px; padding: 6px; border-radius: 10px; background: #17181f; border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); z-index: 6; }
+.menuItem { text-align: left; padding: 9px 12px; border: 0; border-radius: 7px; background: none; color: #f4f2ef; font: inherit; font-size: 13px; cursor: pointer; }
+.menuItem:hover:not(:disabled), .menuItem:focus-visible { background: rgba(255, 255, 255, 0.1); outline: none; }
+.menuItem:disabled { opacity: 0.6; cursor: progress; }
+.menuNote { margin: 4px 8px; font-size: 12px; color: #f3b0a8; }
+.sheetBack { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.72); }
+.sheet { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-radius: 14px; background: #14151b; border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.sheetHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); position: sticky; top: 0; background: #14151b; z-index: 1; }
+.sheetBody { padding: 16px 18px 20px; display: grid; gap: 14px; }
+.facts { margin: 0; display: grid; gap: 8px; }
+.facts > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; font-size: 14px; }
+.facts dt { color: rgba(244, 242, 239, 0.6); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .facts > div { grid-template-columns: 1fr; gap: 2px; } }
+@media (prefers-reduced-motion: reduce) { .menuButton { transition: none; } }

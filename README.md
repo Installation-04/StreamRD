@@ -144,7 +144,7 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 - Clear help when a browser cannot play a file (MKV, DTS and similar), with a hand-off link for VLC or mpv.
 
 **Discover and request**
-- Search TMDB or OMDb, request a title, and track it from administrator approval to a finished download (debrid cloud or the bundled qBittorrent).
+- Search TMDB or OMDb, request a title, and track it from request to a finished download (the server approves a request by itself and finds the release; an administrator can be asked to approve instead) (debrid cloud or the bundled qBittorrent).
 - Automatic artwork and details matching for release-style file names, with manual correction and a *Retry matching* button. A built-in source works with no account or key; TMDB and OMDb keys are optional upgrades.
 
 **Share**

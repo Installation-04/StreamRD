@@ -7,7 +7,7 @@ import { checkForUpdates, clearUpdateCache } from "../src/maintenance";
 import { loadRuntimeSettings, resetRuntimeSettings, runtime, RUNTIME_SETTINGS_KEY } from "../src/runtime-settings";
 
 // What an administrator does from the web page instead of on the server: settings that were environment variables, and a restart.
-const ENV = ["TRANSCODE", "TRANSCODE_VIDEO", "TRANSCODE_MAX", "TRANSCODE_ALLOW_PRIVATE_HOSTS", "LINK_HEALTH", "UPDATE_CHECK", "ADMIN_RESTART", "MEDIA_MANAGER_URL", "MEDIA_MANAGER_TOKEN"];
+const ENV = ["TRANSCODE", "TRANSCODE_VIDEO", "TRANSCODE_MAX", "TRANSCODE_ALLOW_PRIVATE_HOSTS", "LINK_HEALTH", "UPDATE_CHECK", "REQUESTS_AUTO_APPROVE", "ADMIN_RESTART", "MEDIA_MANAGER_URL", "MEDIA_MANAGER_TOKEN"];
 const kept: Record<string, string | undefined> = {};
 let admin: TestUser, member: TestUser, helper: Server | undefined;
 beforeEach(async () => { for (const name of ENV) { kept[name] = process.env[name]; delete process.env[name]; } await resetDb(); ({ admin, user: member } = await adminAndUser()); clearUpdateCache(); });
@@ -25,7 +25,7 @@ it("shows each setting with where its value comes from, and lets the administrat
   expect((await save({ transcode: false }, member.token)).status).toBe(403);
   const first = await settings();
   expect(first.status).toBe(200); expect(first.headers["cache-control"]).toContain("no-store");
-  expect(first.body.settings).toEqual({ transcode: true, transcodeVideo: true, transcodeMax: 2, transcodeAllowPrivateHosts: false, linkHealth: true, updateCheck: true });
+  expect(first.body.settings).toEqual({ transcode: true, transcodeVideo: true, transcodeMax: 2, transcodeAllowPrivateHosts: false, linkHealth: true, requestsAutoApprove: true, updateCheck: true });
   expect(new Set(Object.values(first.body.sources))).toEqual(new Set(["default"]));
 
   process.env.TRANSCODE_MAX = "5"; process.env.LINK_HEALTH = "false";   // an install that set these keeps its behaviour

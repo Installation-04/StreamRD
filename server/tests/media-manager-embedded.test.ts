@@ -54,7 +54,7 @@ it("works out where a folder inside the container lives on the machine, by its c
 
 it("finds its own container and gives a media server that container's folders, network and time zone, from a fixed specification", async () => {
   await start(); const { json, settled, call } = await helper();
-  expect(await json("GET", "/status")).toEqual({ servers: { jellyfin: { state: "absent" }, plex: { state: "absent" } }, embedded: true });
+  expect(await json("GET", "/status")).toEqual({ servers: { jellyfin: { state: "absent" }, plex: { state: "absent" }, prowlarr: { state: "absent" } }, embedded: true });
   expect((await call("POST", "/servers/jellyfin/launch", { port: 8097 })).status).toBe(202);
   expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: true, address: "172.17.0.10" });
   const spec = docker.find("streamrd-jellyfin")!.spec;
@@ -71,6 +71,40 @@ it("finds its own container and gives a media server that container's folders, n
   for (const folder of ["jellyfin/config", "jellyfin/cache", "streamrd/library", "phosphor/library"]) expect(fs.statSync(path.join(folders, "config", folder)).isDirectory(), folder).toBe(true);
   expect(fs.existsSync(path.join(folders, "config", "plex"))).toBe(false);
   expect(docker.calls.filter(entry => entry.startsWith("GET /containers/") && entry.includes(SELF_ID))).toHaveLength(1);   // it asked about itself once
+});
+
+it("keeps the final result of an update when it is read by two readers at once, one of whom read the updater while it still ran", async () => {
+  await start(); const { json } = await helper({ logSettleMs: 20 });
+  const box = { id: "c".repeat(64), name: "streamrd-updater", image: "sha256:x", running: true, alive: true, status: "running", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", output: ['{"time":"2026-11-12T10:00:00Z","message":"Waiting for the new version to start"}'], spec: { Labels: { "streamrd.role": "updater" } } };
+  docker.boxes.push(box);
+  const first = json("GET", "/update");   // reads it while it runs
+  setTimeout(() => { box.running = false; box.status = "exited"; box.exitCode = 1; box.finishedAt = "2026-11-12T10:00:05Z"; box.output.push('{"time":"2026-11-12T10:00:05Z","result":"failed","error":"The new version did not start properly. The previous version was restored; nothing was lost."}'); }, 2);
+  const [a, b, c] = await Promise.all([first, json("GET", "/update"), json("GET", "/update")]);
+  for (const view of [a, b, c]) expect(["running", "failed"]).toContain(view.state);
+  const later = await json("GET", "/update");
+  expect(later).toMatchObject({ state: "failed", error: expect.stringMatching(/previous version was restored/) });   // never "running" once it has ended
+  expect((await json("GET", "/update")).state).toBe("failed");
+  expect(docker.find("streamrd-updater")).toBeUndefined();
+  // An updater that vanished before anyone read its end is reported, not waited for for ever.
+  docker.boxes.push({ ...box, id: "b".repeat(64), alive: true, running: true, status: "running", output: [], finishedAt: "0001-01-01T00:00:00Z" });
+  const gone = await helper({ logSettleMs: 20 }); expect((await gone.json("GET", "/update")).state).toBe("running");
+  docker.find("streamrd-updater")!.alive = false;
+  expect(await gone.json("GET", "/update")).toMatchObject({ state: "failed", error: expect.stringMatching(/updater is gone/) });
+});
+
+it("starts Prowlarr from a fixed specification that gives it its own settings folder and nothing of the libraries or downloads", async () => {
+  await start(); const { call, settled, json } = await helper();
+  expect((await call("POST", "/servers/prowlarr/launch", {})).status).toBe(202);
+  expect(await settled("prowlarr")).toMatchObject({ state: "running", port: 9696, autostart: true });
+  const spec = docker.find("streamrd-prowlarr")!.spec;
+  expect(spec).toMatchObject({ Image: "lscr.io/linuxserver/prowlarr:latest", Env: ["TZ=Europe/Paris", "PUID=1000", "PGID=1000"], Labels: { "streamrd.managed": "true", "streamrd.server": "prowlarr" } });
+  expect(spec.User).toBeUndefined();   // the image drops to PUID itself
+  expect(spec.HostConfig).toMatchObject({ PortBindings: { "9696/tcp": [{ HostPort: "9696" }] }, RestartPolicy: { Name: "unless-stopped" }, NetworkMode: "streamrd_default" });
+  expect(mountsOf("streamrd-prowlarr")).toEqual([{ Type: "bind", Source: "/home/owner/streamrd/config/prowlarr/config", Target: "/config", ReadOnly: false }]);
+  expect(JSON.stringify(spec)).not.toMatch(/Privileged|docker\.sock|library|"\/data"/);
+  expect(fs.statSync(path.join(folders, "config", "prowlarr", "config")).isDirectory()).toBe(true);
+  expect(fs.existsSync(path.join(folders, "config", "jellyfin"))).toBe(false);   // nothing is made for the others
+  expect((await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message)).toContain("Started. It listens on port 9696");
 });
 
 it("refuses a settings folder that has been made a link, instead of giving ownership of whatever it points at", async () => {
