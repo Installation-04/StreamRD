@@ -94,7 +94,11 @@ does exactly these things, and nothing a caller says changes what they are:
   given Docker's socket and nothing else: no network, no folders, a read-only filesystem, no capabilities. The updater does the swap, keeps its account
   of it, and is removed by the new container, which copies the account into **Admin → Logs**;
 - restart the StreamRD container (**Admin → System → Restart**, and *Restart now to apply* after staging a restore);
-- change whether a media server starts again by itself after the machine restarts.
+- change whether a media server starts again by itself after the machine restarts;
+- update a server it started (**Admin → System → Add-ons**, or at night when you turned that on): it downloads the image the server's fixed
+  reference points to now and, only if that is not the image already running, makes the container again from the same fixed specification (the same
+  port, the same folders, the same start-with-the-machine choice), keeping the old container until the new one runs and putting it back if it does not.
+  Which image to use is never chosen by the caller.
 
 It finds where StreamRD's folders are on the machine by asking Docker about its own container, so a volume or a folder you chose is used as it is. A
 media server it starts is attached to the same network as StreamRD, or reached by the address Docker gave it when StreamRD shares no named network.
@@ -126,6 +130,28 @@ makes available on the machine. If you run the container with plain `docker run`
 Running the installer again moves it into the StreamRD container: it removes the old overlay file, the secret and the folder setting, and says so. Run
 `docker compose up -d --remove-orphans` once (the installer does it unless you passed `--no-start`) so that Compose removes the old container.
 Media servers it started are not touched. A setup that still points `MEDIA_MANAGER_URL` at a helper elsewhere keeps working unchanged.
+
+## Updating Prowlarr, Jellyfin and Plex
+
+These programs have their own releases, so a newer version of one does not have to wait for a StreamRD release. With Docker control on,
+**Admin → System → Add-ons** lists each one that is running, the version it reports, and when it was last looked at (the same small panel sits in
+each module's own card: Admin → Library for Jellyfin and Plex, Admin → Request settings for Prowlarr).
+
+- **Check for updates** downloads the image the module is started from (the newest of its tag; nothing is downloaded again when it has not
+  changed) and says whether it is newer than the one running. Nothing is changed and nothing restarts.
+- **Update now** does the check and, when there is a newer image, restarts the module on it. It takes about a minute. The module's port, its
+  folders under `config/` and whether it starts with the machine stay as they were. The old container is kept until the new one is running, and put
+  back, still running, if the new one does not start; the page then says so. The previous image stays on the machine until you prune it.
+- **Update by itself at night** (off until you turn it on, for each module) checks and updates between 03:00 and 05:00 in the server's time zone,
+  at most once a night, only a module that is running. It is off by default because an update restarts the module, and a media server stops
+  whatever it is playing; Prowlarr can safely be left to update itself.
+
+A new version of a program can change its own database in a way an older version cannot read. Putting the previous version back covers a version
+that does not start; it does not undo a change a version made to its own settings. If a library's matches and watched marks in Plex or
+Jellyfin matter to you, keep a copy of that module's folder under `config/` (for example `config/plex`) before updating, as you would before
+updating it by hand. The StreamRD backups on **Admin → System** cover StreamRD's own database, not these folders.
+
+Without Docker control, update them as before: `docker compose pull` and `docker compose up -d`, or the image of the program you started yourself.
 
 ## Optional Docker mounts
 

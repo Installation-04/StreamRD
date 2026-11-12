@@ -209,6 +209,19 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 | POST | `/api/admin/media-servers/:server/refresh` | Asks the server to rescan the libraries under `/library` → `{ refreshed }`. |
 
 `:server` is `jellyfin` or `plex`. Everything here answers 403 to non-administrators.
+
+### Add-on modules (administrators)
+
+Prowlarr, Jellyfin and Plex are updated through the Docker helper, whenever a newer version of their image exists. 409 when Docker control is off.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/admin/modules` | `{ control: { mode, reason }, window: { from, to, timezone }, modules: [{ name, label, what, state, version, built, update, updateAvailable, availableVersion, checkedAt, updatedAt, auto }] }`. `state` is the container's (`absent`, `stopped`, `running`, `starting`, `failed`, `unknown` without Docker control); `version`/`built` come from the image running now (its version label, when the image has one); `update` is `null` or `{ state: running \| current \| available \| updated \| failed, apply, step, error }` for the last check or update the helper still remembers; `updateAvailable`, `availableVersion`, `checkedAt` and `updatedAt` are kept by the server; `auto` is the night update switch. `window` is the hours (server time zone) the night update runs in. |
+| POST | `/api/admin/modules/:module/check` | Downloads the newest image and compares it with the one running; nothing is changed. 202 with the view; the outcome shows in `update` (`current` or `available`). |
+| POST | `/api/admin/modules/:module/update` | Check, and if the image is newer, make the container again from it (same port, folders and start-with-the-machine choice; the old container is kept until the new one runs and is put back if it does not). 202 with the view; `update.state` goes `running`, then `updated`, `current` or `failed` (with `error`). Only for a running module. |
+| PUT | `/api/admin/modules/:module/auto` | `{ enabled }` → the view. Whether the module updates itself at night (off by default). |
+
+`:module` is `prowlarr`, `jellyfin` or `plex`.
 ## My List (any signed-in viewer)
 
 | Method | Path | Description |

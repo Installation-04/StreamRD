@@ -22,7 +22,8 @@ async function helper(extra: Record<string, unknown> = {}) {
   const json = async (method: string, route: string, body?: unknown): Promise<any> => (await call(method, route, body)).json();
   const settled = async (name: string) => { for (let i = 0; i < 200; i++) { const state = (await json("GET", "/status")).servers[name]; if (!["pulling", "starting"].includes(state.state)) return state; await new Promise(done => setTimeout(done, 10)); } throw new Error("never settled"); };
   const updated = async () => { for (let i = 0; i < 300; i++) { const view = await json("GET", "/update"); if (view.state !== "running") return view; await new Promise(done => setTimeout(done, 50)); } throw new Error("the update did not finish"); };
-  return { call, json, settled, updated };
+  const checked = async (name: string) => { for (let i = 0; i < 300; i++) { const view = await json("GET", `/servers/${name}/update`); if (view.state !== "running") return view; await new Promise(done => setTimeout(done, 20)); } throw new Error("the check did not finish"); };
+  return { call, json, settled, updated, checked };
 }
 // The container's folders as the helper sees them. Docker reports where they are on the machine; the stand-in says /home/owner/streamrd.
 async function start(opts: EngineOptions = {}) {
@@ -105,6 +106,92 @@ it("starts Prowlarr from a fixed specification that gives it its own settings fo
   expect(fs.statSync(path.join(folders, "config", "prowlarr", "config")).isDirectory()).toBe(true);
   expect(fs.existsSync(path.join(folders, "config", "jellyfin"))).toBe(false);   // nothing is made for the others
   expect((await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message)).toContain("Started. It listens on port 9696");
+});
+
+const PROWLARR = "lscr.io/linuxserver/prowlarr:latest";
+
+it("looks for a newer image of a server, says what it found, and changes nothing until it is asked to update", async () => {
+  await start(); const { call, json, settled, checked } = await helper();
+  await call("POST", "/servers/prowlarr/launch", { port: 9697 }); expect(await settled("prowlarr")).toMatchObject({ state: "running", port: 9697 });
+  docker.versions[`sha256:${PROWLARR}`] = "1.30.0";
+  expect(await json("GET", "/servers/prowlarr/update")).toMatchObject({ state: "idle", current: { version: "1.30.0", created: expect.any(String) } });
+  const first = docker.find("streamrd-prowlarr")!.id;
+
+  expect((await call("POST", "/servers/prowlarr/update", {})).status).toBe(202);
+  expect(await checked("prowlarr")).toMatchObject({ state: "current", available: null, current: { version: "1.30.0" }, error: "" });   // the image it runs is the newest
+
+  docker.versions["sha256:newer"] = "1.31.0"; docker.nextPull[PROWLARR] = ["sha256:newer"];
+  expect((await call("POST", "/servers/prowlarr/update", { apply: false })).status).toBe(202);
+  expect(await checked("prowlarr")).toMatchObject({ state: "available", current: { version: "1.30.0" }, available: { version: "1.31.0" } });
+  const same = docker.find("streamrd-prowlarr")!;
+  expect(same.id).toBe(first); expect(same.running).toBe(true); expect(same.image).toBe(`sha256:${PROWLARR}`);   // a check changes nothing
+  expect(docker.calls).not.toContain("POST /containers/streamrd-prowlarr/stop");
+  const log = (await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message);
+  expect(log).toEqual(expect.arrayContaining([`Checking ${PROWLARR} for a newer version`, "Already running the newest version", "A newer version is available (1.31.0)"]));
+});
+
+it("makes the container again from the newer image with the same port, folders and policy, and removes the old one once the new one runs", async () => {
+  await start(); const { call, json, settled, checked } = await helper();
+  await call("POST", "/servers/jellyfin/launch", { port: 8097, autostart: false }); expect(await settled("jellyfin")).toMatchObject({ state: "running", port: 8097, autostart: false });
+  const before = docker.find("streamrd-jellyfin")!, oldSpec = before.spec, oldImage = before.image;
+  const jellyfin = "jellyfin/jellyfin:latest"; docker.versions["sha256:newer"] = "10.11.0"; docker.nextPull[jellyfin] = ["sha256:newer"];
+
+  expect((await call("POST", "/servers/jellyfin/update", { apply: true })).status).toBe(202);
+  expect(await checked("jellyfin")).toMatchObject({ state: "updated", error: "", available: { version: "10.11.0" } });
+  const now = docker.find("streamrd-jellyfin")!;
+  expect(now.id).not.toBe(before.id); expect(now.image).toBe("sha256:newer"); expect(now.running).toBe(true);
+  expect(oldImage).not.toBe("sha256:newer");
+  expect(now.spec.HostConfig).toMatchObject({ PortBindings: { "8096/tcp": [{ HostPort: "8097" }] }, RestartPolicy: { Name: "no" }, NetworkMode: "streamrd_default" });   // port and policy as they were
+  expect(now.spec.Mounts).toEqual(oldSpec.Mounts); expect(now.spec.Env).toEqual(oldSpec.Env); expect(now.spec.Image).toBe(jellyfin); expect(now.spec.User).toBe("1000:1000");
+  expect(docker.find("streamrd-jellyfin-previous")).toBeUndefined(); expect(before.alive).toBe(false);   // the old container is gone, its settings folders are not touched
+  expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: false, address: expect.any(String) });
+  expect(await json("GET", "/servers/jellyfin/update")).toMatchObject({ state: "updated", current: { version: "10.11.0" } });
+  const log = (await json("GET", "/servers/jellyfin/logs")).deploy.map((entry: { message: string }) => entry.message);
+  expect(log.some((line: string) => /^Stopping jellyfin to start the new version/.test(line))).toBe(true);
+  expect(log).toContain("Updated to 10.11.0. The previous image is kept on this machine until you prune it.");
+  expect(fs.existsSync(path.join(folders, "config", "jellyfin", "config"))).toBe(true);
+});
+
+it("puts the previous version back, still running and set as before, when the new one does not start", async () => {
+  await start(); const { call, json, settled, checked } = await helper();
+  await call("POST", "/servers/prowlarr/launch", { port: 9697, autostart: false }); await settled("prowlarr");
+  const before = docker.find("streamrd-prowlarr")!;
+  docker.nextPull[PROWLARR] = ["sha256:broken"]; docker.failImages.add("sha256:broken");
+
+  await call("POST", "/servers/prowlarr/update", { apply: true });
+  const result = await checked("prowlarr");
+  expect(result).toMatchObject({ state: "failed", error: expect.stringMatching(/new version did not start properly\. The previous version was restored/) });
+  const back = docker.find("streamrd-prowlarr")!;
+  expect(back.id).toBe(before.id); expect(back.running).toBe(true); expect(back.image).toBe(`sha256:${PROWLARR}`);
+  expect(back.spec.HostConfig.RestartPolicy).toEqual({ Name: "no" });   // the policy the server had is set again
+  expect(docker.find("streamrd-prowlarr-previous")).toBeUndefined();
+  expect(await settled("prowlarr")).toMatchObject({ state: "running", port: 9697 });
+  expect((await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message).some((line: string) => /putting the previous version back/.test(line))).toBe(true);
+  // and a later update, with a working image, goes through
+  docker.nextPull[PROWLARR] = ["sha256:fixed"]; await call("POST", "/servers/prowlarr/update", { apply: true });
+  expect(await checked("prowlarr")).toMatchObject({ state: "updated" }); expect(docker.find("streamrd-prowlarr")!.image).toBe("sha256:fixed");
+});
+
+it("says plainly when a server cannot be checked or updated, and when the download fails, and leaves a server that is running alone", async () => {
+  await start(); const { call, json, settled, checked } = await helper();
+  const absent = await call("POST", "/servers/plex/update", {}); expect(absent.status).toBe(409); expect((await absent.json() as { error: string }).error).toMatch(/not been launched/);
+  expect((await call("POST", "/servers/nothing/update", {})).status).toBe(404);
+  expect((await call("POST", "/servers/plex/update", {}, null)).status).toBe(401);
+  expect((await call("POST", "/servers/plex/update", { apply: "yes" })).status).toBe(400);
+  expect((await call("PUT", "/servers/plex/update", {})).status).toBe(405);
+
+  await call("POST", "/servers/plex/launch", {}); await settled("plex"); await call("POST", "/servers/plex/stop");
+  const stopped = await call("POST", "/servers/plex/update", { apply: true }); expect(stopped.status).toBe(409); expect((await stopped.json() as { error: string }).error).toMatch(/Start it before updating/);
+  expect((await call("POST", "/servers/plex/update", { apply: false })).status).toBe(202);   // a stopped server can still be checked
+  expect(await checked("plex")).toMatchObject({ state: "current" });
+
+  await call("POST", "/servers/prowlarr/launch", {}); await settled("prowlarr");
+  const keep = docker.find("streamrd-prowlarr")!.id;
+  docker.nextPull[PROWLARR] = ["sha256:newer"]; docker.failPullFor = [PROWLARR];
+  await call("POST", "/servers/prowlarr/update", { apply: true });
+  expect(await checked("prowlarr")).toMatchObject({ state: "failed", error: "The image could not be downloaded" });
+  expect(docker.find("streamrd-prowlarr")!.id).toBe(keep); expect(docker.find("streamrd-prowlarr")!.running).toBe(true);   // untouched
+  expect((await json("GET", "/status")).servers.prowlarr).toMatchObject({ state: "running" });
 });
 
 it("refuses a settings folder that has been made a link, instead of giving ownership of whatever it points at", async () => {

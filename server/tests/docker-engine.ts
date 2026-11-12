@@ -19,6 +19,10 @@ const IMAGE_DEFAULTS = { Env: ["PATH=/usr/bin", "NODE_VERSION=24"], Labels: { "o
 export async function dockerEngine(opts: EngineOptions = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "docker-engine-")), socketPath = path.join(dir, "docker.sock");
   const boxes: Box[] = [], calls: string[] = [], images: Record<string, string> = { [REF]: "sha256:old" }, restarts: string[] = [];
+  // Every image id this engine has had (an image whose tag moved is still there, untagged, as in Docker); what the next pull of a
+  // reference brings (for a reference that is not StreamRD's own, the same image as before unless a test says otherwise); the version
+  // label an image carries; the images a container cannot start from.
+  const failPullFor: string[] = [], seen = new Set<string>(["sha256:old"]), nextPull: Record<string, string[]> = {}, versions: Record<string, string> = {}, failImages = new Set<string>();
   const name = opts.name ?? "streamrd";
   const mounts = opts.mounts ?? [
     { Type: "bind", Source: "/home/owner/streamrd/config", Destination: "/config" }, { Type: "bind", Source: "/home/owner/streamrd/data", Destination: "/data" },
@@ -57,13 +61,15 @@ export async function dockerEngine(opts: EngineOptions = {}) {
       const reply = (status: number, body?: unknown, raw?: string) => { response.writeHead(status, { "Content-Type": "application/json" }); response.end(raw ?? (body === undefined ? "" : JSON.stringify(body))); };
       const body = () => { try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { return {}; } };
       if (request.method === "GET" && url.pathname.startsWith("/images/")) {
-        const reference = decodeURIComponent(url.pathname.slice(8, -5)), id = images[reference] ?? (Object.values(images).includes(reference) || reference === "sha256:old" ? reference : "");
-        return id ? reply(200, { Id: id, Config: IMAGE_DEFAULTS }) : reply(404, { message: "no such image" });
+        const reference = decodeURIComponent(url.pathname.slice(8, -5)), id = images[reference] ?? (seen.has(reference) ? reference : "");
+        return id ? reply(200, { Id: id, Created: "2026-11-01T10:00:00.000000000Z", Config: { ...IMAGE_DEFAULTS, Labels: versions[id] ? { "org.opencontainers.image.version": versions[id] } : IMAGE_DEFAULTS.Labels } }) : reply(404, { message: "no such image" });
       }
       if (request.method === "POST" && url.pathname === "/images/create") {
-        if (opts.failPull) return reply(200, undefined, '{"status":"Pulling"}\n{"error":"pull access denied"}\n');
         const reference = `${url.searchParams.get("fromImage")}:${url.searchParams.get("tag")}`;
-        images[reference] = reference === REF ? (opts.unchanged ? "sha256:old" : "sha256:new") : `sha256:${reference}`;
+        if (opts.failPull || failPullFor.includes(reference)) return reply(200, undefined, '{"status":"Pulling"}\n{"error":"pull access denied"}\n');
+        images[reference] = nextPull[reference]?.shift() ?? images[reference] ?? (reference === REF ? (opts.unchanged ? "sha256:old" : "sha256:new") : `sha256:${reference}`);
+        if (reference === REF) images[reference] = opts.unchanged ? "sha256:old" : "sha256:new";
+        seen.add(images[reference]);
         return reply(200, undefined, '{"status":"Pulling"}\n{"status":"Downloading","id":"layer","progressDetail":{"current":50,"total":100}}\n{"status":"Downloaded"}\n');
       }
       if (request.method === "POST" && url.pathname === "/containers/create") {
@@ -83,7 +89,7 @@ export async function dockerEngine(opts: EngineOptions = {}) {
         response.writeHead(200, { "Content-Type": "application/vnd.docker.multiplexed-stream" }); return response.end(Buffer.concat(frames));
       }
       if (request.method === "POST" && named[2] === "start") {
-        if (opts.failStart && box.name === name && box.id !== SELF_ID) { box.status = "exited"; box.exitCode = 1; return reply(204); }
+        if ((opts.failStart && box.name === name && box.id !== SELF_ID) || failImages.has(box.image)) { box.status = "exited"; box.exitCode = 1; return reply(204); }
         box.running = true; box.status = "running";
         if (box.spec.Labels?.["streamrd.role"] === "updater") runUpdater(box);
         return reply(204);
@@ -97,7 +103,7 @@ export async function dockerEngine(opts: EngineOptions = {}) {
     });
   });
   await new Promise<void>(done => server.listen(socketPath, done));
-  return { boxes, calls, images, restarts, find, socketPath, name,
+  return { boxes, calls, images, restarts, find, socketPath, name, nextPull, versions, failImages, set failPullFor(references: string[]) { failPullFor.splice(0, failPullFor.length, ...references); },
     close: () => new Promise<void>(done => server.close(() => { fs.rmSync(dir, { recursive: true, force: true }); done(); })) };
 }
 export type Engine = Awaited<ReturnType<typeof dockerEngine>>;

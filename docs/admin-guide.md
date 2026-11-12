@@ -75,7 +75,7 @@ background link check and the update check. A change is in force at once and sur
 restarts and updates. Each line says where its value comes from: chosen there, set in
 the server's environment, or the default; *Use the default* forgets a choice.
 
-**Admin → System** has three sections below the upgrade status.
+**Admin → System** has four sections below the upgrade status: updates, add-ons, restart, and backups & restore.
 
 **Updates.** *Check for updates* compares the installed version with the latest
 GitHub release (turn the lookup off in **Admin → Server**, or with `UPDATE_CHECK=false`; set
@@ -88,6 +88,12 @@ small host-side script or an updater such as Watchtower; its address comes from 
 environment, never from the admin page. If the hook refuses, the backup is kept and
 nothing changes. After the update the new image starts, applies database upgrades
 (with another verified snapshot when needed) and the page shows the new version.
+
+**Add-ons (Prowlarr, Jellyfin, Plex).** With Docker control on, each of these that is running is listed with its version. *Check for updates*
+looks for a newer version of that program without changing anything, *Update now* restarts it on the newer one (its settings are kept, and the
+previous version is put back if the new one does not start), and *Update by itself at night* does both between 03:00 and 05:00, once a night. The
+night option is off until you turn it on, because an update stops what a media server is playing. Details, and what an update cannot undo, are in
+[plex-jellyfin.md](plex-jellyfin.md#updating-prowlarr-jellyfin-and-plex).
 
 **Backups & restore.** *Create backup* writes a consistent, integrity- and
 foreign-key-checked SQLite snapshot into `backups/` beside the database (at most 20

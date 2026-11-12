@@ -305,6 +305,28 @@ async function main() {
       await owner.shot("jellyfin-launch");
     });
 
+    await step("Jellyfin is checked for a newer version and updated from the System page, keeping how it was set, and the log box tells the story", async () => {
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      const row = owner.page.locator('[data-module="jellyfin"]'), text = () => row.innerText().catch(() => "");
+      await until("the module list to show Jellyfin", async () => /Version 1\.0\.0/.test(await text()), 20_000, 300);
+      assert.match(await text(), /Not checked yet/);
+      await row.getByRole("button", { name: "Check Jellyfin for updates" }).click();
+      await until("a newer version to be found", async () => /Update available: 2\.0\.0/.test(await text()), 60_000, 500);
+      assert.match(await text(), /Version 1\.0\.0/, "a check changes nothing: it still runs the old version");
+      owner.page.once("dialog", dialog => void dialog.accept());
+      await row.getByRole("button", { name: "Update Jellyfin now" }).click();
+      await until("the update to finish", async () => /Up to date/.test(await text()) && /Version 2\.0\.0/.test(await text()) && /Updated /.test(await text()), 90_000, 500);
+      await owner.shot("module-update");
+      await owner.page.goto(`${base}/admin/library`, { waitUntil: "networkidle" });
+      const card = owner.page.locator("#media-servers").getByRole("article", { name: "Jellyfin media server" });
+      await until("Jellyfin to run again", async () => (await card.getByRole("status", { name: "Jellyfin status" }).innerText()) === "Running", 60_000, 500);
+      assert.equal(await card.getByRole("checkbox").isChecked(), false, "it is still kept from starting with the machine: an update keeps how the server was set");
+      await card.getByRole("button", { name: "Show deploy log" }).click();
+      const log = () => card.getByRole("log").innerText().catch(() => "");
+      await until("the update in the deploy log", async () => /Updated to 2\.0\.0/.test(await log()), 20_000, 500);
+      assert.match(await log(), /A newer version is available \(2\.0\.0\)/);
+    });
+
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
       await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
       const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });
