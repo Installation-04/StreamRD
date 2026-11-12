@@ -10,7 +10,7 @@ import { backfillGroups } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
-import { recordUpdateOutcome } from "./routes/logs";
+import { recordUpdateOutcomeWhenKnown } from "./routes/logs";
 import { settleRegistrationDefault } from "./auth/access";
 import { loadRuntimeSettings } from "./runtime-settings";
 
@@ -36,7 +36,7 @@ async function main() {
     startRequestWorker();
     void ensureZileanIndexer().catch(() => undefined);
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
-    void recordUpdateOutcome().catch(() => undefined); // how the last update or rollback went, as the update helper recorded it
+    recordUpdateOutcomeWhenKnown(); // how the last update or rollback went, as the update helper recorded it
     void logEvent("info", "system", `Phosphor server listening on :${config.port}`);
   });
 }

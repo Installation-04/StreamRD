@@ -4,6 +4,11 @@
 const fs = require("node:fs"), http = require("node:http");
 const socketPath = process.env.LAB_DOCKER_SOCKET, pullSeconds = Number(process.env.LAB_PULL_SECONDS || 6);
 const images = new Set(), containers = new Map();   // name -> { spec, running, startedAt }
+// StreamRD's own container, as Docker would describe it to the helper that runs inside it: its name, the folders it keeps on the machine
+// (so the helper can tell a media server where they are) and the network it is on.
+const lab = process.env.LAB_DIR_ON_HOST || require("node:path").dirname(socketPath);
+containers.set("streamrd", { running: true, startedAt: Date.now(), spec: { Image: "ghcr.io/lab/streamrd:latest" }, own: true,
+  mounts: [{ Type: "bind", Source: lab, Destination: lab }, { Type: "bind", Source: `${lab}/data`, Destination: `${lab}/data` }, { Type: "bind", Source: "/var/run/docker.sock", Destination: socketPath }], networks: { streamrd_default: { Aliases: ["streamrd"], IPAddress: "172.20.0.2" } } });
 const frame = text => { const body = Buffer.from(text + "\n"), header = Buffer.alloc(8); header[0] = 1; header.writeUInt32BE(body.length, 4); return Buffer.concat([header, body]); };
 fs.rmSync(socketPath, { force: true });
 http.createServer((request, response) => {
@@ -31,7 +36,7 @@ http.createServer((request, response) => {
       const lines = one?.running ? [`${new Date(one.startedAt).toISOString()} [lab] ${name} is starting`, `${new Date(one.startedAt + 1000).toISOString()} [lab] libraries mapped: /library/streamrd /library/phosphor /data`, `${new Date(one.startedAt + 2000).toISOString()} [lab] listening`] : [];
       return response.end(Buffer.concat(lines.map(frame)));
     }
-    if (request.method === "GET" && url.pathname.endsWith("/json") && name) return one ? reply(200, { Name: `/${name}`, State: { Running: one.running }, Config: { Image: one.spec.Image }, HostConfig: { PortBindings: one.spec.HostConfig?.PortBindings, RestartPolicy: one.spec.HostConfig?.RestartPolicy } }) : reply(404, { message: "no such container" });
+    if (request.method === "GET" && url.pathname.endsWith("/json") && name) return one ? reply(200, { Id: one.own ? "lab0streamrd" : `lab-${name}`, Name: `/${name}`, State: { Running: one.running }, Config: { Image: one.spec.Image }, Mounts: one.mounts || [], NetworkSettings: { Networks: one.networks || { streamrd_default: { IPAddress: "172.20.0.9" } } }, HostConfig: { PortBindings: one.spec.HostConfig?.PortBindings, RestartPolicy: one.spec.HostConfig?.RestartPolicy } }) : reply(404, { message: "no such container" });
     if (request.method === "POST" && name && !one && !url.pathname.endsWith("/restart")) return reply(404, { message: "no such container" });
     if (request.method === "POST" && url.pathname.endsWith("/start")) { one.running = true; one.startedAt = Date.now(); return reply(204); }
     if (request.method === "POST" && url.pathname.endsWith("/stop")) { one.running = false; return reply(204); }

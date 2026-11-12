@@ -110,11 +110,13 @@ export async function updateHelperLog(): Promise<{ state: string; error: string;
 }
 const UPDATE_RECORDED = "logs.lastRecordedUpdate";
 /**
- * Called once at start. An update replaces this container, so the server that asked for it never sees how it went. The helper does:
+ * Called at start. An update replaces this container, so the server that asked for it never sees how it went. The helper does:
  * its account of the last update (or rollback) is copied into the log here, once, where it can be searched and exported with everything else.
+ * Returns "pending" while the update is still being finished: the new version has started but is not yet confirmed healthy.
  */
-export async function recordUpdateOutcome(): Promise<boolean> {
+export async function recordUpdateOutcome(): Promise<boolean | "pending"> {
   const helper = await updateHelperLog();
+  if (helper?.state === "running") return "pending";
   if (!helper || !helper.finishedAt || !["done", "failed", "current"].includes(helper.state)) return false;
   const seen = await db.setting.findUnique({ where: { key: UPDATE_RECORDED } });
   if (seen && seen.value === JSON.stringify(helper.finishedAt)) return false;
@@ -123,6 +125,12 @@ export async function recordUpdateOutcome(): Promise<boolean> {
     : `Update failed and the previous version was put back (now running ${version}): ${helper.error || "no reason was given"}`;
   await logEvent(helper.state === "failed" ? "error" : "info", "system", message, { meta: { update: { state: helper.state, startedAt: helper.startedAt, finishedAt: helper.finishedAt, steps: helper.log } } });
   return true;
+}
+
+/** Records the outcome now, or as soon as the update that started this server has been confirmed (checked every few seconds, for ten minutes). */
+export function recordUpdateOutcomeWhenKnown(everyMs = 10_000, tries = 60): void {
+  const attempt = (left: number) => { void recordUpdateOutcome().then(result => { if (result === "pending" && left > 0) setTimeout(() => attempt(left - 1), everyMs).unref(); }, () => undefined); };
+  attempt(tries);
 }
 
 export const logsRouter = Router();

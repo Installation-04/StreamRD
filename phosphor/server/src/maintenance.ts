@@ -135,6 +135,18 @@ function helper(): { base: string; token: string } | null {
   try { const url = new URL(raw); return ["http:", "https:"].includes(url.protocol) ? { base: url.origin, token } : null; } catch { return null; }
 }
 export function restartSupported(): boolean { return process.env.ADMIN_RESTART === "true" || helper() !== null; }
+/**
+ * Whether this server can ask Docker for things (start Plex and Jellyfin, update itself, restart), and why not when it cannot.
+ * In the all-in-one container the first program works this out at start and passes it on: the helper runs inside the container
+ * ("embedded") when the container starts as root with Docker's socket. An install from before v0.24.0 has the helper in a container
+ * of its own ("external"). `shared` says the user StreamRD runs as could open Docker's socket itself on this machine.
+ */
+export interface DockerControl { mode: "embedded" | "external" | "off"; reason: "no-socket" | "not-root" | "disabled" | "unset" | null; shared: boolean }
+export function dockerControl(): DockerControl {
+  const state = (process.env.DOCKER_CONTROL_STATE ?? "").trim();
+  if (helper()) return state === "embedded" ? { mode: "embedded", reason: null, shared: process.env.DOCKER_CONTROL_SHARED === "1" } : { mode: "external", reason: null, shared: false };
+  return { mode: "off", reason: state === "no-socket" || state === "not-root" || state === "disabled" ? state : "unset", shared: false };
+}
 export function restartSoon(): void { setTimeout(() => process.exit(0), 800).unref(); }
 /** Asks for the restart and returns once it is certain to happen; the caller answers the browser before the server goes away. */
 export async function requestRestart(): Promise<void> {
@@ -145,7 +157,7 @@ export async function requestRestart(): Promise<void> {
     catch { /* decided below */ }
     if (status === 202) return;
     if (status === 409) throw new MaintenanceError("The server is already restarting or updating. Give it a minute.", 409);
-    if (process.env.ADMIN_RESTART !== "true") throw new MaintenanceError("The helper that restarts the server did not answer. Check that its container (streamrd-media-manager) is running.", 502);
+    if (process.env.ADMIN_RESTART !== "true") throw new MaintenanceError(`The helper that restarts the server did not answer. ${dockerControl().mode === "embedded" ? "It starts again by itself; try again in a minute." : "Check that its container (streamrd-media-manager) is running."}`, 502);
   }
   if (process.env.ADMIN_RESTART !== "true" && !via) throw new MaintenanceError("Restart is not available here. Restart the container or service yourself.", 409);
   restartSoon();
@@ -172,7 +184,7 @@ export function updateWebhook(): URL | null {
   if (!raw) return null;
   try { const url = new URL(raw); return ["http:", "https:"].includes(url.protocol) ? url : null; } catch { return null; }
 }
-/** Who rolls out an update: the operator's own hook, or else the media manager helper, which replaces the StreamRD container itself. */
+/** Who rolls out an update: the operator's own hook, or else the helper that talks to Docker, which replaces the StreamRD container. */
 export function updateTarget(): { url: URL; token: string; helper: boolean } | null {
   const hook = updateWebhook();
   if (hook) return { url: hook, token: process.env.UPDATE_WEBHOOK_TOKEN ?? "", helper: false };
@@ -204,7 +216,7 @@ export function clearUpdateCache(): void { cache = null; }
 export function requestUpdate(targetVersion: string): Promise<{ backup: BackupInfo; status: number }> {
   return exclusive(async () => {
     const hook = updateTarget();
-    if (!hook) throw new MaintenanceError("No updater is set up. Run install.sh --media-manager, or set UPDATE_WEBHOOK_URL (see the admin guide).", 409);
+    if (!hook) throw new MaintenanceError("Updating from this page is not set up on this server. Run the installer again to turn it on, or set UPDATE_WEBHOOK_URL (see the admin guide).", 409);
     const info = await checkForUpdates(true);
     if (!info.latest || info.latest !== targetVersion || !info.updateAvailable) throw new MaintenanceError("That version is not the available update. Check for updates again.", 409);
     const backup = await snapshot("pre-update");

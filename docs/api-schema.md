@@ -198,13 +198,13 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/admin/media-servers` | `{ manager: { available }, servers: { jellyfin, plex } }`; each server has `port`, `state` (`unknown` without the media manager, then `absent`, `pulling`, `starting`, `running`, `stopped`, `failed`), `error?` and `secretHint` (the last four characters of the saved token, never the token). |
+| GET | `/api/admin/media-servers` | `{ manager: { available, mode, reason, shared }, servers: { jellyfin, plex } }` (`mode`: `embedded` for the helper inside the container, `external` for one in a container of its own, `off`; `reason` when off: `no-socket`, `not-root`, `disabled`, `unset`; `shared`: the user StreamRD runs as could open Docker's socket itself); each server has `port`, `state` (`unknown` without Docker control, then `absent`, `pulling`, `starting`, `running`, `stopped`, `failed`), `error?` and `secretHint` (the last four characters of the saved token, never the token). |
 | PUT | `/api/admin/media-servers` | `{ plex?: { port?, secret? }, jellyfin?: { port?, secret? } }`; `secret` is a Plex token or Jellyfin API key (stored encrypted) and `null` clears it. |
 | PUT | `/api/admin/media-servers/:server/autostart` | `{ enabled }` → the view. Whether the server starts again by itself after the machine restarts (on by default). Remembered for the next launch; a server that exists is changed in place. Each server in the view carries `autostart`. |
-| POST | `/api/admin/media-servers/:server/launch` | `{ port?, claim?, autostart? }` → 202 `{ state }`. `claim` is a Plex claim token, passed to the launch and never stored. 409 when the media manager is not installed. |
+| POST | `/api/admin/media-servers/:server/launch` | `{ port?, claim?, autostart? }` → 202 `{ state }`. `claim` is a Plex claim token, passed to the launch and never stored. 409 when Docker control is off. |
 | POST | `/api/admin/media-servers/:server/stop` | Stops the container started from here. |
 | DELETE | `/api/admin/media-servers/:server` | Removes it (its settings under `config/` are kept). |
-| GET | `/api/admin/media-servers/:server/logs?tail=100` | `{ deploy: [{ time, message }], container: [line] }`: what the helper did to start the server, then the server's own output (tail 1-200). Tokens are blanked. 409 without the media manager. |
+| GET | `/api/admin/media-servers/:server/logs?tail=100` | `{ deploy: [{ time, message }], container: [line] }`: what the helper did to start the server, then the server's own output (tail 1-200). Tokens are blanked. 409 without Docker control. |
 | POST | `/api/admin/media-servers/:server/test` | `{ reachable, accepted }`: whether the server answers and accepted the saved token. |
 | POST | `/api/admin/media-servers/:server/refresh` | Asks the server to rescan the libraries under `/library` → `{ refreshed }`. |
 
@@ -293,7 +293,7 @@ All routes require an active session and current access to the library.
 
 All routes require a live administrator session, are `no-store`, and are rate limited.
 
-- `GET /api/admin/system/maintenance` → `{backups:[{name,kind,sizeBytes,createdAt}], pendingRestore, restartSupported}`.
+- `GET /api/admin/system/maintenance` → `{backups:[{name,kind,sizeBytes,createdAt}], pendingRestore, restartSupported, control:{mode,reason,shared}}` (`control` as in the media-servers view: the helper inside the container, one in a container of its own, or off and why).
 - `POST /api/admin/system/backups` → 201 `{backup}`; a verified snapshot (max 20 manual).
 - `GET /api/admin/system/backups/:name/download`; `POST …/verify` → `{ok,schema}` or `{ok:false,reason}`; `DELETE …/:name`.
   Names must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.db$`; anything else is 404.

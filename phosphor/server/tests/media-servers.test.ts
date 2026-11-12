@@ -28,11 +28,11 @@ it("is for the administrator only", async () => {
   expect((await request(app).post("/api/admin/media-servers/portainer/launch").set(auth(admin.token)).send({})).status).toBe(404);
 });
 
-it("shows the defaults and explains that launching needs the media manager when it is not installed", async () => {
+it("shows the defaults and explains that launching needs Docker control when it is off", async () => {
   const view = await get(); expect(view.status).toBe(200);
-  expect(view.body).toEqual({ manager: { available: false }, servers: { jellyfin: { port: 8096, autostart: true, state: "unknown", secretHint: null }, plex: { port: 32400, autostart: true, state: "unknown", secretHint: null } } });
+  expect(view.body).toEqual({ manager: { available: false, mode: "off", reason: "unset", shared: false }, servers: { jellyfin: { port: 8096, autostart: true, state: "unknown", secretHint: null }, plex: { port: 32400, autostart: true, state: "unknown", secretHint: null } } });
   const launch = await request(app).post("/api/admin/media-servers/plex/launch").set(auth(admin.token)).send({});
-  expect(launch.status).toBe(409); expect(launch.body.error).toMatch(/media manager/i);
+  expect(launch.status).toBe(409); expect(launch.body.error).toMatch(/Docker control.*off/i);
 });
 
 it("keeps ports and tokens, storing the tokens encrypted and never sending them back", async () => {
@@ -136,7 +136,7 @@ it("tests a connection: reachable or not, and whether the saved token was accept
 });
 
 it("passes a server's deploy log through from the manager, and explains when there is no manager", async () => {
-  const none = await request(app).get("/api/admin/media-servers/plex/logs").set(auth(admin.token)); expect(none.status).toBe(409); expect(none.body.error).toMatch(/media manager/i);
+  const none = await request(app).get("/api/admin/media-servers/plex/logs").set(auth(admin.token)); expect(none.status).toBe(409); expect(none.body.error).toMatch(/Docker control/i);
   const fake = await keep(serve(entry => ({ json: { deploy: [{ time: "2026-11-10T12:00:00.000Z", message: "Started. It listens on port 32400" }], container: ["Starting Plex"], url: entry.url } })));
   process.env.MEDIA_MANAGER_URL = fake.url; process.env.MEDIA_MANAGER_TOKEN = TOKEN;
   const logs = await request(app).get("/api/admin/media-servers/plex/logs?tail=50").set(auth(admin.token));
@@ -144,4 +144,22 @@ it("passes a server's deploy log through from the manager, and explains when the
   expect(fake.seen[0]).toMatchObject({ method: "GET", url: "/servers/plex/logs?tail=50" }); expect(fake.seen[0].headers.authorization).toBe(`Bearer ${TOKEN}`);
   for (const bad of ["0", "201", "x"]) expect((await request(app).get(`/api/admin/media-servers/plex/logs?tail=${bad}`).set(auth(admin.token))).status, bad).toBe(400);
   expect((await request(app).get("/api/admin/media-servers/portainer/logs").set(auth(admin.token))).status).toBe(404);
+});
+
+it("says why Docker control is off or how it is on: from the helper inside the container, in a container of its own, or not at all", async () => {
+  const kept = { state: process.env.DOCKER_CONTROL_STATE, shared: process.env.DOCKER_CONTROL_SHARED };
+  try {
+    for (const [state, reason] of [["no-socket", "no-socket"], ["not-root", "not-root"], ["disabled", "disabled"], ["", "unset"]] as const) {
+      process.env.DOCKER_CONTROL_STATE = state; const body = (await get()).body; expect(body.manager, state).toEqual({ available: false, mode: "off", reason, shared: false });
+      expect((await request(app).get("/api/admin/system/maintenance").set(auth(admin.token))).body.control).toEqual({ mode: "off", reason, shared: false });
+    }
+    const fake = await keep(serve(() => ({ json: { servers: { jellyfin: { state: "absent" }, plex: { state: "absent" } } } })));
+    process.env.MEDIA_MANAGER_URL = fake.url; process.env.MEDIA_MANAGER_TOKEN = "m".repeat(40);
+    process.env.DOCKER_CONTROL_STATE = "embedded"; process.env.DOCKER_CONTROL_SHARED = "1";
+    expect((await get()).body.manager).toEqual({ available: true, mode: "embedded", reason: null, shared: true });
+    delete process.env.DOCKER_CONTROL_SHARED; process.env.DOCKER_CONTROL_STATE = "";
+    expect((await get()).body.manager).toEqual({ available: true, mode: "external", reason: null, shared: false });   // a helper in a container of its own
+  } finally {
+    for (const [name, value] of Object.entries({ DOCKER_CONTROL_STATE: kept.state, DOCKER_CONTROL_SHARED: kept.shared })) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
+  }
 });

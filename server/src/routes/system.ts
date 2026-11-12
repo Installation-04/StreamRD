@@ -9,7 +9,7 @@ import { systemStatus } from "../system";
 import { rateLimit } from "../util/rateLimit";
 import {
   MaintenanceError, backupPath, cancelRestore, checkForUpdates, createBackup, deleteBackup, listBackups, pendingRestore,
-  requestUpdate, requestRestart, restartSupported, stageRestore, validBackupName, verifyBackup,
+  requestUpdate, requestRestart, restartSupported, stageRestore, validBackupName, verifyBackup, dockerControl,
 } from "../maintenance";
 export const systemRouter = Router();
 systemRouter.use(requireAuth, requireAdmin);
@@ -37,7 +37,7 @@ systemRouter.put("/settings", heavy(), guarded(async (req, res) => {
 }));
 
 systemRouter.get("/maintenance", guarded(async (_req, res) => {
-  res.json({ backups: listBackups(), pendingRestore: pendingRestore(), restartSupported: restartSupported() });
+  res.json({ backups: listBackups(), pendingRestore: pendingRestore(), restartSupported: restartSupported(), control: dockerControl() });
 }));
 systemRouter.post("/backups", heavy(), guarded(async (req, res) => {
   const backup = await createBackup();

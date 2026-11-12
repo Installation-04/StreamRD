@@ -99,8 +99,8 @@ off the host.
 `pre-restore-*` safety backup of the current data, and **stages** the restore. The
 database file is swapped at the next start, before anything opens it, so a running
 server is never changed underneath. If the service is under a restart policy and
-`ADMIN_RESTART=true` (set in the provided Compose files), or the helper that starts Plex
-and Jellyfin is present, the page restarts it for you; otherwise restart it yourself.
+`ADMIN_RESTART=true`, or Docker control is on (the installer's default: the helper inside the container restarts it), the page restarts it
+for you; otherwise restart it yourself.
 **Admin → System → Restart** does the same at any time. An older backup is migrated forward on startup
 with its own snapshot. You can cancel a staged restore before restarting.
 Sessions are checked against the restored data, so accounts created after the

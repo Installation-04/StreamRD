@@ -79,11 +79,12 @@ async function ready(url) { for (let attempt = 0; attempt < 120; attempt++) { tr
   fs.mkdirSync(env.MEDIA_SOURCE_ROOT, { recursive: true });
   run(server, process.execPath, ["scripts/prepare-db.cjs"], env);
   if (process.env.LAB_HELPER !== "0") {
-    // The real helper, against a stand-in for Docker: Launch, the deploy log, auto-start and Restart can be tried from the pages.
+    // The real helper, in the mode it has inside the StreamRD container, against a stand-in for Docker: it finds its own container and where
+    // that container's folders are from Docker, as it does on a real machine. Launch, the deploy log, auto-start and Restart can be tried.
     const socket = path.join(lab, "docker.sock");
-    Object.assign(env, { MEDIA_MANAGER_URL: "http://127.0.0.1:8099", MEDIA_MANAGER_TOKEN: secret("helper-token") });
-    start("docker", __dirname, ["fake-docker.cjs"], { LAB_DOCKER_SOCKET: socket });
-    start("helper", root, [path.join("infra", "single-container", "media-manager.cjs")], { DOCKER_SOCKET: socket, MEDIA_MANAGER_TOKEN: env.MEDIA_MANAGER_TOKEN, HOST_INSTALL_DIR: lab, PORT: "8099", STREAMRD_CONTAINER: "streamrd" });
+    Object.assign(env, { MEDIA_MANAGER_URL: "http://127.0.0.1:8099", MEDIA_MANAGER_TOKEN: secret("helper-token"), DOCKER_CONTROL_STATE: "embedded" });
+    start("docker", __dirname, ["fake-docker.cjs"], { LAB_DOCKER_SOCKET: socket, LAB_DIR_ON_HOST: lab });
+    start("helper", root, [path.join("infra", "single-container", "media-manager.cjs"), "--embedded"], { DOCKER_SOCKET: socket, MEDIA_MANAGER_TOKEN: env.MEDIA_MANAGER_TOKEN, PORT: "8099", DATA_DIR: data, CONFIG_DIR: lab, STREAMRD_CONTAINER: "streamrd", APP_UID: String(process.getuid()), APP_GID: String(process.getgid()) });
   }
   start("origin", __dirname, ["origin.cjs"], env);
   start("api", server, ["--require", path.join(__dirname, "preload.cjs"), "dist/src/index.js"], env);
