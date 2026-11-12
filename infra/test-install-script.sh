@@ -66,4 +66,128 @@ DOCKER_HOST=unix:///run/user/1000/docker.sock PATH="$work/rootless:$PATH" bash "
 check "$work/r/.env" '^DOCKER_SOCKET_PATH=/run/user/1000/docker.sock$'
 if PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/b" --media-server nonsense >/dev/null 2>&1; then echo "FAIL: bad --media-server accepted" >&2; exit 1; fi
 if PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/b" --plex-port 99999 >/dev/null 2>&1; then echo "FAIL: bad port accepted" >&2; exit 1; fi
+
+# ---- The host: what is missing is installed (Docker, the Compose plugin, curl, tar), unless told not to. ----------------------------------
+# Each case runs the real installer in a sandbox that has the system's tools but no Docker, package manager, sudo or init system of its own,
+# plus stand-ins that record what they were asked and change the sandbox the way the real thing would.
+fail() { echo "FAIL: $*" >&2; exit 1; }
+has() { grep -Eq -- "$2" "$1" || { echo "FAIL: $1 lacks: $2" >&2; sed 's/^/   | /' "$1" | tail -20 >&2; exit 1; }; }
+lacks() { ! grep -Eq -- "$2" "$1" || { echo "FAIL: $1 has: $2" >&2; exit 1; }; }
+real_bash="$(command -v bash)"; real_tar="$(command -v tar)"; real_curl="$(command -v curl)"
+stub() { printf '#!/bin/sh\n%s\n' "$2" > "$bin/$1"; chmod +x "$bin/$1"; }
+docker_template() { cat > "$state/docker.template" <<'STUB'
+#!/bin/sh
+echo "docker $*" >> "$LOG"
+case "$1" in
+  info)
+    [ -e "$STATE/running" ] || { echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" >&2; exit 1; }
+    if [ -n "${STUB_NEED_SUDO:-}" ] && [ -z "${STUB_AS_ROOT:-}" ]; then echo "permission denied while trying to connect to the Docker daemon socket" >&2; exit 1; fi ;;
+  compose) if [ "$2" = version ]; then [ -e "$STATE/compose" ] || [ -x "${STREAMRD_COMPOSE_DIR:-/nonexistent}/docker-compose" ] || exit 1; fi ;;
+esac
+exit 0
+STUB
+chmod +x "$state/docker.template"; }
+# sandbox NAME PM(apt|pacman|none) HAS_SUDO(0|1) HAS_DOCKER(0|1) HAS_TAR(0|1)
+sandbox() {
+  local name="$1" pm="$2" has_sudo="$3" has_docker="$4" has_tar="$5" f b
+  bin="$work/$name/bin"; state="$work/$name/state"; log="$work/$name/log"; mkdir -p "$bin" "$state"; : > "$log"
+  for f in /usr/bin/* /bin/*; do
+    b="${f##*/}"
+    case "$b" in docker|docker-*|sudo|su|systemctl|service|rc-service|rc-update|apt-get|apt|dnf|yum|zypper|pacman|apk|curl|tar|id|uname|chown) continue ;; esac
+    [ -e "$bin/$b" ] || ln -s "$f" "$bin/$b" 2>/dev/null || true
+  done
+  docker_template
+  stub id 'if [ "$1" = -u ]; then echo "${STUB_UID:-1000}"; else exec /usr/bin/id "$@"; fi'
+  stub uname 'if [ "$1" = -s ] && [ -n "${STUB_OS:-}" ]; then echo "$STUB_OS"; else exec /usr/bin/uname "$@"; fi'
+  stub chown 'exit 0'
+  stub systemctl 'echo "systemctl $*" >> "$LOG"; case "$*" in *docker*) touch "$STATE/running" ;; esac; exit 0'
+  stub service 'echo "service $*" >> "$LOG"; case "$*" in *docker*) touch "$STATE/running" ;; esac; exit 0'
+  [ "$has_sudo" = 0 ] || stub sudo 'echo "sudo $*" >> "$LOG"; STUB_AS_ROOT=1 exec "$@"'
+  [ "$has_tar" = 0 ] || ln -s "$real_tar" "$bin/tar"
+  stub curl 'url=""; out=""; prev=""
+for a in "$@"; do
+  [ "$prev" != -o ] || out="$a"
+  case "$a" in -*) ;; *) [ "$prev" = -o ] || url="$a" ;; esac
+  prev="$a"
+done
+echo "curl $url" >> "$LOG"
+case "$url" in
+  *get.docker.com)
+    if [ -n "${STUB_SCRIPT_FAILS:-}" ]; then printf "#!/bin/sh\nexit 1\n" > "$out"
+    else printf "#!/bin/sh\necho docker-script-ran >> \"%s\"\ntouch \"%s/running\" \"%s/compose\"\ncp \"%s/docker.template\" \"%s/docker\"\n" "$LOG" "$STATE" "$STATE" "$STATE" "$BIN" > "$out"; fi ;;
+  */checksums.txt) cp "$STATE/checksums.txt" "$out" ;;
+  */docker-compose-linux-*) cp "$STATE/compose-binary" "$out" ;;
+  *) exec "$REAL_CURL" "$@" ;;
+esac'
+  case "$pm" in
+    apt) stub apt-get 'echo "apt-get $*" >> "$LOG"
+case "$*" in
+  *install*docker.io*) cp "$STATE/docker.template" "$BIN/docker" ;;
+  *install*docker-compose-plugin*|*install*docker-compose-v2*) [ -z "${STUB_COMPOSE_PKG_FAILS:-}" ] || exit 1; touch "$STATE/compose" ;;
+  *install*tar*) ln -sf "$REAL_TAR" "$BIN/tar" ;;
+esac
+exit 0' ;;
+    pacman) stub pacman 'echo "pacman $*" >> "$LOG"; case "$*" in *docker*) cp "$STATE/docker.template" "$BIN/docker"; touch "$STATE/compose" ;; esac; exit 0' ;;
+  esac
+  if [ "$has_docker" = 1 ]; then cp "$state/docker.template" "$bin/docker"; touch "$state/running" "$state/compose"; fi
+}
+# scenario NAME [VAR=value ...] -- installer options: runs the installer in that sandbox; leaves the exit code in rc and what it printed in out
+scenario() {
+  local name="$1"; shift; local envs=()
+  while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  set +e
+  out="$(env ${envs[@]+"${envs[@]}"} PATH="$bin" LOG="$log" STATE="$state" BIN="$bin" REAL_TAR="$real_tar" REAL_CURL="$real_curl" STREAMRD_COMPOSE_DIR="$state/plugins" \
+    "$real_bash" "$root/install.sh" --yes --no-start --dir "$work/$name/d" "$@" 2>&1)"; rc=$?
+  set -e
+  printf '%s\n' "$out" > "$work/$name/out"
+}
+
+# 1. A bare machine, as root: Docker comes from Docker's own script, the service is started, and the install goes on.
+sandbox h1 apt 0 0 1; scenario h1 STUB_UID=0 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "a bare machine was not set up (exit $rc)"; }
+has "$log" '^curl https://get.docker.com$'; has "$log" 'docker-script-ran'; has "$log" 'systemctl enable --now docker|service docker start'
+[ -f "$work/h1/d/.env" ] || fail "the install did not go on after installing Docker"; has "$work/h1/out" 'Installing Docker Engine'
+# 2. --no-install-docker installs nothing, and says what to do.
+sandbox h2 apt 0 0 1; scenario h2 STUB_UID=0 -- --no-install-docker; [ "$rc" != 0 ] || fail "--no-install-docker went on without Docker"
+has "$work/h2/out" 'Docker is not installed'; has "$work/h2/out" 'docs.docker.com/engine/install'; lacks "$log" 'docker-script-ran'; [ ! -e "$work/h2/d" ] || fail "--no-install-docker made files"
+sandbox h2b apt 0 0 1; scenario h2b STUB_UID=0 STREAMRD_NO_INSTALL_DOCKER=1 -- ; [ "$rc" != 0 ] || fail "STREAMRD_NO_INSTALL_DOCKER=1 went on without Docker"
+# 3. A missing tar is installed first (with the certificates), through the machine's package manager.
+sandbox h3 apt 0 1 0; scenario h3 STUB_UID=0 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "a missing tar stopped the install"; }
+has "$log" 'apt-get install -y -qq tar ca-certificates'
+# 4. Docker without the Compose plugin: the packages are tried, then Docker's own release of the plugin, accepted only with its published checksum.
+arch=""; case "$(uname -m)" in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=aarch64 ;; esac
+if [ -n "$arch" ]; then
+  sandbox h4 apt 0 1 1; printf '#!/bin/sh\nexit 0\n' > "$state/compose-binary"; rm -f "$state/compose"
+  printf '%s *docker-compose-linux-%s\n' "$(sha256sum "$state/compose-binary" | cut -d' ' -f1)" "$arch" > "$state/checksums.txt"
+  scenario h4 STUB_UID=0 STUB_COMPOSE_PKG_FAILS=1 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "the Compose plugin was not installed (exit $rc)"; }
+  [ -x "$state/plugins/docker-compose" ] || fail "the Compose plugin was not put in place"; has "$log" 'docker-compose-linux-'
+  has "$log" 'apt-get install -y -qq docker-compose-plugin'; has "$log" 'apt-get install -y -qq docker-compose-v2'
+  sandbox h4b apt 0 1 1; printf '#!/bin/sh\nexit 0\n' > "$state/compose-binary"; rm -f "$state/compose"
+  printf '%s *docker-compose-linux-%s\n' "0000000000000000000000000000000000000000000000000000000000000000" "$arch" > "$state/checksums.txt"
+  scenario h4b STUB_UID=0 STUB_COMPOSE_PKG_FAILS=1 -- ; [ "$rc" != 0 ] || fail "a Compose plugin that did not match its checksum was accepted"
+  has "$work/h4b/out" 'did not match its published checksum'; [ ! -e "$state/plugins/docker-compose" ] || fail "the unchecked plugin was installed"
+fi
+# 5. Docker installed but not running: it is started, and the install goes on.
+sandbox h5 apt 0 1 1; rm -f "$state/running"; scenario h5 STUB_UID=0 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "a stopped Docker was not started (exit $rc)"; }
+has "$log" 'systemctl enable --now docker|service docker start'; has "$work/h5/out" 'Docker is not running; starting it'
+sandbox h5b apt 0 1 1; rm -f "$state/running"; scenario h5b STUB_UID=0 -- --no-install-docker; [ "$rc" != 0 ] || fail "--no-install-docker started a service"
+lacks "$log" 'systemctl|service docker'; has "$work/h5b/out" 'is not running'
+# 6. Docker answers only to root: it is run through sudo, nobody is added to the docker group, and the printed commands say sudo.
+sandbox h6 apt 1 1 1; scenario h6 STUB_UID=1000 STUB_NEED_SUDO=1 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "Docker that answers only to root was not used through sudo (exit $rc)"; }
+has "$log" '^sudo docker info'; has "$work/h6/out" 'sudo docker compose up -d'; lacks "$log" 'usermod|docker group|groupadd'
+# 7. A Mac or Windows machine without Docker is told what to install; nothing is installed.
+sandbox h7 none 0 0 1; scenario h7 STUB_OS=Darwin -- ; [ "$rc" != 0 ] || fail "a Mac without Docker went on"; has "$work/h7/out" 'Docker Desktop'
+# 8. Arch: no Docker script, the distribution's packages.
+sandbox h8 pacman 0 0 1; scenario h8 STUB_UID=0 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "Arch was not set up (exit $rc)"; }
+has "$log" 'pacman -S --noconfirm --needed docker docker-compose'; lacks "$log" 'get.docker.com'
+# 9. Docker's script failing falls back to the distribution's packages.
+sandbox h9 apt 0 0 1; scenario h9 STUB_UID=0 STUB_SCRIPT_FAILS=1 -- ; [ "$rc" = 0 ] || { echo "$out" >&2; fail "the fallback to packages failed (exit $rc)"; }
+has "$log" 'apt-get install -y -qq docker.io'; has "$log" 'apt-get install -y -qq docker-compose-plugin'; has "$work/h9/out" 'distribution.s own Docker packages'
+# 10. Neither root nor a working sudo: it says so, and installs nothing.
+sandbox h10 apt 0 0 1; scenario h10 STUB_UID=1000 -- ; [ "$rc" != 0 ] || fail "an unprivileged user without sudo went on"
+has "$work/h10/out" 'needs root'; lacks "$log" 'docker-script-ran|apt-get install'
+# 11. --prepare stops once the machine is ready, before anything of StreamRD's is made.
+sandbox h11 apt 0 0 1; set +e; out="$(env STUB_UID=0 PATH="$bin" LOG="$log" STATE="$state" BIN="$bin" REAL_TAR="$real_tar" REAL_CURL="$real_curl" "$real_bash" "$root/install.sh" --yes --prepare --dir "$work/h11/d" 2>&1)"; rc=$?; set -e
+[ "$rc" = 0 ] || { echo "$out" >&2; fail "--prepare failed"; }; printf '%s' "$out" | grep -q 'This machine is ready' || fail "--prepare did not say it was done"; [ ! -e "$work/h11/d" ] || fail "--prepare made StreamRD's folders"
+# 12. Removing never installs anything.
+sandbox h12 apt 0 0 1; scenario h12 STUB_UID=0 -- --uninstall; [ "$rc" != 0 ] || fail "--uninstall went on without Docker"; lacks "$log" 'docker-script-ran'
 echo "install.sh checks passed"

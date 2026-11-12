@@ -71,7 +71,9 @@ You decide who joins and what they can see, and nobody else needs a debrid subsc
 
 ## 🚀 Quick install
 
-You need Docker with the Compose plugin. Then run:
+On a Linux machine that has nothing installed yet, run this and nothing else: the script installs what is missing (curl, tar, Docker Engine with
+the Compose plugin), starts Docker and sets it to start with the machine. It asks once before it does, in a terminal (`--yes`, or no terminal,
+goes ahead; `--no-install-docker` installs nothing). On a Mac or Windows machine install Docker Desktop first (Windows: run the script from a WSL 2 terminal).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
@@ -95,7 +97,8 @@ The script creates `~/streamrd` with one `docker-compose.yml` and two folders, l
 **Update** any time with `cd ~/streamrd && docker compose pull && docker compose up -d` (or run the script again).
 Your folders are never touched. Options go after `bash -s --`, for example `--port 3000 --admin-email you@example.com`;
 `--help` lists them. `--import-db` moves an existing install across and `--uninstall` removes the container, keeping your folders.
-It does not install Docker, set up HTTPS or open firewall ports. Read [`install.sh`](install.sh) before piping any script to a shell.
+It does not set up HTTPS or open firewall ports. Read [`install.sh`](install.sh) before piping any script to a shell; it runs Docker's own
+installation script as root when Docker is missing ([what that means](docs/single-container.md#what-the-installer-does-to-the-machine)).
 
 <details>
 <summary><b>Optional add-ons</b>: Zilean, Zurg, Plex and Jellyfin</summary>
