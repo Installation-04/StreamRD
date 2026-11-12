@@ -19,7 +19,8 @@ This creates `~/streamrd` with one `docker-compose.yml`, a small `.env`, and two
 | `config/` | `/config` | Everything that is *settings*: both databases and their backups/snapshots, signing keys and generated passwords, the download client's settings |
 | `data/` | `/data` | Downloads and media: `data/downloads` by default, and anything you mount for Plex/Jellyfin exports |
 
-Run from a terminal on a first install, the script asks how you want it: **Default**, or **Advanced** (folder, every port, Phosphor
+On a bare Linux machine this one command is enough: it first installs what is missing (see
+[What the installer does to the machine](#what-the-installer-does-to-the-machine)). Run from a terminal on a first install, the script asks how you want it: **Default**, or **Advanced** (folder, every port, Phosphor
 and qBittorrent on or off, Jellyfin and/or Plex, Zilean, Zurg, the reserved administrator email) and shows a summary to confirm.
 Options you pass skip their question; `--yes`, or running without a terminal, skips all of them.
 
@@ -49,6 +50,40 @@ services:
 The container runs as UID/GID 1000, so `config` and `data` must be writable by it (`install.sh` does this for you).
 Only `CONFIG_DIR=/config` is new compared with the first all-in-one release: without it everything lives under
 `/data`, exactly as before.
+
+## What the installer does to the machine
+
+StreamRD needs Docker with the Compose plugin, and `curl` and `tar` for the installer itself. On **Linux** the installer installs whatever is
+missing, so a machine with nothing on it needs only the one command above:
+
+1. **`curl`, `tar` and the certificates**, with the machine's package manager (apt, dnf, yum, zypper, pacman or apk).
+2. **Docker Engine and the Compose plugin.** On Debian, Ubuntu, Raspberry Pi OS, Fedora and CentOS/RHEL and their relatives it runs
+   [Docker's own installation script](https://get.docker.com) (as root: the same thing as `curl -fsSL https://get.docker.com | sudo sh`). Where
+   that script does not support the system, or fails, it uses the distribution's own packages (Docker, plus the Compose plugin; on Arch and
+   Alpine these are the only route). If the Compose plugin is still missing it downloads Docker's release of it and installs it only if it
+   matches the checksum published beside it.
+3. **The Docker service**, started now and set to start with the machine (systemd, OpenRC or `service`).
+4. **FUSE**, only if you choose Zurg and `/dev/fuse` is missing.
+
+**Who is asked.** In a terminal, you are asked once, before anything is installed (`[Y/n]`; sudo may ask for your password). With `--yes`, or when
+there is no terminal, it goes ahead without asking, so long as it can get root: as root, or through a `sudo` that works from where the script runs.
+Otherwise it stops and says so, having installed nothing.
+
+**Say no.** `--no-install-docker` (or `STREAMRD_NO_INSTALL_DOCKER=1`) installs nothing and starts nothing: it stops with what is missing and a
+link to Docker's instructions. `--uninstall` never installs anything. `--prepare` installs and starts what the machine needs, then stops before it
+makes any of StreamRD's folders, which is a way to prepare a machine without installing StreamRD yet.
+
+**What it does not do.** It does not add you to the `docker` group, because membership is the same as root on that machine. When Docker answers only to root,
+the installer runs Docker through `sudo` for that run, and the commands it prints at the end start with `sudo docker`. It does not open firewall
+ports or set up HTTPS, and it does not install anything from a source other than the ones above.
+
+**Mac and Windows.** Docker Desktop cannot be installed without a person at the screen (its licence and its first start), so on a Mac or Windows
+machine the installer says what to install and stops. On Windows run it from a WSL 2 terminal with Docker Desktop's WSL integration on.
+
+**Checked** against bare Ubuntu 24.04 and Debian 12 images in CI (`installer-bare` in `.github/workflows/single-container.yml`): the script installs curl,
+tar, Docker and the Compose plugin, starts Docker, and `docker info` answers. Every decision it makes (root, sudo, each package manager, a failed script,
+the checksum, refusing) is exercised by `infra/test-install-script.sh` against recording stand-ins. **Not run on a real machine:** Fedora, CentOS,
+RHEL, openSUSE, Arch and Alpine, and a Raspberry Pi; those use the same code paths but their package names and services were not tried.
 
 ## Updating
 
