@@ -11,7 +11,7 @@ import { signSession } from "../src/auth/jwt";
 import { accountProviderContext } from "../src/account-library";
 import { playAccountItem } from "../src/providers/account-library";
 import { ProviderError } from "../src/providers/types";
-import { convertibleUrl, decideMode, ffmpegArgs, guessMode, planPlayback, Probe, probeStream, registerStream } from "../src/transcode";
+import { convertibleUrl, decideMode, ffmpegArgs, guessMode, maxConversions, planPlayback, Probe, probeStream, registerStream } from "../src/transcode";
 
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
 const play = vi.mocked(playAccountItem);
@@ -134,8 +134,8 @@ it("says why when the player asks for the picture to be converted and that is tu
   try {
     const id = registerStream("https://example.com/a.mkv", "audio", "x");
     const refused = await request(app).get(`/api/stream/${id}?video=1`);
-    expect(refused.status).toBe(409); expect(refused.body.error).toMatch(/TRANSCODE_VIDEO/);
-    expect((await request(app).get(`/api/stream/${id}/status`)).body.lastError).toMatch(/TRANSCODE_VIDEO/);
+    expect(refused.status).toBe(409); expect(refused.body.error).toMatch(/picture is converted too, and that is turned off on this server \(Admin → Server → Conversion\)/);
+    expect((await request(app).get(`/api/stream/${id}/status`)).body.lastError).toMatch(/Admin → Server → Conversion/);
     expect((await request(app).get(`/api/stream/${id}?video=yes`)).status).toBe(400);
   } finally { delete process.env.TRANSCODE_VIDEO; }
 });
@@ -163,6 +163,23 @@ it("tells a viewer what a dead link means for them, keeps the owner's instructio
   expect(JSON.stringify(lines)).not.toContain("private-fixture-key");
   expect((await db.accountMedia.findUniqueOrThrow({ where: { id: media.id } })).health).toBe("broken");   // two refusals: the link is marked
   play.mockReset();
+});
+
+it("follows the conversion choices made in Admin → Server, without a restart", async () => {
+  const owner = await member("admin");
+  const put = (body: object) => request(app).put("/api/admin/system/settings").set(auth(owner.token)).send(body);
+  process.env.TRANSCODE = "true"; delete process.env.TRANSCODE_MAX; delete process.env.TRANSCODE_VIDEO; delete process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS;
+  try {
+    expect(maxConversions()).toBe(2); expect(convertibleUrl("http://192.168.1.9/a.mkv")).toBeNull();
+    expect((await put({ transcodeMax: 6, transcodeAllowPrivateHosts: true, transcodeVideo: false })).status).toBe(200);
+    expect(maxConversions()).toBe(6); expect(convertibleUrl("http://192.168.1.9/a.mkv")).toBe("http://192.168.1.9/a.mkv");
+    const refused = await request(app).get(`/api/stream/${registerStream("https://example.com/a.mkv", "audio", "x")}?video=1`);
+    expect(refused.status).toBe(409); expect(refused.body.error).toMatch(/Admin → Server → Conversion/);
+    expect((await put({ transcode: false })).status).toBe(200);
+    expect(await planPlayback("https://example.com/a.mkv", "a.mkv")).toMatchObject({ mode: "direct", reason: "off" });   // nothing is converted, and nothing is probed
+    expect((await put({ transcode: null, transcodeMax: null, transcodeAllowPrivateHosts: null, transcodeVideo: null })).body.sources).toMatchObject({ transcode: "environment", transcodeMax: "default" });
+    expect(maxConversions()).toBe(2);
+  } finally { process.env.TRANSCODE = "true"; process.env.TRANSCODE_ALLOW_PRIVATE_HOSTS = "1"; }
 });
 
 it("refuses unknown or malformed stream ids and bad start times", async () => {

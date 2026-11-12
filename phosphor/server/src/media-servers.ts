@@ -6,21 +6,25 @@ import { requireAuth, requireAdmin } from "./auth/middleware";
 import { asyncHandler } from "./http";
 import { logEvent } from "./logger";
 import { parseBody } from "./routes/helpers";
+import { dockerControl } from "./maintenance";
 import { rateLimit } from "./util/rateLimit";
 
 /**
  * Plex and Jellyfin next to StreamRD. The administrator saves a port and, optionally, the server's own token (a Plex token or a Jellyfin
- * API key, stored encrypted) so StreamRD can ask it to rescan the exported libraries. A server can be started from here when the
- * optional media manager is installed (install.sh --media-manager): StreamRD only asks the manager, and the manager alone holds the
- * Docker socket. The Plex claim token is passed to the launch once and is never stored.
+ * API key, stored encrypted) so StreamRD can ask it to rescan the exported libraries. A server can be started from here when Docker
+ * control is on (the installer's default): StreamRD only asks the helper, a separate process that alone opens Docker's socket.
+ * The Plex claim token is passed to the launch once and is never stored.
  */
 const KEY = "media.servers", NAMES = ["jellyfin", "plex"] as const;
 type Name = (typeof NAMES)[number];
 const DEFAULT_PORT: Record<Name, number> = { jellyfin: 8096, plex: 32400 };
 const port = z.number().int().min(1024).max(65535);
-interface Stored { jellyfin: { port: number; secret: string }; plex: { port: number; secret: string } }
-const empty = (): Stored => ({ jellyfin: { port: DEFAULT_PORT.jellyfin, secret: "" }, plex: { port: DEFAULT_PORT.plex, secret: "" } });
-const storedSchema = z.object({ jellyfin: z.object({ port, secret: z.string().max(1500) }), plex: z.object({ port, secret: z.string().max(1500) }) });
+// autostart: whether the server comes back by itself after the machine restarts (on unless the administrator turns it off).
+interface One { port: number; secret: string; autostart: boolean }
+interface Stored { jellyfin: One; plex: One }
+const empty = (): Stored => ({ jellyfin: { port: DEFAULT_PORT.jellyfin, secret: "", autostart: true }, plex: { port: DEFAULT_PORT.plex, secret: "", autostart: true } });
+const oneSchema = z.object({ port, secret: z.string().max(1500), autostart: z.boolean().default(true) });
+const storedSchema = z.object({ jellyfin: oneSchema, plex: oneSchema });
 
 async function readStored(): Promise<Stored> {
   const row = await db.setting.findUnique({ where: { key: KEY } });
@@ -32,29 +36,38 @@ export async function mediaServerTokenSaved(): Promise<boolean> { const stored =
 const secretOf = (stored: Stored, name: Name) => decryptSecret(stored[name].secret) ?? "";
 const hint = (value: string) => value ? (value.length <= 4 ? "****" : `****${value.slice(-4)}`) : null;
 
-/* ------------------------------ the media manager ------------------------------ */
+/* ------------------------------ the helper that talks to Docker ------------------------------ */
 const managerConfig = () => ({ url: (process.env.MEDIA_MANAGER_URL ?? "").replace(/\/+$/, ""), token: process.env.MEDIA_MANAGER_TOKEN ?? "" });
 class ManagerError extends Error { constructor(message: string, public status = 502) { super(message); } }
 async function manager<T>(method: string, route: string, body?: unknown): Promise<T> {
   const { url, token } = managerConfig();
-  if (!url || !token) throw new ManagerError("Launching from here needs the media manager. Run the installer again with --media-manager (see the Plex and Jellyfin guide).", 409);
+  if (!url || !token) throw new ManagerError("Launching from here needs Docker control, which is off on this server. Run the installer again to turn it on (see the Plex and Jellyfin guide).", 409);
   let response: Response;
   try { response = await fetch(url + route, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000), redirect: "error" }); }
-  catch { throw new ManagerError("The media manager did not answer. Check that its container is running."); }
+  catch { throw new ManagerError("The helper that talks to Docker did not answer. Try again in a minute."); }
   const json = await response.json().catch(() => ({})) as { error?: unknown };
-  if (!response.ok) throw new ManagerError(typeof json.error === "string" ? json.error : "The media manager refused the request.", response.status >= 400 && response.status < 500 ? 400 : 502);
+  if (!response.ok) throw new ManagerError(typeof json.error === "string" ? json.error : "The helper that talks to Docker refused the request.", response.status >= 400 && response.status < 500 ? 400 : 502);
   return json as T;
 }
-type ServerState = { state: "absent" | "stopped" | "running" | "pulling" | "starting" | "failed"; port?: number; error?: string };
+type ServerState = { state: "absent" | "stopped" | "running" | "pulling" | "starting" | "failed"; port?: number; error?: string; autostart?: boolean; address?: string };
+// Where the helper last saw each running server on Docker's network, for a StreamRD that shares no named network with it.
+const lastAddress: Partial<Record<Name, string>> = {};
+const ADDRESS = /^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]{3,39}$/i;
 async function managerStatus(): Promise<{ available: boolean; servers: Partial<Record<Name, ServerState>> }> {
   const { url, token } = managerConfig();
   if (!url || !token) return { available: false, servers: {} };
-  try { return { available: true, servers: (await manager<{ servers: Record<Name, ServerState> }>("GET", "/status")).servers }; } catch { return { available: false, servers: {} }; }
+  try {
+    const servers = (await manager<{ servers: Record<Name, ServerState> }>("GET", "/status")).servers;
+    for (const name of NAMES) { const address = servers[name]?.address; if (typeof address === "string" && ADDRESS.test(address)) lastAddress[name] = address; else delete lastAddress[name]; }
+    return { available: true, servers };
+  } catch { return { available: false, servers: {} }; }
 }
 
 /* --------------------------- talking to the media servers --------------------------- */
-// Where StreamRD can reach each server: the address the manager gives it, or the Compose service from install.sh --media-server.
-const bases = (name: Name) => [process.env[`${name.toUpperCase()}_URL`], `http://streamrd-${name}:${DEFAULT_PORT[name]}`, `http://${name}:${DEFAULT_PORT[name]}`].filter((value): value is string => Boolean(value)).map(value => value.replace(/\/+$/, ""));
+// Where StreamRD can reach each server: an address the operator set, the name the helper gives it on a shared network, the Compose
+// service from install.sh --media-server, or the address the helper last saw it at.
+const bases = (name: Name) => [process.env[`${name.toUpperCase()}_URL`], `http://streamrd-${name}:${DEFAULT_PORT[name]}`, `http://${name}:${DEFAULT_PORT[name]}`,
+  lastAddress[name] ? `http://${lastAddress[name]!.includes(":") ? `[${lastAddress[name]}]` : lastAddress[name]}:${DEFAULT_PORT[name]}` : undefined].filter((value): value is string => Boolean(value)).map(value => value.replace(/\/+$/, ""));
 async function reach<T>(name: Name, route: string, init: RequestInit): Promise<{ status: number; json: T | null } | null> {
   for (const base of bases(name)) {
     try {
@@ -101,8 +114,9 @@ mediaServersRouter.use(requireAuth, requireAdmin, (_req, res, next) => { res.set
 mediaServersRouter.param("server", (_req, res, next, value: string) => { if ((NAMES as readonly string[]).includes(value)) next(); else res.status(404).json({ error: "Unknown media server." }); });
 async function view() {
   const [stored, status] = await Promise.all([readStored(), managerStatus()]);
-  const one = (key: Name) => ({ port: stored[key].port, state: (status.servers[key]?.state ?? (status.available ? "absent" : "unknown")) as ServerState["state"] | "unknown", ...(status.servers[key]?.error ? { error: status.servers[key]!.error } : {}), secretHint: hint(secretOf(stored, key)) });
-  return { manager: { available: status.available }, servers: { jellyfin: one("jellyfin"), plex: one("plex") } };
+  const one = (key: Name) => ({ port: stored[key].port, autostart: status.servers[key]?.autostart ?? stored[key].autostart, state: (status.servers[key]?.state ?? (status.available ? "absent" : "unknown")) as ServerState["state"] | "unknown", ...(status.servers[key]?.error ? { error: status.servers[key]!.error } : {}), secretHint: hint(secretOf(stored, key)) });
+  const control = dockerControl();
+  return { manager: { available: status.available, mode: control.mode, reason: control.reason, shared: control.shared }, servers: { jellyfin: one("jellyfin"), plex: one("plex") } };
 }
 mediaServersRouter.get("/", asyncHandler(async (_req, res) => { res.json(await view()); }));
 mediaServersRouter.put("/", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandler(async (req, res) => {
@@ -120,13 +134,14 @@ mediaServersRouter.put("/", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandl
 }));
 mediaServersRouter.post("/:server/launch", rateLimit({ windowMs: 60_000, max: 12 }), asyncHandler(async (req, res) => {
   const key = name.parse(req.params.server);
-  const body = parseBody(z.object({ port: port.optional(), claim: z.string().trim().max(120).optional() }).strict(), req.body ?? {}, res);
+  const body = parseBody(z.object({ port: port.optional(), claim: z.string().trim().max(120).optional(), autostart: z.boolean().optional() }).strict(), req.body ?? {}, res);
   if (!body) return;
-  const stored = await readStored(); if (body.port !== undefined) { stored[key].port = body.port; await writeStored(stored); }
+  const stored = await readStored();
+  if (body.port !== undefined || body.autostart !== undefined) { if (body.port !== undefined) stored[key].port = body.port; if (body.autostart !== undefined) stored[key].autostart = body.autostart; await writeStored(stored); }
   try {
     // The claim token goes to the launch and nowhere else: it is not saved, logged or returned.
-    const job = await manager<{ state: string }>("POST", `/servers/${key}/launch`, { port: stored[key].port, ...(key === "plex" && body.claim ? { claim: body.claim } : {}) });
-    void logEvent("info", "admin_action", `Started ${key}`, { userId: req.session!.sub, meta: { port: stored[key].port } });
+    const job = await manager<{ state: string }>("POST", `/servers/${key}/launch`, { port: stored[key].port, autostart: stored[key].autostart, ...(key === "plex" && body.claim ? { claim: body.claim } : {}) });
+    void logEvent("info", "admin_action", `Started ${key}`, { userId: req.session!.sub, meta: { port: stored[key].port, autostart: stored[key].autostart } });
     res.status(202).json({ state: job.state });
   } catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
 }));
@@ -137,6 +152,19 @@ for (const [method, suffix, route] of [["post", "/:server/stop", "stop"], ["dele
     catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
   }));
 }
+/** Start with the machine or not. The choice is remembered for the next launch; a server that already exists is changed in place. */
+mediaServersRouter.put("/:server/autostart", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandler(async (req, res) => {
+  const key = name.parse(req.params.server);
+  const body = parseBody(z.object({ enabled: z.boolean() }).strict(), req.body, res);
+  if (!body) return;
+  const stored = await readStored(); stored[key].autostart = body.enabled; await writeStored(stored);
+  const status = await managerStatus();
+  try {
+    if (status.available && status.servers[key] && ["running", "stopped"].includes(status.servers[key]!.state)) await manager("POST", `/servers/${key}/autostart`, { enabled: body.enabled });
+    void logEvent("info", "admin_action", `${key} ${body.enabled ? "starts again by itself" : "stays stopped"} after a restart of the machine`, { userId: req.session!.sub });
+    res.json(await view());
+  } catch (error) { if (error instanceof ManagerError) { res.status(error.status).json({ error: error.message }); return; } throw error; }
+}));
 mediaServersRouter.get("/:server/logs", rateLimit({ windowMs: 60_000, max: 120 }), asyncHandler(async (req, res) => {
   const { tail } = parseBody(z.object({ tail: z.coerce.number().int().min(1).max(200).default(100) }).strict(), req.query, res) ?? {};
   if (tail === undefined) return;

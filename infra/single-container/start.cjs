@@ -35,8 +35,12 @@ function shutdown(code = 0) {
   children.forEach(child => child.once('exit', done));
   done();
 }
+// The address and secret of the Docker helper are for the API processes only: the download client and the web pages never get them.
+const HELPER_ONLY = ['MEDIA_MANAGER_URL', 'MEDIA_MANAGER_TOKEN'];
 function launch(name, executable, args, cwd, environment = {}) {
-  const child = spawn(executable, args, { cwd, env: { ...process.env, ...environment }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const inherited = { ...process.env };
+  if (!name.endsWith('-api')) for (const key of HELPER_ONLY) delete inherited[key];
+  const child = spawn(executable, args, { cwd, env: { ...inherited, ...environment }, stdio: ['ignore', 'pipe', 'pipe'] });
   children.set(name, child);
   for (const [stream, output] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
     let pending = '';

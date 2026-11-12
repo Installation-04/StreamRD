@@ -1,6 +1,7 @@
 import { Express } from "express";
 import request from "supertest";
 import { createApp } from "../src/app";
+import { resetRuntimeSettings } from "../src/runtime-settings";
 import { db } from "../src/db";
 
 export const app: Express = createApp();
@@ -28,6 +29,7 @@ export async function resetDb(): Promise<void> {
   // Most tests sign people up directly, so they start from a server whose administrator chose open registration.
   // The default (invitation only) is tested in access.test.ts.
   await db.setting.create({ data: { key: "auth.registration", value: JSON.stringify({ mode: "open" }) } });
+  resetRuntimeSettings(); // settings saved from Admin → Server are also held in memory
 }
 
 export interface TestUser {

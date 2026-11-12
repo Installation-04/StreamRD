@@ -4,7 +4,8 @@
  *   first account -> connect a debrid account -> import -> match -> libraries -> play every kind of file (as it is, audio converted,
  *   picture converted), seek, resume, a series pack with Up next -> invite a child and a friend -> the child sees only what the limit
  *   allows -> the friend requests a film -> the owner approves with automatic release search -> it downloads, is imported and plays ->
- *   the log shows the request's history and the diagnostic bundle holds no secrets.
+ *   the log shows the request's history and the diagnostic bundle holds no secrets -> Jellyfin is launched from the page with its deploy
+ *   log -> a server setting is changed and the server restarted from the page.
  * It is the regression test for what only a real browser shows: the player page itself, with real H.264/AAC decoders.
  *
  *   node qa/lab/journey.cjs                 needs ffmpeg and Google Chrome (CHROME_PATH=... to choose the binary)
@@ -26,7 +27,7 @@ async function until(what, check, timeoutMs = 60_000, everyMs = 1000) {
 
 async function startLab() {
   // The lab keeps its videos between runs (LAB_MEDIA_DIR) and always starts from an empty database here.
-  const child = spawn(process.execPath, [path.join(__dirname, "start.cjs")], { env: { ...process.env, LAB_DIR: dir, LAB_FRESH: "1", LAB_PORT: String(port), LAB_TRANSFER_SECONDS: "8" }, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(process.execPath, [path.join(__dirname, "start.cjs")], { env: { ...process.env, LAB_DIR: dir, LAB_FRESH: "1", LAB_PORT: String(port), LAB_TRANSFER_SECONDS: "8", LAB_PULL_SECONDS: "3" }, stdio: ["ignore", "pipe", "pipe"] });
   let output = ""; const collect = chunk => { output = (output + chunk).slice(-6000); if (process.env.LAB_VERBOSE) process.stdout.write(chunk); };
   child.stdout.on("data", collect); child.stderr.on("data", collect);
   await until("the lab to start", () => { if (child.exitCode !== null) throw Error(`the lab stopped: ${output.slice(-800)}`); return output.includes("lab: StreamRD is on"); }, 15 * 60_000, 1000)
@@ -260,6 +261,39 @@ async function main() {
       const raw = fs.readFileSync(file, "utf8"), bundle = JSON.parse(raw);
       assert.equal(bundle.requestCounts.available, 1); assert.ok(bundle.logs.some(line => line.type === "request")); assert.ok(bundle.logs.some(line => line.type === "playback"));
       for (const secret of [KEY, "lab-indexer-key", "lab-tmdb-key", "owner@example.invalid", "friend@example.invalid", "btih:", "/media/"]) assert.ok(!raw.includes(secret), `the bundle contains ${secret}`);
+    });
+
+    await step("Jellyfin is launched from the page: a log box follows the download and the start, and it can be kept from starting with the machine", async () => {
+      await owner.page.goto(`${base}/admin/library`, { waitUntil: "networkidle" });
+      const card = owner.page.locator("#media-servers").getByRole("article", { name: "Jellyfin media server" });
+      await card.getByRole("button", { name: /launch jellyfin/i }).click();
+      const log = () => card.getByRole("log").innerText().catch(() => "");
+      await until("the download to show in the deploy log", async () => /Downloading image jellyfin\/jellyfin/.test(await log()), 20_000, 300);
+      await until("Jellyfin to be running", async () => (await card.getByRole("status", { name: "Jellyfin status" }).innerText()) === "Running", 60_000, 500);
+      await until("the server's own output", async () => /output from the container/.test(await log()), 20_000, 500);
+      assert.match(await log(), /Started\. It listens on port 8096/);
+      const auto = card.getByRole("checkbox");
+      assert.equal(await auto.isChecked(), true, "a launched server starts again with the machine unless told otherwise");
+      await auto.click(); await until("auto-start to be off", async () => !(await auto.isChecked()), 15_000, 300);
+      await until("the change in the deploy log", async () => /Set to stay stopped after a restart of this machine/.test(await log()), 15_000, 500);
+      await owner.shot("jellyfin-launch");
+    });
+
+    await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
+      await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
+      const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });
+      const saved = () => owner.page.evaluate(async () => (await (await fetch("/api/admin/system/settings", { credentials: "include" })).json()));
+      await until("the settings card", async () => picture.isVisible(), 20_000, 300);
+      assert.equal((await saved()).settings.transcodeVideo, true);
+      await picture.click();
+      await until("the choice to be saved", async () => { const now = await saved(); return now.settings.transcodeVideo === false && now.sources.transcodeVideo === "saved"; }, 15_000, 300);
+      await owner.page.getByRole("button", { name: "Use the default" }).first().click();
+      await until("the default to be back", async () => { const now = await saved(); return now.settings.transcodeVideo === true && now.sources.transcodeVideo === "default"; }, 15_000, 300);
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      owner.page.once("dialog", dialog => void dialog.accept());
+      await owner.page.getByRole("button", { name: "Restart the server" }).click();
+      await until("the restart to be asked of the helper", async () => /Restarting\. Reload this page in a minute\./.test(await owner.text()), 20_000, 300);
+      await until("the helper to restart the StreamRD container", async () => fs.existsSync(path.join(dir, "docker.sock.restarts")) && /streamrd\n/.test(fs.readFileSync(path.join(dir, "docker.sock.restarts"), "utf8")), 15_000, 500);
     });
 
     assert.deepEqual(report.pageErrors, [], "no page raised a script error");

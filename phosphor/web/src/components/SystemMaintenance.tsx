@@ -5,7 +5,8 @@ import { ApiError, api, authFetch } from "@/lib/api";
 import styles from "./SystemMaintenance.module.css";
 
 interface Backup { name: string; kind: "manual" | "pre-update" | "pre-restore" | "pre-upgrade" | "other"; sizeBytes: number; createdAt: string }
-interface Maintenance { backups: Backup[]; pendingRestore: { backup: string; requestedAt: string } | null; restartSupported: boolean }
+interface Maintenance { backups: Backup[]; pendingRestore: { backup: string; requestedAt: string } | null; restartSupported: boolean; control?: { mode: "embedded" | "external" | "off"; reason: string | null; shared: boolean } }
+const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash";
 interface UpdateInfo { current: string; latest: string | null; updateAvailable: boolean; publishedAt: string | null; url: string | null; checkEnabled: boolean; checkedAt: string | null; error: string | null; canApply: boolean; updater?: "helper" | "webhook" | null }
 const KIND: Record<Backup["kind"], string> = { manual: "Manual", "pre-update": "Before update", "pre-restore": "Before restore", "pre-upgrade": "Before upgrade", other: "Other" };
 const when = (value: string | null) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded";
@@ -82,7 +83,7 @@ export default function SystemMaintenance() {
       {update?.error && <p className={styles.notice}>{update.error}</p>}
       {update?.updateAvailable && update.url && <p className={styles.copy}><a href={update.url} target="_blank" rel="noreferrer">Read the v{update.latest} release notes ↗</a></p>}
       {update?.updateAvailable && !update.canApply && <div className={styles.notice}>
-        <strong>One click, once set up.</strong> Run <code>bash install.sh</code> in your install folder one time (add <code>--media-manager</code> if you declined the helper before): it adds a small helper that lets this page update StreamRD for you (an <strong>Update</strong> button appears here, with an automatic backup and an automatic rollback if the new version does not start). Until then, update by hand. In your install folder run:
+        <strong>One click, once set up.</strong> This server runs without access to Docker, so it cannot replace itself with the new version. Run the installer again on the computer that runs StreamRD (<code style={{ overflowWrap: "anywhere" }}>{INSTALL_COMMAND}</code>; add <code>-s -- --media-manager</code> if you declined before): an <strong>Update</strong> button then appears here, with an automatic backup and an automatic rollback if the new version does not start. Until then, update by hand. In your install folder run:
         <pre style={{ margin: "8px 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>docker compose pull &amp;&amp; docker compose up -d</pre>
         <div className={styles.actions}><button type="button" className="btn btn-secondary" onClick={() => { void navigator.clipboard?.writeText("docker compose pull && docker compose up -d").then(() => setNotice("Update command copied."), () => setNotice("Your browser blocked copying; select the command above.")); }}>Copy command</button></div>
         <p className={styles.hint}>Your settings (<code>config</code>) and downloads (<code>data</code>) are kept; the database is snapshotted before any upgrade. Running the older split install? Use <code>git pull</code> then <code>docker compose up -d --build</code>. Prefer your own updater? Point <code>UPDATE_WEBHOOK_URL</code> at it (for example Watchtower).</p>
@@ -90,6 +91,16 @@ export default function SystemMaintenance() {
       {update?.updateAvailable && update.canApply && !confirmUpdate && !updating && <button type="button" className="btn" disabled={busy !== ""} onClick={() => setConfirmUpdate(true)}>Update to v{update.latest}</button>}
       {updating && <p className={styles.copy} role="status"><span aria-hidden="true">⏳ </span>Updating to v{updating}… do not close this page.</p>}
       {update?.updateAvailable && update.canApply && confirmUpdate && <div className={styles.confirm}><p className={styles.copy}>{update.updater === "helper" ? <>This creates a verified backup, downloads v{update.latest}, restarts StreamRD into it and checks that it starts; if it does not, the previous version is put back automatically. Your settings and downloads are kept. Everyone is briefly disconnected.</> : <>This creates a verified backup, then asks your updater to roll out v{update.latest}. The server restarts and applies database upgrades on startup. Users are briefly disconnected.</>}</p><div className={styles.actions}><button type="button" className="btn" disabled={busy !== ""} onClick={() => void applyUpdate()}>{busy === "update" ? "Backing up…" : "Back up and update"}</button><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => setConfirmUpdate(false)}>Cancel</button></div></div>}
+    </section>
+    <section className={styles.panel} aria-labelledby="restart-heading">
+      <div className={styles.heading}><div><p className={styles.eyebrow}>SERVER</p><h3 id="restart-heading">Restart</h3></div>
+        {maintenance?.restartSupported && <div className={styles.actions}><button type="button" className="btn btn-secondary" disabled={busy !== ""} onClick={() => void restart()}>{busy === "restart" ? "Restarting…" : "Restart the server"}</button></div>}</div>
+      <p className={styles.copy}>{!maintenance ? "Checking…" : maintenance.restartSupported
+        ? "Restarts StreamRD and everything that runs with it. Everyone is disconnected for about a minute; nothing is lost. A restore you staged is applied when it starts again."
+        : "This server cannot be restarted from here yet: it runs without access to Docker, which is also what starts Plex and Jellyfin and runs updates (the installer turns it on). Until then, restart the container yourself."}</p>
+      {maintenance?.control && maintenance.control.mode !== "off" && <p className={styles.hint}>{maintenance.control.mode === "embedded"
+        ? <>Docker control is on: a small helper inside this container, run apart from StreamRD, is the only thing that talks to Docker. It can start Plex and Jellyfin, update StreamRD and restart it, nothing else.{maintenance.control.shared && <> <strong>On this machine the user StreamRD runs as can open Docker&apos;s socket too</strong>, so that separation does not hold here; see &quot;Docker control&quot; in the Plex and Jellyfin guide.</>}</>
+        : <>Docker control is on through a helper in a container of its own. Running the installer again moves the helper into this container, so there is one container to look after.</>}</p>}
     </section>
     <section className={styles.panel} aria-labelledby="backup-restore-heading">
       <div className={styles.heading}><div><p className={styles.eyebrow}>RECOVERY</p><h3 id="backup-restore-heading">Backups &amp; restore</h3></div>

@@ -3,7 +3,7 @@ import request from "supertest";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { app, auth, resetDb, adminAndUser } from "./helpers";
 import { db } from "../src/db";
-import { recordUpdateOutcome, redact } from "../src/routes/logs";
+import { recordUpdateOutcome, recordUpdateOutcomeWhenKnown, redact } from "../src/routes/logs";
 
 beforeEach(async () => { await resetDb(); });
 const base = Date.parse("2026-02-01T00:00:00Z"), at = (seconds: number) => new Date(base + seconds * 1000);
@@ -114,5 +114,12 @@ it("copies the update helper's account of the last update into the log once, and
   const rolledBack = await db.logEvent.findFirst({ where: { type: "system", level: "error" } });
   expect(rolledBack?.message).toMatch(/Update failed and the previous version was put back .*did not become healthy/);
   state = { ...state, state: "running", finishedAt: null as unknown as string };
-  expect(await recordUpdateOutcome()).toBe(false);                                   // an update still in progress is left alone
+  expect(await recordUpdateOutcome()).toBe("pending");                               // an update still in progress is left alone, and said to be
+  const before = await db.logEvent.count({ where: { type: "system" } });
+  // The new container starts while its update is still being confirmed healthy: the outcome is recorded as soon as it is known.
+  recordUpdateOutcomeWhenKnown(20, 50);
+  await new Promise(done => setTimeout(done, 80)); expect(await db.logEvent.count({ where: { type: "system" } })).toBe(before);
+  state = { ...state, state: "done", finishedAt: "2026-02-03T10:00:00.000Z" };
+  for (let i = 0; i < 100 && (await db.logEvent.count({ where: { type: "system" } })) === before; i++) await new Promise(done => setTimeout(done, 20));
+  expect(await db.logEvent.count({ where: { type: "system" } })).toBe(before + 1);
 });

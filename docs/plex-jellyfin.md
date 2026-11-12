@@ -46,12 +46,19 @@ is limited by Docker's bridge network; set `network_mode: host` on the `plex` se
 ## Start Plex or Jellyfin from StreamRD's Setup page
 
 Instead of choosing at install time, you can start them later from **Setup → Plex or Jellyfin** (Admin → Plex / Jellyfin). Enter the port and the
-tokens, press **Launch**, and the server starts next to StreamRD with the same mappings as above. This needs the media manager helper, which
-the installer includes unless you decline it. An install from before the helper existed gets it by running the installer once more:
+tokens, press **Launch**, and the server starts next to StreamRD with the same mappings as above. This needs Docker control, which the installer
+turns on unless you decline it (see [Docker control](#docker-control) below). An install made before it existed gets it by running the installer once more:
 
 ```bash
-bash install.sh                        # add --media-manager if you declined the helper earlier
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash     # add -s -- --media-manager if you declined it earlier
 ```
+
+While it starts, a log box under the buttons follows the deployment: the image download with its progress, the start of the
+container, then the server's own output. **Copy log** puts it on the clipboard.
+
+**Start again by itself when this machine restarts** is ticked by default: after a reboot, or a restart of Docker, the media server
+comes back without you. Untick it to keep the server stopped until you launch it from the page. A server you stopped from the page stays
+stopped either way.
 
 What you enter on the page:
 
@@ -62,22 +69,63 @@ What you enter on the page:
 | **Jellyfin API key** | Jellyfin: Dashboard, API Keys, add one | Stored encrypted. The same two things for Jellyfin. |
 | **Port** | You choose (defaults 8096 and 32400) | The port the server is published on. |
 
-**The deploy log.** Once the helper is installed, each server card has **Show deploy log**: a live log of what happened when you pressed Launch (the image
+**The deploy log.** With Docker control on, each server card has **Show deploy log**: a live log of what happened when you pressed Launch (the image
 download with its progress, the container being created and started, any error Docker gave) followed by the server's own output, refreshed every few
 seconds while it starts. **Copy log** puts it on the clipboard for a bug report. Plex claim tokens, Plex tokens and Jellyfin API keys are blanked in it
 before it leaves the helper.
 
-**What the media manager is, and why it is separate.** Starting a container needs access to the Docker socket, which is the same as root on the
-machine. StreamRD never gets it. The installer adds a tiny helper container (`streamrd-media-manager`) that holds the socket and does exactly
-three things: start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`, plus one more since v0.23.0: replace the StreamRD container with a newer image of itself when you press **Update** in Admin → System (with an automatic rollback). It listens only on the internal Docker network (no published
-port), answers only requests carrying a secret generated into your `.env`, and the image, the folders mounted (your libraries and downloads, read-only, and
-each server's own settings under `config/`), the user and every other container setting are fixed in the helper, not chosen by the caller. It runs
-read-only with all capabilities dropped. Even so, anyone who can control the helper controls Docker on that machine, so you can decline it:
-`bash install.sh --no-media-manager` removes it and keeps it off on later runs, until you pass `--media-manager`. Containers it started keep running (stop them from Setup first, or `docker rm -f streamrd-plex streamrd-jellyfin`);
-their settings stay in `config/jellyfin` and `config/plex`.
+## Docker control
 
-Without the helper the page still saves your tokens, rescans and tests connections for a Plex or Jellyfin you started another way (set `PLEX_URL` or
-`JELLYFIN_URL` on the StreamRD container if it is not reachable as `plex` or `jellyfin`).
+Starting a container, replacing StreamRD with a newer version of itself and restarting it all need access to Docker's socket. That access is the
+same as root on the machine, so this section says exactly what is given, to what, and how to take it back.
+
+**What it is.** The StreamRD container is given Docker's socket and starts as root. Its first program starts one small helper (`media-manager.cjs`) as
+root and then runs StreamRD, Phosphor and the download client as an ordinary user (uid 1000), exactly as before. There is one container and
+nothing to start by hand: the pages do the rest.
+
+**What the helper can do.** It listens only on the container's own loopback address and answers only requests carrying a secret that is made anew at
+every start and handed to the two API processes alone (not to the web pages, not to the download client, not to the helper's own children). It
+does exactly these things, and nothing a caller says changes what they are:
+
+- start, stop and remove the containers `streamrd-jellyfin` and `streamrd-plex`, from a fixed specification: the image, the folders mounted
+  (your libraries and downloads read-only, and each server's own settings under `config/`), the user and every other setting are fixed in the helper;
+- replace the StreamRD container with a newer image of the reference it already runs, when you press **Update** (with a verified backup first and an
+  automatic rollback). The helper cannot replace the container it lives in, so it starts a short-lived updater from the image that is running,
+  given Docker's socket and nothing else: no network, no folders, a read-only filesystem, no capabilities. The updater does the swap, keeps its account
+  of it, and is removed by the new container, which copies the account into **Admin → Logs**;
+- restart the StreamRD container (**Admin → System → Restart**, and *Restart now to apply* after staging a restore);
+- change whether a media server starts again by itself after the machine restarts.
+
+It finds where StreamRD's folders are on the machine by asking Docker about its own container, so a volume or a folder you chose is used as it is. A
+media server it starts is attached to the same network as StreamRD, or reached by the address Docker gave it when StreamRD shares no named network.
+
+**What it does not protect against.** Inside the container, "root can use Docker, uid 1000 cannot" is a boundary between two users, not between two
+containers. It holds as long as StreamRD's user cannot get to root and cannot open the socket. That is why the container drops no privileges for the
+helper but does set `no-new-privileges`, why nothing in the image that runs as root can be written by uid 1000, and why the helper is never
+given StreamRD's secrets. Even so, a flaw that let someone run code as root inside the container would hand them Docker, and Docker is the machine.
+Before enabling it on a server that is open to the internet, put StreamRD behind a reverse proxy with HTTPS and keep the owner account's password strong.
+Two situations are reported on the page and in the container's log rather than hidden:
+
+- the socket on your machine can be opened by uid 1000 (it is group-owned by a group numbered 1000, or open to everyone): everything works, but
+  the separation does not hold there, and the **System** page says so;
+- the container does not start as root (a Compose file written by hand with the socket but without `user: "0:0"`): the helper is not started, and the
+  Plex and Jellyfin card explains the one line to add.
+
+**Turning it off.** `bash install.sh --no-media-manager` removes the socket and `user: "0:0"` from the container, which then runs with nothing as
+root, and keeps it off on later runs until you pass `--media-manager`. Setting `DOCKER_CONTROL=false` on the container turns the helper off without
+touching the socket. Media servers already started keep running (stop them from Setup first, or `docker rm -f streamrd-plex streamrd-jellyfin`); their
+settings stay in `config/jellyfin` and `config/plex`. Without it the page still saves your tokens, rescans and tests connections for a Plex or Jellyfin
+you started another way (set `PLEX_URL` or `JELLYFIN_URL` on the StreamRD container if it is not reachable as `plex` or `jellyfin`), and **Admin →
+System** shows the command that updates by hand.
+
+**Other ways to run Docker.** Rootless Docker keeps its socket in the user's runtime folder; the installer finds it and records it as
+`DOCKER_SOCKET_PATH` in `.env`. Docker Desktop and Podman's Docker-compatible socket work the same way, with the path of the socket that Docker
+makes available on the machine. If you run the container with plain `docker run`, add `--user 0:0 --security-opt no-new-privileges:true -v /var/run/docker.sock:/var/run/docker.sock`.
+
+**Installs that had a second container.** v0.21.0 to v0.23.2 ran the helper as its own container (`streamrd-media-manager`) with a secret in `.env`.
+Running the installer again moves it into the StreamRD container: it removes the old overlay file, the secret and the folder setting, and says so. Run
+`docker compose up -d --remove-orphans` once (the installer does it unless you passed `--no-start`) so that Compose removes the old container.
+Media servers it started are not touched. A setup that still points `MEDIA_MANAGER_URL` at a helper elsewhere keeps working unchanged.
 
 ## Optional Docker mounts
 
