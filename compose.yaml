@@ -6,6 +6,12 @@ services:
     image: streamrd-all-in-one:local
     restart: unless-stopped
     stop_grace_period: 30s
+    # Docker control: lets StreamRD start Plex and Jellyfin, update itself and restart from its web pages. The container starts as
+    # root only so that the one small helper that opens Docker's socket is kept apart from StreamRD, which runs as user 1000.
+    # To run without it, remove `user`, `security_opt` and the docker.sock volume below. See docs/plex-jellyfin.md ("Docker control").
+    user: "0:0"
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${STREAMRD_PORT:-8080}:8080"
       - "${PHOSPHOR_PORT:-8081}:8081"
@@ -24,5 +30,6 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
       - streamrd-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
 volumes:
   streamrd-data:

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import type { Response } from "express";
 import { logEvent } from "./logger";
+import { runtime } from "./runtime-settings";
 
 /**
  * Plays files a browser cannot play by converting them on the fly with ffmpeg, the way a media server does.
@@ -17,10 +18,10 @@ export type Mode = "direct" | "remux" | "audio" | "video";
 export interface Probe { formats: string[]; video: string | null; audio: string | null; pixFmt: string | null; durationSeconds: number; width: number; height: number }
 export interface Plan { mode: Mode; probe: Probe | null; reason?: string }
 
-const flag = (name: string, fallback: boolean) => { const value = (process.env[name] ?? "").trim().toLowerCase(); return value ? !["0", "false", "off", "no"].includes(value) : fallback; };
-export const transcodeEnabled = () => flag("TRANSCODE", true);
-export const videoTranscodeEnabled = () => flag("TRANSCODE_VIDEO", true);
-export const maxConversions = () => Math.max(1, Math.min(8, Number.parseInt(process.env.TRANSCODE_MAX ?? "2", 10) || 2));
+// These are choices in Admin → Server (runtime-settings.ts); the environment variables of the same names are their starting values.
+export const transcodeEnabled = () => runtime().transcode;
+export const videoTranscodeEnabled = () => runtime().transcodeVideo;
+export const maxConversions = () => runtime().transcodeMax;
 const ffmpegBin = () => process.env.FFMPEG_PATH || "ffmpeg", ffprobeBin = () => process.env.FFPROBE_PATH || "ffprobe";
 const PROTOCOLS = "http,https,tcp,tls,crypto";
 
@@ -30,7 +31,7 @@ export function convertibleUrl(value: string | null | undefined): string | null 
     const url = new URL(value ?? "");
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return null;
     const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    if (flag("TRANSCODE_ALLOW_PRIVATE_HOSTS", false)) return url.href; // for a source on your own network
+    if (runtime().transcodeAllowPrivateHosts) return url.href; // for a source on your own network
     if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
     if (isIP(host) && /^(?:127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$|f[cd][0-9a-f]{2}:|fe80:)/i.test(host)) return null;
     return url.href;
@@ -131,7 +132,7 @@ export function streamStatus(id: string): { known: boolean; lastError: string | 
  * (Blu-ray style "open GOP" encodes) that keyframe is not a clean entry point: the frames after it still refer to pictures from before it.
  * ffmpeg and desktop players conceal that; a browser stops with a decode error. Playing from the very start is not affected.
  */
-const VIDEO_OFF = "This video only plays here if its picture is converted too, and that is turned off on this server (TRANSCODE_VIDEO).";
+const VIDEO_OFF = "This video only plays here if its picture is converted too, and that is turned off on this server (Admin → Server → Conversion).";
 /**
  * Streams a converted file to the response. Returns false (and answers) when the id is unknown or the server is busy.
  * Nothing is sent until ffmpeg has produced its first bytes, so a conversion that fails at once answers with the reason instead of an empty video.

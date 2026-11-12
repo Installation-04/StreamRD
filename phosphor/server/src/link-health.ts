@@ -1,3 +1,4 @@
+import { runtime } from "./runtime-settings";
 import { Prisma } from "@prisma/client";
 import { accountProviderContext } from "./account-library";
 import { db } from "./db";
@@ -103,11 +104,10 @@ export async function linkHealthSummary() {
   return { ok: count("ok"), unknown: count("unknown"), broken: count("broken"), items: broken.map(item => ({ id: item.id, name: item.name, year: item.year, reason: item.healthError, checkedAt: item.healthCheckedAt?.toISOString() ?? null })) };
 }
 
-/** Checks a few items a minute in the background (set LINK_HEALTH=false to turn it off). */
+/** Checks a few items a minute in the background. Admin → Server turns it off and on; the switch is read on every round. */
 export function startLinkHealthWorker() {
-  if (process.env.LINK_HEALTH === "false") return;
   let busy = false;
-  const tick = async () => { if (busy) return; busy = true; try { await runLinkHealthJob(); } catch { /* retried on the next tick */ } finally { busy = false; } };
+  const tick = async () => { if (busy || !runtime().linkHealth) return; busy = true; try { await runLinkHealthJob(); } catch { /* retried on the next tick */ } finally { busy = false; } };
   setInterval(() => void tick(), 60_000).unref();
   setTimeout(() => void tick(), 15_000).unref();
 }

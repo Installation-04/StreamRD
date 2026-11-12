@@ -6,17 +6,19 @@ import styles from "./AccountScanPanel.module.css";
 
 type Name = "jellyfin" | "plex";
 type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "starting" | "failed";
-interface Server { port: number; state: State; error?: string; secretHint: string | null }
+interface Server { port: number; state: State; error?: string; secretHint: string | null; autostart: boolean }
 interface Logs { deploy: Array<{ time: string; message: string }>; container: string[] }
-interface View { manager: { available: boolean }; servers: Record<Name, Server> }
+interface View { manager: { available: boolean; mode?: "embedded" | "external" | "off"; reason?: "no-socket" | "not-root" | "disabled" | "unset" | null; shared?: boolean }; servers: Record<Name, Server> }
+// The one command that turns Docker control on for an existing install: the installer, run again.
+const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- --media-manager";
 
 const COPY: Record<Name, { label: string; secret: string; secretHelp: string; port: number; path: string }> = {
   jellyfin: { label: "Jellyfin", secret: "Jellyfin API key", secretHelp: "Optional. Create one in Jellyfin under Dashboard, API Keys. It lets StreamRD ask Jellyfin to rescan your libraries.", port: 8096, path: "" },
   plex: { label: "Plex", secret: "Plex token", secretHelp: "Optional. Your Plex token lets StreamRD ask Plex to rescan your libraries. It is stored encrypted and never shown again.", port: 32400, path: "/web" },
 };
-const WORDS: Record<State, string> = { unknown: "Helper not installed", absent: "Not started", stopped: "Stopped", running: "Running", pulling: "Downloading the image…", starting: "Starting…", failed: "Needs attention" };
+const WORDS: Record<State, string> = { unknown: "Docker control is off", absent: "Not started", stopped: "Stopped", running: "Running", pulling: "Downloading the image…", starting: "Starting…", failed: "Needs attention" };
 
-/** Onboarding for Plex and Jellyfin: where to put the tokens, and (with the media manager installed) a button that starts the container next to StreamRD. */
+/** Onboarding for Plex and Jellyfin: where to put the tokens, and (with Docker control on) a button that starts the container next to StreamRD. */
 export default function MediaServersPanel() {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState("");
   const [ports, setPorts] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [secrets, setSecrets] = useState<Record<Name, string>>({ jellyfin: "", plex: "" }), [claim, setClaim] = useState("");
@@ -70,13 +72,23 @@ export default function MediaServersPanel() {
     <header className={styles.header}><div><p>ONBOARDING · MEDIA SERVER</p><h2>Run Plex or Jellyfin next to StreamRD.</h2>
       <p>Pick a server, enter its details and launch it. It starts beside StreamRD with your libraries and downloads already mapped (read-only); you only add the libraries inside Plex or Jellyfin.</p></div></header>
     {!view.manager.available && <div role="note" style={{ margin: "12px 0", padding: "14px 16px", borderRadius: 12, border: "1px solid rgba(255,138,31,.45)", background: "rgba(255,138,31,.08)", display: "grid", gap: 10 }}>
-      <div><strong>One quick step, once.</strong> New installs already include it. This server was installed without the small helper that starts Plex and Jellyfin for you (it can only start, stop and remove those two containers). On the computer that runs StreamRD, open the install folder and run:</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-        <code style={{ padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,.45)" }}>bash install.sh --media-manager</code>
-        <button type="button" className="btn btn-sm btn-secondary" onClick={() => { void navigator.clipboard?.writeText("bash install.sh --media-manager").then(() => setNotice("Command copied."), () => setNotice("Copy it by hand: bash install.sh --media-manager")); }}>Copy command</button>
-        <button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>I ran it — check again</button>
-      </div>
-      <div style={{ fontSize: 13, opacity: 0.85 }}>It keeps your settings and data and takes about a minute. After that, Launch works from this page. You can still save tokens and test or rescan a server you started another way.</div>
+      {view.manager.mode && view.manager.mode !== "off" ? <>
+        <div><strong>The helper that talks to Docker is not answering.</strong> It starts again by itself; this usually lasts under a minute. You can still save tokens and test or rescan a server.</div>
+        <div><button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>Check again</button></div>
+      </> : view.manager.reason === "not-root" ? <>
+        <div><strong>One line to add.</strong> Docker&apos;s socket is shared with StreamRD&apos;s container, but the container does not start as root, so the small helper that would use it is not started. Add <code>user: &quot;0:0&quot;</code> to the StreamRD service and recreate the container (StreamRD itself still runs as an ordinary user), or run the installer again, which does it for you.</div>
+        <div><button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>Check again</button></div>
+      </> : view.manager.reason === "disabled" ? <>
+        <div><strong>Turned off on this server.</strong> Starting Plex and Jellyfin from here is switched off with <code>DOCKER_CONTROL=false</code>. Remove that setting and recreate the container to use it.</div>
+      </> : <>
+        <div><strong>One quick step, once.</strong> New installs already include it. This server runs without access to Docker, so it cannot start Plex or Jellyfin for you. On the computer that runs StreamRD, run the installer again:</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <code style={{ padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,.45)", overflowWrap: "anywhere" }}>{INSTALL_COMMAND}</code>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => { void navigator.clipboard?.writeText(INSTALL_COMMAND).then(() => setNotice("Command copied."), () => setNotice("Your browser blocked copying; select the command above.")); }}>Copy command</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => void load()}>I ran it — check again</button>
+        </div>
+        <div style={{ fontSize: 13, opacity: 0.85 }}>It keeps your settings and data and takes about a minute (add <code>--dir</code> and your folder if StreamRD is not in <code>~/streamrd</code>). After that, Launch works from this page, and so do the Update and Restart buttons in Admin → System. You can still save tokens and test or rescan a server you started another way.</div>
+      </>}
     </div>}
     {error && <div className={styles.error} role="alert"><p>{error}</p></div>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
@@ -89,6 +101,10 @@ export default function MediaServersPanel() {
           <label style={{ display: "grid", gap: 4 }}>{copy.label} port<input type="number" inputMode="numeric" min={1024} max={65535} value={ports[name]} onChange={event => setPorts(current => ({ ...current, [name]: event.target.value }))} /></label>
           <label style={{ display: "grid", gap: 4 }}>{copy.secret}<input type="password" autoComplete="off" spellCheck={false} maxLength={500} value={secrets[name]} placeholder={server.secretHint ? `Saved (${server.secretHint})` : "Paste it here"} onChange={event => setSecrets(current => ({ ...current, [name]: event.target.value }))} /><small style={{ opacity: 0.75 }}>{copy.secretHelp}</small></label>
           {name === "plex" && <label style={{ display: "grid", gap: 4 }}>Plex claim token<input type="text" autoComplete="off" spellCheck={false} maxLength={120} value={claim} placeholder="claim-…" onChange={event => setClaim(event.target.value)} /><small style={{ opacity: 0.75 }}>Optional. Get it at plex.tv/claim; it is valid for 4 minutes, used once to link the server to your Plex account, and not stored.</small></label>}
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input type="checkbox" style={{ width: 16, height: 16, minHeight: 16, padding: 0, margin: "3px 0 0", flex: "none" }} checked={server.autostart} disabled={Boolean(busy)} onChange={event => { const enabled = event.target.checked; void run(`autostart-${name}`, async () => { await api(`/api/admin/media-servers/${name}/autostart`, { method: "PUT", body: JSON.stringify({ enabled }) }); return enabled ? `${copy.label} will start again by itself after this machine restarts.` : `${copy.label} will stay stopped after this machine restarts, until you launch it here.`; }); }} />
+            <span>Start {copy.label} again by itself when this machine restarts<br /><small style={{ opacity: 0.75 }}>A server you stopped here stays stopped either way.</small></span>
+          </label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <button type="button" className="btn" disabled={Boolean(busy) || live || !view.manager.available} onClick={() => void launch(name)}>{busy === `launch-${name}` ? "Starting…" : server.state === "running" ? `Relaunch ${copy.label}` : `Launch ${copy.label}`}</button>
             <button type="button" className="btn btn-secondary" disabled={Boolean(busy)} onClick={() => void run(`save-${name}`, async () => { await save(name); return `${copy.label} settings saved.`; })}>Save settings</button>

@@ -68,10 +68,17 @@ share exports carefully.
 
 ## Updates, backups and restore (System page)
 
-**Admin → System** has two sections below the upgrade status.
+**Admin → Server → Server settings** holds choices that used to need a file on the
+server: converting files a browser cannot play, converting the picture too, how many
+videos are converted at once, reading media links on the server's own network, the
+background link check and the update check. A change is in force at once and survives
+restarts and updates. Each line says where its value comes from: chosen there, set in
+the server's environment, or the default; *Use the default* forgets a choice.
+
+**Admin → System** has three sections below the upgrade status.
 
 **Updates.** *Check for updates* compares the installed version with the latest
-GitHub release (set `UPDATE_CHECK=false` to turn the lookup off, or
+GitHub release (turn the lookup off in **Admin → Server**, or with `UPDATE_CHECK=false`; set
 `UPDATE_REPOSITORY=owner/name` to follow a fork). The server never replaces itself.
 On a Docker install the page shows the command to run (`docker compose pull && docker compose up -d`) with a Copy button; updates are never applied by the app itself. **Update to vX.Y.Z** appears only when the operator configures `UPDATE_WEBHOOK_URL`
 (and optionally `UPDATE_WEBHOOK_TOKEN`, sent as a bearer token): the server takes a
@@ -92,8 +99,9 @@ off the host.
 `pre-restore-*` safety backup of the current data, and **stages** the restore. The
 database file is swapped at the next start, before anything opens it, so a running
 server is never changed underneath. If the service is under a restart policy and
-`ADMIN_RESTART=true` (set in the provided Compose files), the page restarts it for
-you; otherwise restart it yourself. An older backup is migrated forward on startup
+`ADMIN_RESTART=true`, or Docker control is on (the installer's default: the helper inside the container restarts it), the page restarts it
+for you; otherwise restart it yourself.
+**Admin → System → Restart** does the same at any time. An older backup is migrated forward on startup
 with its own snapshot. You can cancel a staged restore before restarting.
 Sessions are checked against the restored data, so accounts created after the
 backup no longer exist and must sign up again. A restore never deletes backups.

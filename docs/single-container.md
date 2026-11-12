@@ -2,8 +2,9 @@
 
 The root Dockerfile bundles StreamRD, Phosphor and qBittorrent in one image and
 runs them in one container. Both web interfaces, their APIs, background workers,
-SQLite databases and the local download client are included. No Docker socket or
-Docker-in-Docker service is needed inside the application.
+SQLite databases and the local download client are included. There is nothing else to start: the pages start Plex and Jellyfin, update StreamRD and
+restart it. For that, the installer gives the container Docker's socket and runs one small helper inside it; read
+[Docker control](plex-jellyfin.md#docker-control) for what that means, and decline it with `--no-media-manager` if you would rather not.
 
 ## Install
 
@@ -61,13 +62,14 @@ server snapshots each database (verified) before applying any migration. You can
 does the same and keeps your ports and settings. To go back, set `STREAMRD_TAG=0.8.1` (an earlier version) in `.env` and run
 `docker compose up -d`; restore the snapshot from `config/streamrd/backups/` if a release changed the database (including 0.10, which encrypts stored credentials; the key stays in `config/secrets`).
 
-**One click.** With the media manager helper (part of every install unless you declined it; running `bash install.sh` again adds it to an older one),
+**One click.** With Docker control (part of every install unless you declined it; running `bash install.sh` again adds it to an older one),
 **Admin → System → Updates** shows an **Update** button. It takes a verified backup, downloads the new image, replaces the StreamRD container with
 it (same ports, folders, settings and network), waits until it is healthy and removes the old one. If the new version does not start, the old
-container is put back automatically and the page says so. The helper can only replace the one container named `streamrd` and only with a newer
-image of the reference it already runs. The helper itself is refreshed the next time you run `install.sh` or `docker compose up -d`.
+container is put back automatically and the page says so. The helper can only replace the StreamRD container it lives in and only with a newer
+image of the reference it already runs; the replacement is done by a short-lived updater container, so a plain `docker compose pull && docker compose up -d`
+does the same thing and the two never disagree. The helper is part of the image, so every update brings the new helper with it.
 
-Without the helper, updates are not applied by the app itself. **Admin → System** tells you when
+Without Docker control, updates are not applied by the app itself. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
 [Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label
 (`com.centurylinklabs.watchtower.enable`). Watchtower can also serve an HTTP update endpoint; point
@@ -76,7 +78,7 @@ a newer release exists and shows the command. For automatic updates run
 
 ## Optional add-ons
 
-The installer adds a small helper (unless you pass `--no-media-manager`) so **Setup → Plex or Jellyfin** can start them later, with a place for the Plex claim token, the Plex token and the Jellyfin API key; see [Start Plex or Jellyfin from StreamRD's Setup page](plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page) for what the helper can and cannot do (it holds the Docker socket, so it is opt-in).
+The installer turns on Docker control (unless you pass `--no-media-manager`) so **Setup → Plex or Jellyfin** can start them later, with a place for the Plex claim token, the Plex token and the Jellyfin API key; see [Start Plex or Jellyfin from StreamRD's Setup page](plex-jellyfin.md#start-plex-or-jellyfin-from-streamrds-setup-page) and [Docker control](plex-jellyfin.md#docker-control) for what it can and cannot do (it uses the Docker socket, so read it before exposing the server to the internet).
 
 `install.sh --media-server jellyfin|plex|both` runs [Jellyfin and/or Plex](plex-jellyfin.md#built-in-jellyfin-and-plex) in the same Compose project, already mapped to the
 libraries StreamRD and Phosphor export and to your downloads, with their own settings kept under `config/jellyfin` and `config/plex`. Choose their ports with
@@ -179,9 +181,9 @@ folder. Source preservation and mounted-library rules remain unchanged.
 | `CONFIG_DIR` | Where settings and databases live (`/config` in the provided compose file); unset keeps everything under `DATA_DIR` |
 | `MEDIA_SOURCE_ROOT` | `/data/downloads`; may point to a separately mounted media directory |
 | `STREAMRD_DATA_KEY`, `PHOSPHOR_DATA_KEY` | Optional explicit keys (at least 16 characters) for encrypting stored credentials; otherwise generated under `/config/secrets` |
-| `LINK_HEALTH` | Set to `false` to turn off the background check of every imported link (on by default; see [the release notes](releases/v0.19.0.md)) |
+| `LINK_HEALTH` | Set to `false` to turn off the background check of every imported link (on by default). Also a choice in **Admin → Server**; a choice saved there takes the place of this variable |
 | `LINK_HEALTH_BATCH` | How many imports are checked per minute (default 3, at most 20) |
-| `TRANSCODE` | Set to `false` to stop converting files a browser cannot play (on by default; see [the release notes](releases/v0.22.0.md)) |
+| `TRANSCODE` | Set to `false` to stop converting files a browser cannot play (on by default). Like the three below, also a choice in **Admin → Server**, in force at once; a choice saved there takes the place of the variable |
 | `TRANSCODE_VIDEO` | Set to `false` to allow only the light conversions (repackaging and audio), never re-encoding video |
 | `TRANSCODE_MAX` | How many videos may be converted at once (default 2, at most 8); more get a "try again" |
 | `TRANSCODE_ALLOW_PRIVATE_HOSTS` | Set to `true` only if your media links are on your own network (a local address); off by default |
