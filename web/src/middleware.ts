@@ -15,6 +15,8 @@ export function middleware(req: NextRequest) {
     if (!token) return NextResponse.redirect(new URL("/login", req.url));
     if (role !== "admin") return NextResponse.redirect(new URL("/", req.url));
   }
+  // Imports (/library) belong to the administrator since v0.18.0; anyone else is taken to the libraries shared with them.
+  if ((pathname === "/library" || pathname.startsWith("/library/")) && token && role !== "admin") return NextResponse.redirect(new URL("/shared-libraries", req.url));
   if ((pathname.startsWith("/discover") || pathname.startsWith("/requests") || pathname.startsWith("/shared-libraries") || pathname.startsWith("/my-list") || pathname.startsWith("/account") || pathname.startsWith("/library") || pathname.startsWith("/play")) && !token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }

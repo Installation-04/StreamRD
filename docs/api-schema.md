@@ -63,7 +63,7 @@ on `/api/auth/*`), `502` provider failure).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/debrid/account?provider=<id>` | Live account info from the provider (defaults to primary). Doubles as "test connection". |
+| GET | `/api/debrid/account?provider=<id>` | Live account info from the provider (defaults to primary). Doubles as "test connection". On failure the `error` says what to do: 409 when the provider did not accept the key (never 401, which means the caller's own session ended), 429 when it is limiting requests, 504 on a timeout, 502 otherwise. |
 
 ```json
 // 200
@@ -219,7 +219,7 @@ sanitized error. Internal field-ownership bookkeeping is omitted.
 | DELETE | `/api/shared-libraries/:id/items/:itemId/watched` | Unmarks it → `{ watched: false }` and restarts the title. Items and My List carry `watched`; `GET /:id/items?unwatched=1` leaves out finished titles. |
 | GET | `/api/shared-libraries/:id/items/:itemId/trailer` | StreamRD only. `{ trailer: <YouTube id> | null }` from the public catalogue; `null` when there is none or `HOME_TRAILERS=false`. |
 | POST | `/api/shared-libraries/:id/items/:itemId/play` | Besides the stream, answers `playback: { mode: direct\|remux\|audio\|video, url?, durationSeconds, video, audio }`; for a converted mode `url` is `/api/stream/:id`. |
-| GET | `/api/stream/:id?start=SECONDS` | The converted fragmented MP4 for a stream id from a play response. The id is unguessable and lasts 12 hours; 404 when unknown or expired, 503 (Retry-After) at the `TRANSCODE_MAX` limit. Items now carry `tags: [{ kind, label }]`. |
+| GET | `/api/stream/:id?start=SECONDS` | The converted fragmented MP4 for a stream id from a play response. The id is unguessable and lasts 12 hours; 404 when unknown or expired, 503 (Retry-After) at the `TRANSCODE_MAX` limit. `&video=1` asks for the picture to be re-encoded as well, which the player sends after the browser reports a decode error on a copied picture; 409 when `TRANSCODE_VIDEO` is off. Items now carry `tags: [{ kind, label }]`. |
 
 Library item views (a library's items, one item, and `GET /api/home` rows) carry `favorite: boolean`, and `GET /api/home` has a `myList` row (StreamRD). Entries name a title by owner and group, so every version of a title shares one entry.
 
@@ -310,6 +310,14 @@ All routes require a live administrator session, are `no-store`, and are rate li
   message text; `from`/`to` are ISO dates. Invalid dates or cursors return 400.
 - `GET /api/admin/logs/export?format=ndjson|csv|txt&max=…&(same filters)` streams an attachment
   (max 50,000 rows, 10 requests/minute). CSV neutralizes formula-leading cells.
+- Since v0.23.2 the log is one stream: every step of a media request appears in it as `type=request`, with
+  `meta: {requestId, status, progress, mediaType, destination}` and the title at the start of the message. `q` also searches
+  the details, a request's title and its id, so one search shows a request's whole history. `level` maps failed steps to
+  `error` and attention, rejected and cancelled steps to `warn`.
+- `GET /api/admin/logs/bundle?days=7` (1–90, 6 requests/minute) downloads one JSON file for a bug report: version and runtime,
+  which settings are set (never their values), update state and the update helper's account of the last update, backups,
+  request counts, requests that failed or are stuck with their history, and up to 5,000 recent log lines. Links are cut to
+  their host; magnets, e-mail addresses and anything key-shaped are removed.
 - `GET /api/account/library/metadata/summary` → counts for the caller's own library only:
   `{total, matched, matching, review, unmatched, error, notStarted, provider:{configured, automatic}}`.
 - `POST /api/account/library/metadata/rematch` queues up to 500 of the caller's review, unmatched,

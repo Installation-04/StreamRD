@@ -42,6 +42,7 @@
         "routes/health.ts",
         "routes/library.ts",
         "routes/metadata.ts",
+        "routes/logs.ts",
         "routes/requests.ts",
         "routes/system.ts",
         "shared-libraries.ts",
@@ -75,6 +76,7 @@
         "age-limits.test.ts",
         "attention.test.ts",
         "api-hardening.test.ts",
+        "debrid-test.test.ts",
         "favorites.test.ts",
         "invitation-access.test.ts",
         "library-community.test.ts",
@@ -93,6 +95,7 @@
         "request-worker.test.ts",
         "requests.test.ts",
         "session-cookie.test.ts",
+        "logs-activity.test.ts",
         "system.test.ts",
         "title-versions.test.ts"
       ]

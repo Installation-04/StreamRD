@@ -88,7 +88,8 @@ setupRouter.get("/", asyncHandler(async (req, res) => {
     });
   }
   const accountLibrary = await getAccountScanStatus(userId);
-  checks.push({ id: "account-library", title: "Your private debrid library", required: false, status: accountLibrary.totalImported ? "complete" : "optional", description: accountLibrary.totalImported ? "Existing provider items have been imported privately for this account. Open your library to review metadata or play a video." : "Scan existing torrents and cloud videos from your connected accounts. Scanning reads your providers; imported items stay private.", href: "/library", actionLabel: "Open your library" });
+  // Only the administrator imports from a debrid account (v0.18.0); for everyone else this card led to a page that refused them.
+  if (admin) checks.push({ id: "account-library", title: "Your private debrid library", required: false, status: accountLibrary.totalImported ? "complete" : "optional", description: accountLibrary.totalImported ? "Existing provider items have been imported privately for this account. Open your library to review metadata or play a video." : "Scan existing torrents and cloud videos from your connected accounts. Scanning reads your providers; imported items stay private.", href: "/library", actionLabel: "Open your library" });
   const required = checks.filter(check => check.required), completed = required.filter(check => check.status === "complete").length;
   res.setHeader("Cache-Control", "private, no-store");
   res.json({

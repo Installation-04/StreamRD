@@ -57,7 +57,7 @@ Usage: install.sh [options]
   --jellyfin-port N      Jellyfin web port (default 8096)
   --plex-port N          Plex web port (default 32400)
   --plex-claim TOKEN     Plex claim token from https://plex.tv/claim (valid 4 minutes; optional)
-  --media-manager        Let StreamRD start Plex and Jellyfin from its Setup page (paste the Plex claim token there). Adds a small helper
+  --media-manager        (the default) Let StreamRD start Plex and Jellyfin from its Setup page (paste the Plex claim token there). Adds a small helper
                          container that holds the Docker socket: it can only start, stop and remove those two containers, but anyone who
                          controls it controls Docker on this machine, so it is off unless you ask for it
   --no-media-manager     Stop running the helper (containers it started are kept; stop them from Setup first)
@@ -592,14 +592,22 @@ main() {
   esac
   local zurg_flag=none; [ "$use_zurg" = true ] && zurg_flag=zurg
   local use_manager=false
-  # An existing install that never had the helper is offered it once, so Plex and Jellyfin can start from the Setup page without more steps.
-  if [ "$FIRST" != true ] && [ -z "$MEDIA_MANAGER" ] && [ "$ASSUME_YES" != true ] && [ -t 0 ] && ! env_value COMPOSE_FILE | grep -q manager && [ -z "$(env_value MEDIA_MANAGER_ASKED)" ]; then
-    set_env MEDIA_MANAGER_ASKED 1
-    if confirm "Add the small helper that lets StreamRD start Plex and Jellyfin for you (it can only manage those two containers)?" y; then MEDIA_MANAGER=on; fi
+  # The helper is part of every install unless it was declined, so Plex and Jellyfin start from StreamRD's Setup page and the Update button
+  # works with no extra step (it can only manage those containers). Declined means: --no-media-manager, or "no" to the question below;
+  # older installers recorded only that the question had been asked.
+  local has_manager=false declined=false
+  env_value COMPOSE_FILE | grep -q manager && has_manager=true
+  if [ "$(env_value MEDIA_MANAGER_OPTOUT)" = 1 ] || { [ -n "$(env_value MEDIA_MANAGER_ASKED)" ] && [ "$has_manager" = false ]; }; then declined=true; fi
+  # An existing install without it is asked when someone is there to answer; with --yes or no terminal it is added.
+  if [ "$FIRST" != true ] && [ -z "$MEDIA_MANAGER" ] && [ "$has_manager" = false ] && [ "$declined" = false ] && [ "$ASSUME_YES" != true ] && [ -t 0 ]; then
+    if confirm "Add the small helper that lets StreamRD start Plex and Jellyfin and update itself (it can only manage those containers)?" y; then MEDIA_MANAGER=on; else MEDIA_MANAGER=off; fi
   fi
-  # A first install gets the helper by default, so Plex and Jellyfin start from StreamRD's Setup page with no extra step (it can only manage those two containers).
-  # An existing install keeps its choice; add it later with --media-manager.
-  case "$MEDIA_MANAGER" in on) use_manager=true ;; off) ;; *) if [ "$FIRST" = true ]; then use_manager=true; else env_value COMPOSE_FILE | grep -q manager && use_manager=true; fi ;; esac
+  case "$MEDIA_MANAGER" in
+    on) use_manager=true; set_env MEDIA_MANAGER_OPTOUT 0 yes ;;
+    off) set_env MEDIA_MANAGER_OPTOUT 1 yes ;;
+    *) [ "$declined" = true ] || use_manager=true ;;
+  esac
+  if [ "$use_manager" = true ] && [ "$has_manager" = false ] && [ "$FIRST" != true ]; then log "Adding the helper that starts Plex and Jellyfin and runs updates (it alone holds the Docker socket). Remove it with --no-media-manager."; fi
   if [ "$use_manager" = true ]; then
     write_manager "$([ "$use_zurg" = true ] && echo 1 || echo 0)"
     [ -n "$(env_value MEDIA_MANAGER_TOKEN)" ] || set_env MEDIA_MANAGER_TOKEN "$( (openssl rand -hex 24 2>/dev/null) || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"

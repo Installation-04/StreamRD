@@ -7,6 +7,7 @@ export type LogType =
   | "logout"
   | "search"
   | "download"
+  | "library"
   | "provider_error"
   | "admin_action"
   | "system";

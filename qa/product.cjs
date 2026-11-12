@@ -21,6 +21,10 @@ async function call(port,route,data,token,method){const res=await fetch(`http://
  for(const product of products){
   const sr=product==='streamrd',api=sr?47821:61337,web=sr?3000:3100,url=`http://localhost:${web}`;
   const admin=await call(api,'/api/auth/signup',credentials);
+  // Once its first account exists a server is invitation only. These journeys create accounts directly, so the administrator opens registration first.
+  const uninvited=await fetch(`http://127.0.0.1:${api}/api/auth/signup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...credentials,email:'member@example.invalid',displayName:'Community member'})});
+  assert.equal(uninvited.status,403,`${product}: a second account needs an invitation by default`);await uninvited.body?.cancel();
+  await call(api,'/api/admin/access',{mode:'open'},admin.token,'PUT');
   const member=await call(api,'/api/auth/signup',{...credentials,email:'member@example.invalid',displayName:'Community member'});
   if(!sr) await call(api,'/api/admin/indexers',{name:'Local demo fixture',baseUrl:'http://127.0.0.1:9191/api',apiKey:'fixture-only'},admin.token);
   const setup=await call(api,'/api/account/setup',null,member.token);assert.equal(setup.connectionVerified,false);assert.ok(setup.checks.every(c=>!c.href?.startsWith('/admin')));

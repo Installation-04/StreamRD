@@ -45,8 +45,7 @@ export default function ProfilePage() {
       <p className="dim" style={{ marginBottom: 24 }}>
         {user.email} · role: {user.role} ·{" "}
         <Link href="/account/settings" style={{ textDecoration: "underline" }}>{t("account.settings")}</Link>
-        {" · "}
-        <Link href="/account/debrid" style={{ textDecoration: "underline" }}>{t("account.debrid")}</Link>
+        {user.role === "admin" && <>{" · "}<Link href="/account/debrid" style={{ textDecoration: "underline" }}>{t("account.debrid")}</Link></>}
       </p>
       <form className="card" onSubmit={save}>
         <div className="field">

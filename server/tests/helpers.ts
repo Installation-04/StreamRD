@@ -25,6 +25,9 @@ export async function resetDb(): Promise<void> {
   await db.title.deleteMany();
   await db.user.deleteMany();
   await db.setting.deleteMany();
+  // Most tests sign people up directly, so they start from a server whose administrator chose open registration.
+  // The default (invitation only) is tested in access.test.ts.
+  await db.setting.create({ data: { key: "auth.registration", value: JSON.stringify({ mode: "open" }) } });
 }
 
 export interface TestUser {

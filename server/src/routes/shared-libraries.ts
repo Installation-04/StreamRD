@@ -219,7 +219,19 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
     const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
     if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
   };
-  const { mediaKey, ...result } = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize);
+  // A play that fails is in the log with the reason the owner needs. The viewer is told what it means for them: they cannot rescan or
+  // reconnect anything, so the owner's instructions are not passed on to them.
+  const resolved = await playImportedMedia(library.sourceUserId, itemId, body.fileToken, authorize).catch(async error => {
+    if (!(error instanceof AccountLibraryError)) throw error;
+    const failed = await db.accountMedia.findUnique({ where: { id: itemId }, select: { name: true, year: true } });
+    void logEvent("warn", "playback", `Could not play ${failed?.name ?? "a title"}${failed?.year ? ` (${failed.year})` : ""}: ${error.message}`, { userId: req.session!.sub, meta: { libraryId, itemId, status: error.status } }).catch(() => undefined);
+    if (req.session!.sub === library.sourceUserId) throw error;
+    throw new AccountLibraryError(error.status === 404 || error.status === 422
+      ? "This title cannot be played right now: its link stopped working. The administrator is told automatically, and it comes back when a replacement arrives."
+      : error.status === 400 || error.status === 409 ? error.message
+      : "This title could not be started: the server's provider did not answer. Try again in a moment.", error.status);
+  });
+  const { mediaKey, ...result } = resolved;
   await authorize();
   if (!result.stream || !mediaKey) { res.json(result); return; }
   // Resume state belongs to the viewer; each play supersedes older player sessions.
@@ -233,6 +245,13 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   const plan = await planPlayback(result.stream.url, result.stream.filename).catch(() => ({ mode: "direct" as const, probe: null, reason: "error" }));
   const playback = plan.mode === "direct" ? { mode: "direct" as const, reason: plan.reason, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null }
     : { mode: plan.mode, url: `/api/stream/${registerStream(result.stream.url, plan.mode, userId)}`, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null };
+  // Each play is in the log with what the server decided and why: who, which title, and how the file reaches the browser. No link, no file path.
+  const HOW = { direct: "as it is", remux: "repackaged", audio: "audio converted", video: "picture and audio converted" } as const;
+  const WHY: Record<string, string> = { off: "conversion is turned off or the link cannot be read by the server", "ffmpeg-missing": "ffmpeg is not installed", "video-off": "it needs its picture converted and that is turned off (TRANSCODE_VIDEO)", error: "the file could not be examined" };
+  const title = await db.accountMedia.findUnique({ where: { id: itemId }, select: { name: true, year: true } });
+  const unhelped = playback.mode === "direct" && playback.reason && playback.reason !== "off" ? WHY[playback.reason] : null;
+  void logEvent(unhelped ? "warn" : "info", "playback", `Playing ${title?.name ?? "a title"}${title?.year ? ` (${title.year})` : ""}: ${HOW[playback.mode]}${unhelped ? `, although a browser may not open it, because ${unhelped}` : ""}`,
+    { userId, provider: result.stream.provider, meta: { libraryId, itemId, mode: playback.mode, video: playback.video, audio: playback.audio, reason: playback.reason ?? null, resumedAt: saved.completed ? 0 : Math.floor(saved.positionSeconds) } }).catch(() => undefined);
   res.json({ ...result, progressSessionId, resumeSeconds: saved.completed ? 0 : saved.positionSeconds, durationSeconds: saved.durationSeconds || playback.durationSeconds, playback });
 }));
 const progressBody = z.object({

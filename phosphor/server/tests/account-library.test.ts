@@ -46,6 +46,9 @@ it("walks durable pages including empty pages and imports duplicate refs idempot
   expect(scan.mock.calls[1][2]).toBe("page-two"); expect(scan.mock.calls[2][2]).toBe("page-three");
   const status = await db.accountScan.findFirstOrThrow(); expect(status).toMatchObject({ status: "complete", pages: 3, scanned: 3, imported: 2, skipped: 1 });
   const media = await db.accountMedia.findMany({ orderBy: { name: "asc" } }); expect(media).toHaveLength(2); expect(media[0]).toMatchObject({ name: "Example Movie", year: 2020, type: "movie" }); expect(media[1].type).toBe("series");
+  await new Promise(done => setTimeout(done, 100));
+  const logged = await db.logEvent.findMany({ where: { type: "library", userId: user.id } });   // one line when the scan ends, with its totals
+  expect(logged.map(line => line.message)).toEqual(["Account scan finished: 3 checked, 2 imported, 1 already known or left out"]); expect(logged[0].provider).toBe("realdebrid");
   const catalog = await db.$queryRawUnsafe<Array<{ name: string }>>("SELECT name FROM sqlite_master WHERE name='Title'");
   if (catalog.length) expect(Number((await db.$queryRawUnsafe<Array<{ count: bigint }>>("SELECT COUNT(*) AS count FROM Title"))[0].count)).toBe(0);
 });
@@ -174,6 +177,17 @@ it("stops rejected credentials without retrying and sanitizes the failure", asyn
   const user = await owner(); await configure(user.id); scan.mockRejectedValue(new ProviderError("realdebrid", "private-fixture-key denied", 401));
   await queueAccountScans(user.id); await runAccountLibraryJob(); expect((await db.accountScan.findFirstOrThrow()).status).toBe("error"); expect(await runAccountLibraryJob()).toBe(false);
   expect((await db.accountScan.findFirstOrThrow()).error).not.toContain("private-fixture-key"); expect(scan).toHaveBeenCalledOnce();
+  await new Promise(done => setTimeout(done, 100));
+  const logged = await db.logEvent.findMany({ where: { type: "provider_error", userId: user.id } });
+  expect(logged.map(line => line.message)).toEqual(["Account scan stopped: The provider rejected the saved credentials. Review your debrid settings."]); expect(JSON.stringify(logged)).not.toContain("private-fixture-key");
+});
+it("names in the log what a scan left out, so a missing title can be traced", async () => {
+  const user = await owner(); await configure(user.id);
+  scan.mockResolvedValue({ items: [item("a", "Sintel.2010.1080p.WEB-DL.H264.AAC"), item("b", "Cyberpunk 2077 FitGirl Repack"), item("c", "Artist - Live Album.flac")], nextCursor: null });
+  await queueAccountScans(user.id); await runAccountLibraryJob(); await new Promise(done => setTimeout(done, 100));
+  expect((await db.accountMedia.findMany()).map(row => row.name)).toEqual(["Sintel"]);
+  const left = await db.logEvent.findFirstOrThrow({ where: { type: "library", message: { startsWith: "Account scan left out" } } });
+  expect(left.message).toBe("Account scan left out 2 entries that do not look like a film or a show"); expect(JSON.parse(left.meta!).names).toEqual(["Cyberpunk 2077 FitGirl Repack", "Artist - Live Album.flac"]);
 });
 it("withholds a signed playback response after credentials change during resolution", async () => {
   const user = await owner(); const imported = await importOne(user.id);
