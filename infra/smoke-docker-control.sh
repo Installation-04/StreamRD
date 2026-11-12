@@ -57,7 +57,16 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-retry() { local tries="$1"; shift; local n=0; until "$@"; do n=$((n + 1)); [ "$n" -lt "$tries" ] || return 1; sleep 5; done; }
+# retry TRIES COMMAND...: tries again with a longer wait each time (5, 10, 20, 40 s), because registries rate-limit the addresses CI runners share
+# (toomanyrequests): a fixed few seconds does not outlast that.
+retry() {
+  local tries="$1"; shift; local n=0 pause=5
+  until "$@"; do
+    n=$((n + 1)); [ "$n" -lt "$tries" ] || return 1
+    echo "(attempt $n of $tries failed: $*; trying again in ${pause}s)" >&2
+    sleep "$pause"; pause=$((pause * 2)); [ "$pause" -le 60 ] || pause=60
+  done
+}
 until_true() {   # until_true SECONDS DESCRIPTION COMMAND...
   local limit="$1" what="$2"; shift 2; local waited=0
   until "$@" >/dev/null 2>&1; do waited=$((waited + 2)); [ "$waited" -lt "$limit" ] || fail "timed out waiting for $what"; sleep 2; done
@@ -99,14 +108,14 @@ NODE
 inspect() { docker inspect -f "$1" "$2"; }
 
 say "A local registry, so an update has a newer image to pull"
-retry 3 docker pull registry:2 >/dev/null || fail "could not pull registry:2"
+retry 5 docker pull registry:2 >/dev/null || fail "could not pull registry:2"
 docker run -d --name "$registry" -p 127.0.0.1::5000 registry:2 >/dev/null
 registry_port="$(docker port "$registry" 5000/tcp | head -1 | sed 's/.*://')"
 until_true 30 "the registry" curl -fsS "http://127.0.0.1:$registry_port/v2/"
 ref="localhost:$registry_port/streamrd-control:latest"
 docker tag "$image" "$ref"; docker push "$ref" >/dev/null
-retry 3 docker pull jellyfin/jellyfin:latest >/dev/null || fail "could not pull jellyfin/jellyfin (the launch itself is tested below, with the image already here)"
-retry 3 docker pull lscr.io/linuxserver/prowlarr:latest >/dev/null || fail "could not pull Prowlarr's image (it is started by default, below, with the image already here)"
+retry 5 docker pull jellyfin/jellyfin:latest >/dev/null || fail "could not pull jellyfin/jellyfin (the launch itself is tested below, with the image already here)"
+retry 5 docker pull lscr.io/linuxserver/prowlarr:latest >/dev/null || fail "could not pull Prowlarr's image (it is started by default, below, with the image already here)"
 
 say "Start the container as an installed copy has it: root, Docker's socket, one volume each for settings and downloads"
 docker volume create "$config" >/dev/null; docker volume create "$data" >/dev/null
