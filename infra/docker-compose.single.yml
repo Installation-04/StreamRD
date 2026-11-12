@@ -12,7 +12,8 @@ services:
       - "${TORRENT_PORT:-6881}:6881/tcp"
       - "${TORRENT_PORT:-6881}:6881/udp"
     environment:
-      ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-true}
+      # Phosphor is off unless you set ENABLE_PHOSPHOR=true. Left empty, a folder that already holds Phosphor's data keeps it running.
+      ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}
       ENABLE_QBITTORRENT: ${ENABLE_QBITTORRENT:-true}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       STREAMRD_ADMIN_EMAIL: ${STREAMRD_ADMIN_EMAIL:-}

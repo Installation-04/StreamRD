@@ -79,7 +79,7 @@ goes ahead; `--no-install-docker` installs nothing). On a Mac or Windows machine
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
 ```
 
-Run in a terminal, it asks how you want it: **Default** (StreamRD on 8080, Phosphor on 8081, the download client) or
+Run in a terminal, it asks how you want it: **Default** (StreamRD on 8080 and the download client) or
 **Advanced** (folder, every port, Phosphor and qBittorrent on or off, **Jellyfin and/or Plex already wired to your libraries**,
 Zilean, Zurg, the reserved administrator email), then shows a summary to confirm. Add `--yes` (or run it without a terminal) to skip
 the questions.
@@ -105,7 +105,8 @@ installation script as root when Docker is missing ([what that means](docs/singl
 
 - The installer turns on Docker control (decline it with `--no-media-manager`): the **Setup** page launches Plex or Jellyfin beside StreamRD, with a log of the deployment and an option to start them again after a reboot, and **Admin → System** updates and restarts StreamRD. You paste the tokens (the Plex claim token is used once and never stored) and press Launch; there is no second container and no script to run. It works by giving the container Docker's socket and running one small helper in it, apart from StreamRD; read [what it can do and what it does not protect against](docs/plex-jellyfin.md#docker-control).
 - `install.sh --media-server jellyfin|plex|both` runs Jellyfin and/or Plex next to StreamRD with the library folders and your downloads already mapped (read-only); you only add the libraries in their setup. See [Plex and Jellyfin](docs/plex-jellyfin.md#built-in-jellyfin-and-plex).
-- `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor.
+- `install.sh --phosphor` also runs [Phosphor](#-also-in-the-box-phosphor); it is off unless you ask for it.
+- `install.sh --zilean` runs [Zilean](docs/zilean-zurg.md) (a torrent index) and registers it as an indexer for Phosphor (use it with `--phosphor`).
 - `install.sh --zurg --rd-token …` mounts your Real-Debrid movies and shows (Linux host, Real-Debrid only).
 - Admin → Plex / Jellyfin exports mounted files as symlink libraries for your media server:
   [setup and scanning guide](docs/plex-jellyfin.md).
@@ -168,7 +169,8 @@ Split deployments and the older Debian/Ubuntu installer are in [deployment.md](d
 
 **Phosphor** is the companion app for people who prefer to search. It queries your own Torznab indexers
 (Jackett, Prowlarr, Zilean), adds the result to your debrid account in one click, and streams it once resolved,
-all in a retro terminal look. It runs in the same container on port **8081** with its own accounts, and also supports TorBox.
+all in a retro terminal look. It is **off by default**: turn it on with `install.sh --phosphor` (or `ENABLE_PHOSPHOR=true` in `~/streamrd/.env`, then `docker compose up -d`).
+It then runs in the same container on port **8081** with its own accounts, and also supports TorBox.
 
 <table>
   <tr>

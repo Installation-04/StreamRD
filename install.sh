@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# StreamRD + Phosphor one-command installer (all-in-one container), laid out as:
+# StreamRD one-command installer (all-in-one container; Phosphor is optional: --phosphor), laid out as:
 #
 #   ~/streamrd/docker-compose.yml   the container definition
 #   ~/streamrd/.env                 ports and the image tag
@@ -47,7 +47,8 @@ Usage: install.sh [options]
   --phosphor-port N      Phosphor web port (default 8081)
   --torrent-port N       qBittorrent peer port (default 6881)
   --admin-email EMAIL    Reserve the first administrator account for this address
-  --no-phosphor          Do not run Phosphor (the search/queue companion)
+  --phosphor             Run Phosphor too (the indexer search and download companion; it is off unless asked for)
+  --no-phosphor          Do not run Phosphor (this is already the default for a new install)
   --no-qbittorrent       Do not run the bundled qBittorrent client
   --zilean               Also run Zilean (a Debrid Media Manager torrent index) and add it to Phosphor as an indexer
   --no-zilean            Stop running Zilean (its data volumes are kept)
@@ -89,6 +90,7 @@ while [ $# -gt 0 ]; do
     --phosphor-port) PHOSPHOR_PORT="${2:?--phosphor-port needs a number}"; shift 2 ;;
     --torrent-port) TORRENT_PORT="${2:?--torrent-port needs a number}"; shift 2 ;;
     --admin-email) ADMIN_EMAIL="${2:?--admin-email needs an address}"; shift 2 ;;
+    --phosphor) PHOSPHOR=true; shift ;;
     --no-phosphor) PHOSPHOR=false; shift ;;
     --no-qbittorrent) QBIT=false; shift ;;
     --zilean) ZILEAN=on; shift ;;
@@ -153,7 +155,8 @@ services:
     environment:
       CONFIG_DIR: /config
       TZ: ${TZ:-UTC}
-      ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-true}
+      # Phosphor is off unless you set ENABLE_PHOSPHOR=true. Left empty, a folder that already holds Phosphor's data keeps it running.
+      ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}
       ENABLE_QBITTORRENT: ${ENABLE_QBITTORRENT:-true}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       STREAMRD_JWT_SECRET: ${STREAMRD_JWT_SECRET:-}
@@ -264,7 +267,7 @@ wizard() {
   say ""
   say "  StreamRD installer"
   say "  ------------------"
-  say "  1) Default   StreamRD on 8080, Phosphor on 8081, the bundled download client, in $DIR"
+  say "  1) Default   StreamRD on 8080 and the bundled download client, in $DIR"
   say "  2) Advanced  choose ports, folder, Jellyfin / Plex, Zilean, Zurg and more"
   say "  3) Cancel"
   local choice=""
@@ -278,7 +281,7 @@ wizard() {
   ask "Install folder" "$DIR"; DIR="$REPLY"
   [ -n "$PORT" ] || { ask_port "StreamRD web port" 8080; PORT="$REPLY"; }
   if [ -z "$PHOSPHOR" ]; then
-    if confirm "Run Phosphor (search your indexers and queue downloads)?" y; then
+    if confirm "Run Phosphor too (search your indexers and queue downloads)?" n; then
       PHOSPHOR=true
       [ -n "$PHOSPHOR_PORT" ] || { ask_port "Phosphor web port" 8081; PHOSPHOR_PORT="$REPLY"; }
     else PHOSPHOR=false; fi
@@ -307,7 +310,7 @@ wizard() {
       ask "Plex claim token (Enter to skip)" ""; PLEX_CLAIM="$REPLY"
     fi ;;
   esac
-  if [ -z "$ZILEAN" ] && confirm "Run Zilean (a torrent index) and add it to Phosphor?" n; then ZILEAN=on; fi
+  if [ -z "$ZILEAN" ] && [ "$PHOSPHOR" = true ] && confirm "Run Zilean (a torrent index) and add it to Phosphor?" n; then ZILEAN=on; fi
   if [ -z "$ZURG" ] && [ "$(uname -s)" = Linux ] && confirm "Mount your Real-Debrid movies and shows with Zurg (Linux only)?" n; then
     ZURG=on
     if [ -z "$RD_TOKEN" ]; then
@@ -323,7 +326,7 @@ wizard() {
   say "  Summary"
   say "    Folder        $DIR"
   say "    StreamRD      port ${PORT:-8080}"
-  say "    Phosphor      ${PHOSPHOR:-true}${PHOSPHOR_PORT:+ (port $PHOSPHOR_PORT)}"
+  say "    Phosphor      ${PHOSPHOR:-false}$([ "$PHOSPHOR" = true ] && [ -n "$PHOSPHOR_PORT" ] && echo " (port $PHOSPHOR_PORT)")"
   say "    qBittorrent   ${QBIT:-true}${TORRENT_PORT:+ (port $TORRENT_PORT)}"
   say "    Media server  ${MEDIA_SERVER:-none}"
   say "    Zilean / Zurg ${ZILEAN:-off} / ${ZURG:-off}"
@@ -756,7 +759,11 @@ main() {
   set_env PLEX_PORT "${PLEX_PORT:-32400}" "$([ -n "$PLEX_PORT" ] && echo yes || echo no)"
   [ -z "$PLEX_CLAIM" ] || set_env PLEX_CLAIM "$PLEX_CLAIM" yes
   [ -z "$ADMIN_EMAIL" ] || set_env ADMIN_EMAIL "$ADMIN_EMAIL" yes
-  [ -z "$PHOSPHOR" ] || set_env ENABLE_PHOSPHOR "$PHOSPHOR" yes
+  # Phosphor is off for a new install unless it was asked for. An installation that was already running it keeps it: its settings
+  # file is written from what it was running, so it is not switched off by this change (or by --refresh-compose).
+  if [ -n "$PHOSPHOR" ]; then set_env ENABLE_PHOSPHOR "$PHOSPHOR" yes
+  elif [ "$FIRST" = true ]; then set_env ENABLE_PHOSPHOR false
+  else set_env ENABLE_PHOSPHOR true; fi
   [ -z "$QBIT" ] || set_env ENABLE_QBITTORRENT "$QBIT" yes
   [ -z "$JWT_SECRET" ] || set_env STREAMRD_JWT_SECRET "$JWT_SECRET" yes
 
@@ -771,6 +778,7 @@ main() {
     [ -n "$(env_value ZILEAN_DB_PASSWORD)" ] || set_env ZILEAN_DB_PASSWORD "$( (openssl rand -hex 16 2>/dev/null) || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   fi
   if [ "$use_zurg" = true ]; then write_zurg; prepare_zurg_mount; fi
+  [ "$use_zilean" != true ] || [ "$(env_value ENABLE_PHOSPHOR)" != false ] || log "Zilean is added to Phosphor, which is not running. Run Phosphor too with --phosphor."
   local use_jellyfin=false use_plex=false
   case "$MEDIA_SERVER" in
     jellyfin) use_jellyfin=true ;; plex) use_plex=true ;; both) use_jellyfin=true; use_plex=true ;; none) ;;
@@ -878,7 +886,7 @@ main() {
 
 StreamRD is running.
   StreamRD   http://localhost:$web
-  Phosphor   http://localhost:$(env_value PHOSPHOR_PORT)   (set ENABLE_PHOSPHOR=false in .env to turn it off)
+$( [ "$(env_value ENABLE_PHOSPHOR)" = false ] || echo "  Phosphor   http://localhost:$(env_value PHOSPHOR_PORT)   (set ENABLE_PHOSPHOR=false in .env to turn it off)" )
 
 Create your account on the StreamRD page$( [ -n "$(env_value ADMIN_EMAIL)" ] && echo " with $(env_value ADMIN_EMAIL), which is reserved for the first administrator." || echo "; the first account becomes the administrator." )
 Put a reverse proxy with HTTPS in front before exposing it to the internet.
@@ -893,6 +901,7 @@ $(addon_notes)
 EOF
 }
 addon_notes() {
+  [ "$(env_value ENABLE_PHOSPHOR)" != false ] || echo "  Phosphor   not running. To run it too: bash install.sh --phosphor --dir $DIR"
   env_value COMPOSE_FILE | grep -q zilean && echo "  Zilean     internal only; it appears in Phosphor as the 'Zilean' indexer (its first import takes a while)"
   env_value COMPOSE_FILE | grep -q control && echo "  Docker     StreamRD starts Plex and Jellyfin (Admin -> Plex / Jellyfin), updates itself and restarts (Admin -> System) from its pages; see docs/plex-jellyfin.md"
   env_value COMPOSE_FILE | grep -q jellyfin && echo "  Jellyfin   http://localhost:$(env_value JELLYFIN_PORT)   libraries: Movies /library/streamrd/Movies, Shows \"/library/streamrd/TV Shows\" (see docs/plex-jellyfin.md)"

@@ -9,7 +9,12 @@ const { spawn } = require('node:child_process');
 const root = process.env.DATA_DIR || '/data';
 const configRoot = process.env.CONFIG_DIR || root;
 const qbitEnabled = process.env.ENABLE_QBITTORRENT !== 'false';
-const phosphorEnabled = process.env.ENABLE_PHOSPHOR !== 'false';
+// Phosphor is off unless it is asked for (ENABLE_PHOSPHOR=true). One exception keeps an installation that was already running it
+// working: with the setting absent, a configuration folder that already holds Phosphor's data means it was in use, so it stays on.
+const phosphorSetting = (process.env.ENABLE_PHOSPHOR || '').trim().toLowerCase();
+const phosphorEnabled = phosphorSetting
+  ? phosphorSetting !== 'false'
+  : fs.existsSync(path.join(configRoot, 'phosphor'));
 const children = new Map();
 const gateways = [];
 let stopping = false;
