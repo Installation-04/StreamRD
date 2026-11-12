@@ -69,6 +69,10 @@ container is put back automatically and the page says so. The helper can only re
 image of the reference it already runs; the replacement is done by a short-lived updater container, so a plain `docker compose pull && docker compose up -d`
 does the same thing and the two never disagree. The helper is part of the image, so every update brings the new helper with it.
 
+**The programs started next to StreamRD** (Prowlarr, Jellyfin, Plex) are separate containers with their own releases, so a StreamRD update does not
+change them. **Admin → System → Add-ons** checks each one for a newer version and updates it on request, or by itself at night if you turn that on for
+that module: see [Updating Prowlarr, Jellyfin and Plex](plex-jellyfin.md#updating-prowlarr-jellyfin-and-plex).
+
 Without Docker control, updates are not applied by the app itself. **Admin → System** tells you when
 a newer release exists and shows the command. For automatic updates run
 [Watchtower](https://containrrr.dev/watchtower/): the compose file already carries its opt-in label

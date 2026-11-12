@@ -1,6 +1,7 @@
 'use strict';
-// The helper: the one part of StreamRD that talks to Docker. It starts, stops and removes exactly two containers (Jellyfin and Plex) next
-// to StreamRD, replaces the StreamRD container with a newer image of its own, and restarts it, so the web pages can do all of that.
+// The helper: the one part of StreamRD that talks to Docker. It starts, stops, updates and removes exactly three containers (Jellyfin,
+// Plex and Prowlarr) next to StreamRD, replaces the StreamRD container with a newer image of its own, and restarts it, so the web pages
+// can do all of that.
 //
 // It runs in one of two places, with the same rules:
 //   - inside the StreamRD container (--embedded, the default). The container's first program (init.cjs) starts it as root and runs
@@ -12,13 +13,16 @@
 //
 // To keep what it can do small it:
 //   - answers only requests carrying MEDIA_MANAGER_TOKEN;
-//   - accepts only a server name (jellyfin or plex), a port and an optional Plex claim token; the image, the folders it mounts, the
+//   - accepts only a server name (jellyfin, plex or prowlarr), a port and an optional Plex claim token; the image, the folders it mounts, the
 //     user it runs as and every other setting of the container are fixed here, not chosen by the caller;
 //   - never logs or stores the claim token;
 //   - updates only the StreamRD container, only to a newer image of the reference that container already uses; the caller chooses
 //     nothing. The old container is kept until the new one is healthy and put back if it is not;
 //   - restarts only that same container (the Restart button, and applying a staged restore);
-//   - sets one thing on a media server after it was made: whether Docker starts it again by itself after the machine restarts.
+//   - sets one thing on a media server after it was made: whether Docker starts it again by itself after the machine restarts;
+//   - updates a server it started without being told which image to use: it downloads the image the server's fixed reference points to
+//     now and, when that differs from the one running and it was asked to, makes the container again from the same fixed specification
+//     (same port, same folders), keeping the old container until the new one runs and putting it back if it does not.
 const http = require('node:http');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -247,6 +251,88 @@ function createManager(config) {
   async function stop(name) { delete jobs[name]; note(name, 'Stop requested'); const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
   async function remove(name) { delete jobs[name]; note(name, 'Remove requested'); const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
 
+  // ---- Updating a server (Jellyfin, Plex, Prowlarr) without waiting for a StreamRD release.
+  // updates[name] is the last check or update of each server: { state: 'running' | 'current' | 'available' | 'done' | 'failed', apply, step, error, ... }.
+  const updates = {};
+  /** What an image says about itself: its id, its version label (when it has one) and when it was built. Null when Docker does not have it. */
+  async function imageInfo(reference) {
+    const response = await docker('GET', `/images/${reference.startsWith('sha256:') ? reference : encodeURIComponent(reference)}/json`);
+    if (response.status !== 200 || !response.json?.Id) return null;
+    const version = String(response.json.Config?.Labels?.['org.opencontainers.image.version'] ?? '').trim();
+    return { id: response.json.Id, version: /^[A-Za-z0-9][A-Za-z0-9._+~-]{0,59}$/.test(version) ? version : '', created: typeof response.json.Created === 'string' && !Number.isNaN(Date.parse(response.json.Created)) ? response.json.Created : '' };
+  }
+  const shown = info => info ? { version: info.version, created: info.created } : null;
+  async function moduleView(name) {
+    const found = await docker('GET', `/containers/${containerName(name)}/json`);
+    return { state: 'idle', ...(updates[name] || {}), current: found.status === 200 && found.json?.Image ? shown(await imageInfo(found.json.Image)) : null };
+  }
+  /**
+   * Looks for a newer image of a server and, when asked to, runs the server from it. The answer is what was found: 'current' (the image
+   * running is the newest), 'available' (a newer one is on this machine, nothing was changed) or 'updated'.
+   */
+  async function moduleUpdate(name, apply) {
+    const server = SERVERS[name], reference = `${server.image}:${server.tag}`, record = updates[name];
+    const say = text => { record.step = text; note(name, text); };
+    say(`Checking ${reference} for a newer version`);
+    await pull(name, server);
+    const found = await docker('GET', `/containers/${containerName(name)}/json`);
+    if (found.status !== 200 || !found.json?.Id) throw new Error('The server is no longer there');
+    const fresh = await imageInfo(reference);
+    if (!fresh) throw new Error('The new image is not available after the download');
+    record.current = shown(await imageInfo(found.json.Image));
+    if (fresh.id === found.json.Image) { record.available = null; say('Already running the newest version'); return 'current'; }
+    record.available = shown(fresh);
+    say(`A newer version is available${fresh.version ? ` (${fresh.version})` : ''}`);
+    return apply ? replaceServer(name, found.json, fresh, say) : 'available';
+  }
+  /** Makes the container again from the image its reference now points at. The old one is kept until the new one runs, and put back if it does not. */
+  async function replaceServer(name, inspected, fresh, say) {
+    const mine = containerName(name), previous = `${mine}-previous`, policy = inspected.HostConfig?.RestartPolicy?.Name ?? 'unless-stopped';
+    const bindings = inspected.HostConfig?.PortBindings?.[`${SERVERS[name].internal}/tcp`];
+    const options = { port: Number(bindings?.[0]?.HostPort) || SERVERS[name].port, autostart: !['', 'no'].includes(policy), claim: '' };
+    const where = await layout(); prepareFolders(name);
+    const body = specFor(name, options, config, where);
+    jobs[name] = { state: 'starting' };   // until it runs again, the server reads as starting, and nothing else launches it
+    try {
+      say(`Stopping ${name} to start the new version (it is back in a minute)`);
+      await docker('DELETE', `/containers/${previous}?force=true`);
+      await docker('POST', `/containers/${mine}/update`, { RestartPolicy: { Name: 'no' } });
+      await mustOk('Stopping the server', await docker('POST', `/containers/${mine}/stop?t=30`), [204, 304]);
+      await mustOk('Keeping the old container', await docker('POST', `/containers/${mine}/rename?name=${previous}`), [204]);
+      const restore = async why => {
+        say(`${why}; putting the previous version back`);
+        await docker('DELETE', `/containers/${mine}?force=true`);
+        await docker('POST', `/containers/${previous}/rename?name=${mine}`);
+        await docker('POST', `/containers/${mine}/update`, { RestartPolicy: { Name: policy } });
+        await docker('POST', `/containers/${mine}/start`);
+      };
+      try {
+        const created = await docker('POST', `/containers/create?name=${mine}`, body);
+        if (created.status !== 201 || !created.json?.Id) throw new Error(`Creating the new container failed (Docker answered ${created.status}${created.json?.message ? `: ${String(created.json.message).slice(0, 160)}` : ''})`);
+        await mustOk('Starting the new version', await docker('POST', `/containers/${mine}/start`), [204, 304]);
+      } catch (error) { await restore(error.message); throw new Error(`${error.message}. The previous version was restored.`); }
+      say('Waiting for the new version to start');
+      if (!await waitHealthy(mine)) { await restore('The new version did not start properly'); throw new Error('The new version did not start properly. The previous version was restored; its settings were not touched.'); }
+      await docker('DELETE', `/containers/${previous}?force=true`);
+      say(`Updated${fresh.version ? ` to ${fresh.version}` : ''}. The previous image is kept on this machine until you prune it.`);
+      return 'updated';
+    } finally { delete jobs[name]; }
+  }
+  /** Starts a check (apply false) or an update (apply true) and answers at once; the page reads the outcome with moduleView. */
+  async function startModuleUpdate(name, apply) {
+    if (jobs[name] && jobs[name].state !== 'failed') throw Object.assign(new Error('That server is being started. Try again when it is running'), { status: 409 });
+    if (updates[name]?.state === 'running') return { ...updates[name] };
+    const found = await docker('GET', `/containers/${containerName(name)}/json`);
+    if (found.status === 404) throw Object.assign(new Error('That server has not been launched yet'), { status: 409 });
+    if (found.status !== 200) throw new Error(`Docker answered ${found.status}`);
+    if (apply && !found.json?.State?.Running) throw Object.assign(new Error('Start it before updating it'), { status: 409 });
+    const record = updates[name] = { state: 'running', apply, step: 'Checking for a newer version', error: '', startedAt: new Date().toISOString(), finishedAt: null, current: null, available: null };
+    moduleUpdate(name, apply).then(result => { record.state = result; }, error => {
+      record.state = 'failed'; record.error = redact(error && error.message ? error.message : 'The update failed').slice(0, 300); note(name, `Failed: ${record.error}`);
+    }).finally(() => { record.finishedAt = new Date().toISOString(); });
+    return { ...record };
+  }
+
   // ---- Updating StreamRD itself.
   const STREAMRD = config.streamrdContainer || 'streamrd', HEALTH_WAIT_MS = config.healthWaitMs || 300000, SETTLE_MS = config.settleMs === undefined ? 8000 : config.settleMs;
   const upd = { state: 'idle', log: [], error: '', startedAt: null, finishedAt: null, handed: false };
@@ -437,7 +523,7 @@ function createManager(config) {
         if (request.method !== 'POST') return send(405, { error: 'Method not allowed' });
         const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
       }
-      const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs|autostart))?$/.exec(url.pathname);
+      const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs|autostart|update))?$/.exec(url.pathname);
       if (request.method === 'GET' && url.pathname === '/status') return send(200, { servers: await status(), ...(config.embedded ? { embedded: true } : {}) });
       if (!match || !SERVERS[match[1]]) return send(404, { error: 'Unknown server' });
       const name = match[1];
@@ -456,6 +542,15 @@ function createManager(config) {
         const body = await readBody(request);
         if (typeof body.enabled !== 'boolean') return send(400, { error: 'enabled is true or false' });
         await setAutostart(name, body.enabled); return send(200, { ok: true, autostart: body.enabled });
+      }
+      if (match[2] === 'update') {
+        if (request.method === 'GET') return send(200, await moduleView(name));
+        if (request.method === 'POST') {
+          const body = await readBody(request);
+          if (body.apply !== undefined && typeof body.apply !== 'boolean') return send(400, { error: 'apply is true or false' });
+          return send(202, await startModuleUpdate(name, body.apply === true));
+        }
+        return send(405, { error: 'Method not allowed' });
       }
       if (request.method === 'POST' && match[2] === 'stop') { await stop(name); return send(200, { ok: true }); }
       if (request.method === 'DELETE' && !match[2]) { await remove(name); return send(200, { ok: true }); }
