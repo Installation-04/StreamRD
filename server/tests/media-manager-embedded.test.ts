@@ -191,8 +191,14 @@ it("reports an update still being finished when the new container's helper is as
   const after = await json("GET", "/update");
   expect(after).toMatchObject({ state: "failed", error: "The new version did not start properly. The previous version was restored; nothing was lost.", finishedAt: "2026-11-12T10:00:00Z" });
   expect(docker.find("streamrd-updater")).toBeUndefined();
+  // Docker can say a container has ended a moment before its output can all be read: the account is looked for once more.
+  docker.boxes.push({ id: "d".repeat(64), name: "streamrd-updater", image: "sha256:x", running: false, alive: true, status: "exited", exitCode: 0, finishedAt: "2026-11-12T11:05:00Z", output: [], spec: { Labels: { "streamrd.role": "updater" } } });
+  setTimeout(() => docker.boxes.find(box => box.id === "d".repeat(64))!.output.push('{"time":"2026-11-12T11:04:59Z","message":"Updated. The previous image is kept on this machine until you prune it."}', '{"time":"2026-11-12T11:05:00Z","result":"updated"}'), 200);
+  const slow = await (await helper({ logSettleMs: 600 })).json("GET", "/update");
+  expect(slow).toMatchObject({ state: "done", error: "" }); expect(slow.log.map((line: { message: string }) => line.message)).toEqual(["Updated. The previous image is kept on this machine until you prune it."]);
+  expect(docker.find("streamrd-updater")).toBeUndefined();
   // An updater that ended without a result says how it ended.
   docker.boxes.push({ id: "e".repeat(64), name: "streamrd-updater", image: "sha256:x", running: false, alive: true, status: "exited", exitCode: 137, finishedAt: "2026-11-12T11:00:00Z", output: ["Error: connect EACCES /var/run/docker.sock"], spec: { Labels: { "streamrd.role": "updater" } } });
-  const crashed = await (await helper()).json("GET", "/update");
+  const crashed = await (await helper({ logSettleMs: 10 })).json("GET", "/update");
   expect(crashed).toMatchObject({ state: "failed", error: "The updater stopped before it finished (exit code 137)" }); expect(crashed.log.map((line: { message: string }) => line.message)).toEqual(["Error: connect EACCES /var/run/docker.sock"]);
 });

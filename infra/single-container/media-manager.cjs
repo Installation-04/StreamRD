@@ -352,9 +352,13 @@ function createManager(config) {
   /** How the last update went. The embedded helper may be a new process in a new container: the updater's account is the record. */
   async function updateView() {
     if (config.embedded && (upd.handed || upd.state === 'idle')) {
-      const report = await updaterReport().catch(() => null);
+      let report = await updaterReport().catch(() => null);
+      // Docker can report a container as ended a moment before its output is all readable; look once more before calling an updater silent.
+      if (report && report.ended && !report.result) { await sleep(config.logSettleMs === undefined ? 1500 : config.logSettleMs); report = await updaterReport().catch(() => report); }
       if (report) {
-        upd.log = report.log.slice(-LOG_LINES); upd.startedAt = upd.startedAt || report.log[0]?.time || null;
+        // What was seen while it ran is kept if the output cannot be read at the end: it says how far it got.
+        if (report.log.length || !upd.log.length) upd.log = report.log.slice(-LOG_LINES);
+        upd.startedAt = upd.startedAt || upd.log[0]?.time || null;
         if (!report.ended) { upd.state = 'running'; upd.handed = true; }
         else {
           upd.state = report.result === 'updated' ? 'done' : report.result === 'current' ? 'current' : 'failed';
