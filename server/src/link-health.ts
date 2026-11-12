@@ -1,3 +1,4 @@
+import { approveAutomatically } from "./requests/approval";
 import { runtime } from "./runtime-settings";
 import { Prisma } from "@prisma/client";
 import { accountProviderContext } from "./account-library";
@@ -52,7 +53,7 @@ export async function checkItem(itemId: string): Promise<"skipped" | "ok" | "unk
 }
 
 /**
- * A title whose only working copy is gone gets a replacement request (waiting for the administrator's approval, like any request),
+ * A title whose only working copy is gone gets a replacement request (approved by itself unless the server waits for an administrator, like any request),
  * unless another version of it works, a request for it is already on its way, or an administrator rejected or cancelled one.
  */
 export async function ensureReplacement(itemId: string): Promise<"switched" | "requested" | "none"> {
@@ -63,8 +64,9 @@ export async function ensureReplacement(itemId: string): Promise<"switched" | "r
   const record = await db.metadataRecord.findFirst({ where: { targetType: "account", targetId: item.id, ownerId: item.userId, status: "matched" } });
   const media = record ? storedMetadata(record.data) : null;
   if (!media) return "none"; // no confirmed identity to request by; the administrator is told through the log and the library
-  const canonicalKey = canonicalMediaKey(media), message = "The link for this title stopped working. A replacement was requested and is waiting for administrator approval.";
-  return db.$transaction(async tx => {
+  const canonicalKey = canonicalMediaKey(media), message = "The link for this title stopped working. A replacement was requested.";
+  let created: string | null = null;
+  const result = await db.$transaction(async tx => {
     await lockRequests(tx);
     const existing = await tx.mediaRequest.findUnique({ where: { canonicalKey } });
     if (existing && ACTIVE_REQUEST_STATUSES.includes(existing.status)) return "requested" as const;
@@ -78,8 +80,11 @@ export async function ensureReplacement(itemId: string): Promise<"switched" | "r
     }
     await tx.requestFollower.upsert({ where: { requestId_userId: { requestId: id, userId: item.userId } }, create: { requestId: id, userId: item.userId }, update: {} });
     void logEvent("warn", "system", `Replacement requested for ${media.name}`, { userId: item.userId, meta: { itemId: item.id, requestId: id } });
+    created = id;
     return "requested" as const;
   }, { maxWait: 10000, timeout: 10000 });
+  if (created) void approveAutomatically(created);   // once the request exists for everyone to see
+  return result;
 }
 
 /** Finished imports of active administrators whose last result is old enough to look at again, oldest first. */

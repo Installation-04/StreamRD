@@ -84,3 +84,18 @@ browser knows what its decoder accepts, and a check on the server before every s
 - Re-encoding is the expensive answer to cause 2. Segment-based delivery, planned next, can start each seek on a segment boundary and
   re-encode only the first group of pictures.
 - A converted stream held paused for 40 seconds through the gateway kept playing; longer pauses were not tried.
+
+## v0.25.0: the sound arrived late after a skip
+A converted stream whose picture is copied can only start on a keyframe, at or before the second asked for. The sound was cut at the exact
+second (ffmpeg's accurate seek applies to what is re-encoded, not to what is copied), so after a skip the picture began at the keyframe and
+the sound began later, by up to a whole keyframe interval, and the player's clock was wrong by the same amount.
+
+Measured with a source whose picture brightness and sound pitch each carry their own time, with a keyframe every 10 seconds, asked to start
+at 40 s: the picture began at 31 s (the keyframe), the sound at 40 s, which is 8.8 s into the stream: container timestamps were correct
+and sound was simply absent for 8.8 s.
+
+Where ffmpeg lands is not where a probe says: it compares the second with the keyframe's decoding time, so for a second within the picture
+reordering delay after a keyframe it lands on the keyframe before. A probe (`ffprobe -read_intervals`) names the keyframe at or before the
+second; ffmpeg lands one earlier for those seconds. Asking ffmpeg for the keyframe's own time therefore started a whole interval too
+early. The server learns the true landing with a dry run of the very same seek (`-ss T -noaccurate_seek -copyts`, one picture, `-f framecrc`;
+about 0.2 s), and cuts the sound with `-noaccurate_seek` so both begin at the same place.

@@ -28,6 +28,9 @@ const path = require('node:path');
 const SERVERS = {
   jellyfin: { image: 'jellyfin/jellyfin', tag: 'latest', port: 8096, internal: 8096 },
   plex: { image: 'plexinc/pms-docker', tag: 'latest', port: 32400, internal: 32400 },
+  // Prowlarr finds releases for requests (it keeps the list of indexers). It is a separate program with its own licence and releases,
+  // started from a fixed specification like the media servers, but it is given only a folder for its own settings, nothing of the libraries.
+  prowlarr: { image: 'lscr.io/linuxserver/prowlarr', tag: 'latest', port: 9696, internal: 9696 },
 };
 // What the deploy log and a server's own output may show: tokens are blanked before anything leaves the manager.
 const redact = text => String(text)
@@ -69,7 +72,7 @@ function ownLayout(mounts, dirs) {
 // mounts them: Docker would otherwise make them as root and the servers could not write.
 // The settings folder is written by StreamRD's user and this runs as root, so a folder that is a link (which StreamRD's user could point
 // anywhere) is refused rather than followed, and ownership is only ever given to a folder that is really one, never to what a link names.
-const FOLDERS = { jellyfin: ['jellyfin/config', 'jellyfin/cache'], plex: ['plex/config', 'plex/transcode'], both: ['streamrd/library', 'phosphor/library'] };
+const FOLDERS = { jellyfin: ['jellyfin/config', 'jellyfin/cache'], plex: ['plex/config', 'plex/transcode'], prowlarr: ['prowlarr/config'], both: ['streamrd/library', 'phosphor/library'] };
 function ownFolder(base, relative, uid, gid) {
   let current = base;
   for (const part of relative.split('/')) {
@@ -87,12 +90,16 @@ function specFor(name, options, config, layout) {
   const server = SERVERS[name], mounts = [], settings = layout.settings;
   const bind = (source, target, readOnly, propagation) => mounts.push({ Type: 'bind', Source: source, Target: target, ReadOnly: readOnly, ...(propagation ? { BindOptions: { Propagation: propagation } } : {}) });
   if (name === 'jellyfin') { bind(`${settings}/jellyfin/config`, '/config', false); bind(`${settings}/jellyfin/cache`, '/cache', false); }
+  else if (name === 'prowlarr') bind(`${settings}/prowlarr/config`, '/config', false);
   else { bind(`${settings}/plex/config`, '/config', false); bind(`${settings}/plex/transcode`, '/transcode', false); }
-  bind(`${settings}/streamrd/library`, '/library/streamrd', true);
-  bind(`${settings}/phosphor/library`, '/library/phosphor', true);
-  bind(layout.data.source, layout.data.target, true);
-  if (layout.zurg) bind(layout.zurg, '/mnt/zurg', true, 'rslave');
+  if (name !== 'prowlarr') {   // the media servers see the libraries and the downloads (read-only); Prowlarr sees neither
+    bind(`${settings}/streamrd/library`, '/library/streamrd', true);
+    bind(`${settings}/phosphor/library`, '/library/phosphor', true);
+    bind(layout.data.source, layout.data.target, true);
+    if (layout.zurg) bind(layout.zurg, '/mnt/zurg', true, 'rslave');
+  }
   const env = [`TZ=${config.tz || 'UTC'}`];
+  if (name === 'prowlarr') env.push('PUID=1000', 'PGID=1000');
   if (name === 'plex') { env.push('PLEX_UID=1000', 'PLEX_GID=1000'); if (options.claim) env.push(`PLEX_CLAIM=${options.claim}`); }
   const port = `${server.internal}/tcp`, network = layout.network;
   return {
@@ -105,7 +112,7 @@ function specFor(name, options, config, layout) {
 
 function createManager(config) {
   const jobs = {}; // in-flight launches: { state: 'pulling' | 'starting' | 'failed', error? }
-  const deploy = { jellyfin: [], plex: [] }; // what the manager did for each server, oldest first
+  const deploy = Object.fromEntries(Object.keys(SERVERS).map(key => [key, []])); // what the manager did for each server, oldest first
   const note = (name, message) => { const list = deploy[name]; list.push({ time: new Date().toISOString(), message: redact(message).slice(0, 300) }); if (list.length > LOG_LINES) list.splice(0, list.length - LOG_LINES); };
   function docker(method, route, body) {
     return new Promise((resolve, reject) => {
@@ -149,7 +156,7 @@ function createManager(config) {
   /** The embedded helper shares StreamRD's settings folder, so it makes the folders a server is about to be given, owned by the servers' user. */
   function prepareFolders(name) {
     if (!config.embedded) return;
-    for (const folder of [...FOLDERS[name], ...FOLDERS.both]) ownFolder(config.dirs.config, folder, config.appUid ?? 1000, config.appGid ?? 1000);
+    for (const folder of [...FOLDERS[name], ...(name === 'prowlarr' ? [] : FOLDERS.both)]) ownFolder(config.dirs.config, folder, config.appUid ?? 1000, config.appGid ?? 1000);
   }
 
   async function inspect(name) {
@@ -350,9 +357,13 @@ function createManager(config) {
     return { name, ended, result, error, finishedAt: ended && typeof state.FinishedAt === 'string' ? state.FinishedAt : null, log };
   }
   /** How the last update went. The embedded helper may be a new process in a new container: the updater's account is the record. */
-  async function updateView() {
+  // One reader at a time. Two readers at once (the page, and the server recording the outcome after a start) each read the updater, and the one
+  // that read it while it still ran could write "running" after the other had written the final result, and nothing would ever correct it.
+  let reading = Promise.resolve();
+  function updateView() { const run = reading.then(readUpdate, readUpdate); reading = run.then(() => undefined, () => undefined); return run; }
+  async function readUpdate() {
     if (config.embedded && (upd.handed || upd.state === 'idle')) {
-      let report = await updaterReport().catch(() => null);
+      let report = await updaterReport().catch(error => { console.error(`[helper] could not read the updater's account: ${error && error.message}`); return null; });
       // Docker can report a container as ended a moment before its output is all readable; look once more before calling an updater silent.
       if (report && report.ended && !report.result) { await sleep(config.logSettleMs === undefined ? 1500 : config.logSettleMs); report = await updaterReport().catch(() => report); }
       if (report) {
@@ -366,6 +377,9 @@ function createManager(config) {
           upd.finishedAt = report.finishedAt || new Date().toISOString(); upd.handed = false;
           await docker('DELETE', `/containers/${report.name}?force=true`).catch(() => undefined);
         }
+      } else if (upd.handed) {
+        // Handed over, and the updater is gone without anyone having read its end: say so rather than stay "running" for good.
+        upd.state = 'failed'; upd.error = 'The updater is gone and left no account. Check that StreamRD is running the version you expect.'; upd.finishedAt = new Date().toISOString(); upd.handed = false;
       }
     }
     return { state: upd.state, error: upd.error, startedAt: upd.startedAt, finishedAt: upd.finishedAt, log: upd.log.slice(-50) };

@@ -22,6 +22,8 @@ const DEFINITIONS = {
   transcodeAllowPrivateHosts: { env: "TRANSCODE_ALLOW_PRIVATE_HOSTS", read: () => off("TRANSCODE_ALLOW_PRIVATE_HOSTS", false), schema: z.boolean() },
   /** Check in the background that imported links still work. */
   linkHealth: { env: "LINK_HEALTH", read: () => off("LINK_HEALTH", true), schema: z.boolean() },
+  /** Approve a request by itself when it arrives: the server finds the best release and sends it to an administrator's cloud account. Off: every request waits for a person. */
+  requestsAutoApprove: { env: "REQUESTS_AUTO_APPROVE", read: () => off("REQUESTS_AUTO_APPROVE", true), schema: z.boolean() },
   /** Ask the project's release page whether a newer version exists. */
   updateCheck: { env: "UPDATE_CHECK", read: () => off("UPDATE_CHECK", true), schema: z.boolean() },
 } as const;

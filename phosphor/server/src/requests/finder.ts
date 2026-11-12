@@ -4,6 +4,7 @@ import { db } from "../db";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { MediaTag, mediaTags } from "../media-tags";
 import { validateMagnet } from "./clients";
+import { prowlarrSources } from "../prowlarr";
 
 /**
  * Finds a release for a request by itself. Indexers are Torznab endpoints (Prowlarr, Jackett, or Zilean, which the installer can run);
@@ -34,7 +35,7 @@ function builtin(env: NodeJS.ProcessEnv = process.env): Indexer[] {
   const raw = env.ZILEAN_URL?.trim(); if (!raw) return [];
   try { const base = new URL(raw); if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) return []; return [{ id: "zilean", name: "Zilean", baseUrl: `${base.origin}/torznab/api`, apiKey: env.ZILEAN_API_KEY?.trim() || "zilean", builtin: true }]; } catch { return []; }
 }
-export async function listIndexers(): Promise<Indexer[]> { return [...builtin(), ...await readStored()]; }
+export async function listIndexers(): Promise<Indexer[]> { return [...builtin(), ...await prowlarrSources(), ...await readStored()]; }
 export const publicIndexer = (indexer: Indexer) => ({ id: indexer.id, name: indexer.name, baseUrl: indexer.baseUrl, hasKey: Boolean(indexer.apiKey), builtin: Boolean(indexer.builtin) });
 export async function addIndexer(input: { name: string; baseUrl: string; apiKey: string }): Promise<Indexer> {
   const list = await readStored();
