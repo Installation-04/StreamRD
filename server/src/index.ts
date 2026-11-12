@@ -1,4 +1,6 @@
 import { startRequestWorker } from "./requests/worker";
+import { startAutomaticApprovals } from "./requests/approval";
+import { startProwlarr } from "./prowlarr";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
@@ -34,6 +36,8 @@ async function main() {
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
     void backfillGroups().catch(() => undefined); // names titles imported before versions existed
     startRequestWorker();
+    startAutomaticApprovals();
+    startProwlarr(); // Prowlarr, which finds releases for requests, is started by the Docker helper unless it was removed
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
     recordUpdateOutcomeWhenKnown(); // how the last update or rollback went, as the update helper recorded it
     void logEvent("info", "system", `StreamRD server listening on :${config.port}`);

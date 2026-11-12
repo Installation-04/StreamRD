@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 
-type Name = "transcode" | "transcodeVideo" | "transcodeMax" | "transcodeAllowPrivateHosts" | "linkHealth" | "updateCheck";
+type Name = "transcode" | "transcodeVideo" | "transcodeMax" | "transcodeAllowPrivateHosts" | "linkHealth" | "updateCheck" | "requestsAutoApprove";
 type Source = "saved" | "environment" | "default";
 interface View { settings: Record<Name, boolean | number>; sources: Record<Name, Source> }
 
@@ -11,6 +11,7 @@ const SWITCHES: Array<{ name: Name; conversion?: boolean; label: string; help: s
   { name: "transcode", conversion: true, label: "Convert files a browser cannot play", help: "MKV, DTS, HEVC and similar are converted while they are watched. Off: every file is played as it is, and the browser plays what it can." },
   { name: "transcodeVideo", conversion: true, label: "Also convert the picture when a file needs it", help: "The heaviest conversion, limited to 1080p. Off: only repackaging and audio conversion are done." },
   { name: "transcodeAllowPrivateHosts", conversion: true, label: "Let the server read media links on its own network", help: "Only for a source at a local address, such as a NAS. Leave it off for debrid links." },
+  { name: "requestsAutoApprove", label: "Approve requests automatically", help: "A request is approved when it arrives: the server picks the best release and sends it to your cloud account. Needs an indexer (Admin → Requests), a cloud account and a library. Off: every request waits for an administrator." },
   { name: "linkHealth", label: "Check in the background that links still work", help: "A few titles a minute. A link that stops working is marked, and a replacement is requested." },
   { name: "updateCheck", label: "Check for new versions", help: "Asks the project's release page whether a newer version exists. Nothing about this server is sent." },
 ];

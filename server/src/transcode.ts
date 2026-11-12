@@ -109,13 +109,40 @@ export function registerStream(url: string, mode: Exclude<Mode, "direct">, userI
 export function ffmpegArgs(url: string, mode: Exclude<Mode, "direct">, startSeconds: number): string[] {
   const start = Number.isFinite(startSeconds) && startSeconds > 0 ? Math.min(startSeconds, 604_800) : 0;
   const args = ["-hide_banner", "-nostdin", "-loglevel", "error", "-protocol_whitelist", PROTOCOLS, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"];
-  if (start > 0) args.push("-ss", start.toFixed(3));
+  // A copied picture can only start on a keyframe. The sound is then cut from the same place (no accurate seek), so that it begins with the
+  // picture it belongs to; cutting it at the exact second instead left the sound starting up to a whole GOP after its picture.
+  if (start > 0) { args.push("-ss", start.toFixed(3)); if (mode !== "video") args.push("-noaccurate_seek"); }
   args.push("-i", url, "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn");
   if (mode === "video") args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-vf", "scale=w='min(1920,iw)':h=-2");
   else args.push("-c:v", "copy");
   if (mode === "remux") args.push("-c:a", "copy"); else args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
   args.push("-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "4096", "-movflags", "frag_keyframe+empty_moov+default_base_moof+negative_cts_offsets", "-f", "mp4", "pipe:1");
   return args;
+}
+
+/**
+ * Where a converted stream really starts when asked to start at `at`. A re-encoded picture starts exactly there. A copied picture can only
+ * start on a keyframe, at or before it, and the sound then has to start there too, or it arrives that much later than the picture it
+ * belongs to (after a skip ahead the picture showed one scene while the sound played another, silent until it caught up). The player asks
+ * first, so it knows what the stream will show; the stream route snaps to the same answer. Falls back to `at` when the file cannot be read.
+ */
+const starts = new Map<string, { value: number; expires: number }>();
+export async function alignedStart(id: string, at: number, forceVideo = false): Promise<number | null> {
+  const entry = streams.get(id); if (!entry || entry.expires < Date.now()) return null;
+  const wanted = Number.isFinite(at) && at > 0 ? Math.min(at, 604_800) : 0;
+  if (wanted === 0 || (forceVideo ? "video" : entry.mode) === "video") return wanted;
+  const key = `${id}:${wanted.toFixed(3)}`, known = starts.get(key);
+  if (known && known.expires > Date.now()) return known.value;
+  const url = convertibleUrl(entry.url); if (!url) return wanted;
+  // A dry run of the very same seek, stopped after one picture: which keyframe does ffmpeg land on? (Not the one a probe would name:
+  // ffmpeg compares the position with the keyframe's decoding time, so the two differ by the picture reordering delay.)
+  const { code, out } = await run(ffmpegBin(), ["-v", "error", "-nostdin", "-protocol_whitelist", PROTOCOLS, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-ss", wanted.toFixed(3), "-noaccurate_seek", "-copyts", "-i", url, "-map", "0:v:0", "-c:v", "copy", "-frames:v", "1", "-f", "framecrc", "-"], 10_000);
+  const base = /^#tb 0: (\d+)\/(\d+)/m.exec(out), line = /^0,\s*(-?\d+),\s*(-?\d+),/m.exec(out);
+  const first = code === 0 && base && line ? Number(line[2]) * Number(base[1]) / Number(base[2]) : Number.NaN;
+  const value = Number.isFinite(first) && first >= 0 && first <= wanted + 0.5 ? first : wanted;
+  if (starts.size > 500) starts.clear();
+  starts.set(key, { value, expires: Date.now() + 10 * 60_000 });
+  return value;
 }
 
 let active = 0;

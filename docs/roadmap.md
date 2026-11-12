@@ -32,7 +32,8 @@ Playing a video is the product, so it comes first.
 | Release | What changes for the viewer | Size | Database |
 |---|---|---|---|
 | v0.23.2 | A converted video no longer stops when resumed or sought; a refused stream says why | S | none |
-| v0.25.0 | Instant seeking in converted videos, a real duration and buffer, the server converts only what your browser cannot play | L | none |
+| v0.25.0 | The sound follows the picture after a skip; converted video has a real length, a buffer and a buffering indicator through the browser's streaming API (Chrome, Firefox, Safari on a computer or iPad); requests approve themselves; Prowlarr by default; poster menu | L | none |
+| v0.26.0 | Segment-based delivery (a playlist that knows the full length, segments made ahead of the viewer) for instant seeking everywhere, including an iPhone, and for audio-track choice | L | none |
 | v0.25.x | Choose the audio track; subtitles; a quality menu (Original, 1080p, 720p, 480p) | M | none |
 | v0.25.x | The administrator sees who is watching and can stop a stream; a limit per viewer | S | none |
 | later | Optional hardware acceleration and correct colours for HDR sources | M | none |
@@ -63,7 +64,7 @@ Not verifiable in CI: Safari, hardware acceleration. Those are recorded manual r
 | Signed images | Each published image carries a signature, a list of its contents and a record of how it was built | S |
 | Encryption key rotation | A command that re-encrypts stored credentials under a new key | S |
 
-Database: one additive table for rate limiting. Release: v0.26.0.
+Database: one additive table for rate limiting. Release: v0.27.0.
 
 ## Phase 3: one codebase, one API description
 

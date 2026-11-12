@@ -27,11 +27,12 @@ fail() {
     echo "-- $name (last lines)"; docker logs --tail 60 "$name" 2>&1
     for extra in "$name-updater" "$name-previous"; do docker inspect "$extra" >/dev/null 2>&1 && { echo "-- $extra"; docker logs --tail 40 "$extra" 2>&1; }; done
     [ ! -s "${watch_file:-/nonexistent}" ] || { echo "-- the updater, as seen while it ran"; cat "$watch_file"; }
+    if declare -F extra_diag >/dev/null; then extra_diag; fi
   } >&2 || true
   exit 1
 }
 
-for existing in streamrd-jellyfin streamrd-plex; do
+for existing in streamrd-jellyfin streamrd-plex streamrd-prowlarr; do
   if docker ps -a --format '{{.Names}}' | grep -qx "$existing"; then echo "Refusing to run: a container named $existing exists (the launch would replace it)." >&2; exit 1; fi
 done
 watch_file="$(mktemp)"; watcher=""
@@ -48,7 +49,7 @@ cleanup() {
   local code=$?; set +e
   [ -z "$watcher" ] || kill "$watcher" >/dev/null 2>&1
   rm -f "$watch_file" "$watch_file.new"
-  docker rm -f "$name" "$name-previous" "$name-updater" streamrd-jellyfin "$registry" >/dev/null 2>&1
+  docker rm -f "$name" "$name-previous" "$name-updater" streamrd-jellyfin streamrd-prowlarr "$registry" >/dev/null 2>&1
   docker volume rm "$config" "$data" >/dev/null 2>&1
   [ -z "${ref:-}" ] || docker rmi "$ref" >/dev/null 2>&1
   return "$code"
@@ -105,6 +106,7 @@ until_true 30 "the registry" curl -fsS "http://127.0.0.1:$registry_port/v2/"
 ref="localhost:$registry_port/streamrd-control:latest"
 docker tag "$image" "$ref"; docker push "$ref" >/dev/null
 retry 3 docker pull jellyfin/jellyfin:latest >/dev/null || fail "could not pull jellyfin/jellyfin (the launch itself is tested below, with the image already here)"
+retry 3 docker pull lscr.io/linuxserver/prowlarr:latest >/dev/null || fail "could not pull Prowlarr's image (it is started by default, below, with the image already here)"
 
 say "Start the container as an installed copy has it: root, Docker's socket, one volume each for settings and downloads"
 docker volume create "$config" >/dev/null; docker volume create "$data" >/dev/null
@@ -128,6 +130,20 @@ say "StreamRD sees Docker control, and the page for it works"
 signin signup
 [ "$(call GET /api/admin/system/maintenance | jq -r '.control.mode + " " + (.restartSupported | tostring)')" = "embedded true" ] || fail "Docker control is not on"
 [ "$(call GET /api/admin/media-servers | jq -r '.manager.available')" = true ] || fail "the helper does not answer"
+
+say "Prowlarr is started by default, with only its own settings folder, and StreamRD can reach it and read its key"
+prowlarr_view() { call GET /api/admin/prowlarr | jq -c '.prowlarr'; }
+prowlarr_up() { [ "$(prowlarr_view | jq -r '.reachable and .keyFound')" = true ]; }
+until_true 300 "Prowlarr to be started by default and answer" prowlarr_up || true
+[ "$(prowlarr_view | jq -r '.reachable and .keyFound')" = true ] || fail "Prowlarr is not up and wired: $(prowlarr_view)"
+docker inspect streamrd-prowlarr | jq -e '.[0].Mounts | length == 1 and .[0].Destination == "/config"' >/dev/null || fail "Prowlarr was given more than its own folder: $(inspect '{{json .Mounts}}' streamrd-prowlarr)"
+[ "$(inspect '{{.HostConfig.RestartPolicy.Name}}' streamrd-prowlarr)" = unless-stopped ] || fail "Prowlarr does not start again with the machine"
+call GET /api/admin/request-indexers | jq -e '.indexers == []' >/dev/null || fail "an indexer appeared by itself"   # a new Prowlarr has none, and none are added for the owner
+removed="$(call DELETE /api/admin/prowlarr)"; echo "$removed" | jq -e '.prowlarr.declined == true' >/dev/null || fail "Prowlarr could not be removed: $removed"
+until_true 60 "Prowlarr to be removed" test -z "$(docker ps -aq --filter name=streamrd-prowlarr)"
+[ "$(call POST /api/admin/prowlarr/start | jq -r '.prowlarr.declined')" = false ] || fail "Prowlarr could not be started again"
+until_true 300 "Prowlarr to be started again" prowlarr_up || true
+[ "$(prowlarr_view | jq -r '.reachable')" = true ] || fail "Prowlarr did not come back: $(prowlarr_view)"
 
 say "Launch Jellyfin from the web API"
 call POST /api/admin/media-servers/jellyfin/launch "{\"port\":$media_port}" | jq -e '.state' >/dev/null || fail "the launch was refused"
@@ -164,6 +180,7 @@ printf 'FROM %s\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retr
 docker push "$ref" >/dev/null
 accepted="$(helper POST /update 2>&1)" || fail "the update was not accepted: $accepted"
 echo "$accepted" | jq -e '.state == "running"' >/dev/null || fail "the update was not accepted: $accepted"
+extra_diag() { echo "-- what the helper says about the update now"; helper GET /update 2>&1 | head -c 800; echo; docker top "$name" -eo pid,user,args 2>&1 | head -20; }
 # While the container is being replaced nothing answers; only a finished state counts.
 finished() { local now; now="$(helper GET /update 2>/dev/null | jq -r '.state' 2>/dev/null || true)"; [ "$now" = failed ] || [ "$now" = done ] || [ "$now" = current ]; }
 until_true 360 "the update to finish" finished

@@ -82,6 +82,21 @@ it("enforces the active request limit while retaining idempotent follows", async
  expect((await request(app).post("/api/requests").set(auth(member.token)).send({ ...selection, id: "200" })).status).toBe(200);
  expect(await db.requestFollower.count()).toBe(20);
 });
+it("tells the buttons for a title that is in a library more than once apart: each names its library and its copy", async () => {
+ const owner = await actor("admin"), member = await actor(), metadata = details();
+ const first = await imported(owner.id, metadata);
+ const second = await db.accountMedia.create({ data: { userId: owner.id, provider: "realdebrid", providerRef: "second-ref", credentialFingerprint: first.credentialFingerprint, name: `${metadata.name}.2160p.UHD.BluRay.x265.mkv`, type: metadata.type, year: metadata.year, phase: "finished", progress: 100 } });
+ await db.metadataRecord.create({ data: { targetType: "account", targetId: second.id, ownerId: owner.id, name: second.name, mediaType: second.type, status: "matched", data: JSON.stringify(metadata) } });
+ const library = await db.sharedLibrary.create({ data: { name: "Family movies", sourceUserId: owner.id, mediaType: "movie" } });
+ await db.sharedLibraryGrant.create({ data: { libraryId: library.id, userId: member.id } });
+ const mine = (await request(app).get("/api/discovery/tmdb/movie/101").set(auth(owner.token))).body.availability as Array<{ kind: string; library: string; label: string; href: string }>;
+ expect(mine).toHaveLength(2); expect(mine.every(entry => entry.kind === "private")).toBe(true);   // the owner's own library does not list them a second time
+ expect(mine.filter(entry => entry.kind === "private").every(entry => entry.library === "My library")).toBe(true);
+ expect(new Set(mine.map(entry => entry.label)).size).toBe(mine.length);                       // no two buttons read alike
+ expect(mine.some(entry => /2160p UHD BluRay x265 mkv/.test(entry.label))).toBe(true);        // dots and underscores made readable
+ const theirs = (await request(app).get("/api/discovery/tmdb/movie/101").set(auth(member.token))).body.availability as Array<{ kind: string; library: string; label: string }>;
+ expect(theirs).toHaveLength(2); expect(new Set(theirs.map(entry => entry.label)).size).toBe(2); expect(theirs.every(entry => entry.kind === "shared" && entry.library === "Family movies" && entry.label.length > 0)).toBe(true);
+});
 it("discloses only current private imports and explicitly granted shared libraries", async () => {
  const owner = await actor("admin"), member = await actor(), item = await imported(owner.id);
  const library = await db.sharedLibrary.create({ data: { name: "Owner's shared movies", sourceUserId: owner.id, mediaType: "movie" } });
@@ -89,7 +104,7 @@ it("discloses only current private imports and explicitly granted shared librari
  const hidden = await request(app).get(url).set(auth(member.token)); expect(hidden.body.availability).toEqual([]); expect(JSON.stringify(hidden.body)).not.toContain(item.id);
  const mine = await request(app).get(url).set(auth(owner.token)); expect(mine.body.availability.some((entry: {kind:string}) => entry.kind === "private")).toBe(true);
  await db.sharedLibraryGrant.create({ data: { libraryId: library.id, userId: member.id } });
- const visible = await request(app).get(url).set(auth(member.token)); expect(visible.body.availability).toEqual([{ kind: "shared", name: library.name, href: `/shared-libraries/${library.id}/${item.id}` }]);
+ const visible = await request(app).get(url).set(auth(member.token)); expect(visible.body.availability).toEqual([{ kind: "shared", name: library.name, href: `/shared-libraries/${library.id}/${item.id}`, library: library.name, label: expect.any(String) }]);
  expect(JSON.stringify(visible.body)).not.toMatch(/secret-provider-ref|owner-private-import-key|credentialFingerprint/);
  expect((await request(app).post("/api/requests").set(auth(member.token)).send(selection)).status).toBe(409);
  await db.debridConfig.update({ where: { userId: owner.id }, data: { realDebridToken: "changed-key" } });
@@ -155,7 +170,7 @@ it("finds a completed approved source without metadata and still requires a curr
  const library=await db.sharedLibrary.create({data:{name:"Published movies",sourceUserId:owner.id,mediaType:"movie",grants:{create:{userId:member.id}}}});
  await db.mediaRequest.update({where:{id:row.id},data:{status:"available",destination:"cloud",sourceUserId:owner.id,providerId:"realdebrid",providerRef:"approved-private-ref",sourceFingerprint:context.fingerprint,sharedLibraryId:library.id}});
  const known = await request(app).get("/api/discovery/tmdb/movie/101").set(auth(member.token));
- expect(known.body.availability).toEqual([{kind:"shared",name:library.name,href:`/shared-libraries/${library.id}/${item.id}`}]);
+ expect(known.body.availability).toEqual([{kind:"shared",name:library.name,href:`/shared-libraries/${library.id}/${item.id}`,library:library.name,label:expect.any(String)}]);
  expect(known.body.request.status).toBe("available");
  const follow = await request(app).post("/api/requests").set(auth(other.token)).send(selection);
  expect(follow.status).toBe(200);expect(follow.body.request).toMatchObject({status:"downloaded",downloadState:"awaiting_library_access"});

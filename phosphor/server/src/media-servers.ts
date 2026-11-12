@@ -38,8 +38,8 @@ const hint = (value: string) => value ? (value.length <= 4 ? "****" : `****${val
 
 /* ------------------------------ the helper that talks to Docker ------------------------------ */
 const managerConfig = () => ({ url: (process.env.MEDIA_MANAGER_URL ?? "").replace(/\/+$/, ""), token: process.env.MEDIA_MANAGER_TOKEN ?? "" });
-class ManagerError extends Error { constructor(message: string, public status = 502) { super(message); } }
-async function manager<T>(method: string, route: string, body?: unknown): Promise<T> {
+export class ManagerError extends Error { constructor(message: string, public status = 502) { super(message); } }
+export async function manager<T>(method: string, route: string, body?: unknown): Promise<T> {
   const { url, token } = managerConfig();
   if (!url || !token) throw new ManagerError("Launching from here needs Docker control, which is off on this server. Run the installer again to turn it on (see the Plex and Jellyfin guide).", 409);
   let response: Response;

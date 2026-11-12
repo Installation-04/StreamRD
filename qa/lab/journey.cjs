@@ -46,7 +46,10 @@ async function main() {
     const plays = []; page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/play")) plays.push(Date.now()); });
     const text = async () => (await page.locator("body").innerText()).replace(/\s*\n+\s*/g, " / ");
     const shot = file => page.screenshot({ path: path.join(artifacts, `${file}.png`) }).catch(() => undefined);
-    const video = () => page.evaluate(() => { const v = document.querySelector("video"); if (!v) return null; const source = v.querySelector("source");
+    // Converted video is played through the browser's streaming API, so the element's own source is a blob: the stream being read is the last one asked for.
+    const streams = []; page.on("request", request => { const url = new URL(request.url()); if (/^\/api\/stream\/[\w-]+$/.test(url.pathname)) streams.push(url.pathname + url.search); });
+    const video = async () => { const state = await rawVideo(); return state && state.src.startsWith("blob:") ? { ...state, src: streams.at(-1) ?? state.src } : state; };
+    const rawVideo = () => page.evaluate(() => { const v = document.querySelector("video"); if (!v) return null; const source = v.querySelector("source");
       return { at: v.currentTime, paused: v.paused, error: v.error ? `${v.error.code} ${v.error.message}` : null, src: (source?.src || v.src).replace(/^https?:\/\/[^/]+/, ""), width: v.videoWidth }; });
     const api = (method, route, body) => page.evaluate(async ([m, r, b]) => { const response = await fetch(r, { method: m, credentials: "include", headers: { "Content-Type": "application/json" }, ...(b ? { body: JSON.stringify(b) } : {}) }); return response.status; }, [method, route, body]);
     const open = async (library, title) => {
@@ -124,7 +127,7 @@ async function main() {
       await owner.page.getByLabel("Version", { exact: true }).selectOption({ index: 1 }); await sleep(1000);   // the 1080p version
       owner.plays.length = 0;
       const state = await owner.play("Big Buck Bunny (DTS)");
-      assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0$/);
+      assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0(\.000)?$/);
       await sleep(3000);
       assert.equal(owner.plays.length, 1, `the player asked the server to play ${owner.plays.length} times; a converted stream must not make it start over`);
       assert.match(await owner.text(), /Audio converted for your browser/);
@@ -133,7 +136,7 @@ async function main() {
 
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);
-      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=(5\d|6\d)/.test(now.src) ? now : null; }, 45_000, 500);
+      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=6[01]\b/.test(now.src) ? now : null; }, 45_000, 500);   // the second that was asked for, not where the copied picture began
       assert.equal(state.error, null);
       assert.match(state.src, /&video=1$/, "this file's copied picture cannot be decoded part-way in, so the player should have asked for it to be converted");
       assert.match(await owner.text(), /Converted for your browser/);
@@ -245,6 +248,29 @@ async function main() {
       await friend.page.goto(`${base}/requests`, { waitUntil: "networkidle" });
       await until("the friend's request to show as available", async () => /Available on server/.test(await friend.text()), 20_000);
       await friend.open("Movies", "Cosmos Laundromat"); await friend.play("Cosmos Laundromat");
+    });
+
+    await step("the three dots on a poster mark a title watched (a check shows) and show its details; the library page lists nothing that is being watched", async () => {
+      await friend.page.goto(`${base}/shared-libraries`, { waitUntil: "networkidle" });
+      assert.ok(!/Continue watching|Pick up where you left off/.test(await friend.text()), "the library page must not list what is being watched: that row is on the dashboard");
+      await friend.page.getByRole("link", { name: "Open library Movies" }).click();
+      await until("the library's titles", async () => friend.page.getByRole("button", { name: /More for Cosmos Laundromat/ }).count().then(count => count > 0), 20_000);
+      const more = friend.page.getByRole("button", { name: /More for Cosmos Laundromat/ }), watchedCheck = friend.page.getByRole("img", { name: "Watched" });
+      await more.click(); await friend.page.getByRole("menuitem", { name: "Mark as watched" }).click();
+      await until("the check on the poster", async () => (await watchedCheck.count()) > 0, 15_000);
+      await friend.shot("poster-watched-check");
+      await more.click(); assert.ok(await friend.page.getByRole("menuitem", { name: "Mark as unwatched" }).isVisible(), "the menu offers the opposite once a title is watched");
+      await friend.shot("poster-menu-open");
+      assert.equal(await friend.page.getByRole("menuitem", { name: "Fix match…" }).count(), 0, "only an administrator can fix a match");
+      await friend.page.getByRole("menuitem", { name: "Get info" }).click();
+      const info = friend.page.getByRole("dialog", { name: /About Cosmos Laundromat/ }); await info.waitFor();
+      const facts = await info.innerText(); assert.match(facts, /Quality\s*\n?\s*1080p/); assert.match(facts, /From\s*\n?\s*Real-Debrid/); assert.match(facts, /Watched\s*\n?\s*Yes/);
+      await friend.shot("poster-menu-info"); await info.getByRole("button", { name: "Close" }).click();
+      await more.click(); await friend.page.getByRole("menuitem", { name: "Mark as unwatched" }).click();
+      await until("the check to go", async () => (await watchedCheck.count()) === 0, 15_000);
+      await owner.page.goto(`${base}/shared-libraries`, { waitUntil: "networkidle" }); await owner.page.getByRole("link", { name: "Open library Movies" }).click();
+      const ownerMore = owner.page.getByRole("button", { name: /More for Cosmos Laundromat/ }); await ownerMore.waitFor(); await ownerMore.click();
+      assert.ok(await owner.page.getByRole("menuitem", { name: "Fix match…" }).isVisible(), "an administrator can fix the match from the poster");
     });
 
     await step("the log tells the request's story, and the diagnostic bundle carries no secrets", async () => {
