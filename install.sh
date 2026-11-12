@@ -15,8 +15,9 @@
 #
 # Updating = running it again (or `docker compose pull && docker compose up -d` in that folder):
 # it pulls the newer image and recreates the container. config/ and data/ are never touched.
-# It needs Docker with the Compose plugin plus curl/tar, does not install Docker and does not need
-# root unless your Docker setup does. Read it before piping it to a shell:
+# It needs Docker with the Compose plugin plus curl and tar. On Linux, whatever is missing is installed for you (Docker's own
+# installation script, or your distribution's packages), and Docker is started and set to start with the machine; that is the only
+# thing that needs root (through sudo). --no-install-docker installs nothing and only says what is missing. Read it before piping it to a shell:
 # https://github.com/Installation-04/StreamRD/blob/main/install.sh
 set -euo pipefail
 
@@ -31,6 +32,7 @@ REF=""; BUILD=false; START=true; UNINSTALL=false; REFRESH_COMPOSE=false
 PORT=""; PHOSPHOR_PORT=""; TORRENT_PORT=""; ADMIN_EMAIL=""; IMPORT_DB=""; JWT_SECRET=""
 PHOSPHOR=""; QBIT=""; ZILEAN=""; ZURG=""; RD_TOKEN="${RD_TOKEN:-}"
 MEDIA_MANAGER=""; MEDIA_SERVER=""; JELLYFIN_PORT=""; PLEX_PORT=""; PLEX_CLAIM="${PLEX_CLAIM:-}"; ASSUME_YES=false; ADVANCED=false
+NO_INSTALL=false; PREPARE_ONLY=false; [ "${STREAMRD_NO_INSTALL_DOCKER:-}" != 1 ] || NO_INSTALL=true
 
 log() { printf '[streamrd] %s\n' "$*"; }
 die() { printf '[streamrd] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -63,6 +65,10 @@ Usage: install.sh [options]
                          container is moved to this one. Read docs/plex-jellyfin.md ("Docker control") first if the server is public
   --no-media-manager     Turn Docker control off: the container gets no socket and nothing in it runs as root
                          (media servers already started are kept; stop them from Setup first)
+  --no-install-docker    Do not install what is missing (Docker Engine, the Compose plugin, curl, tar): stop and say what to install.
+                         Without it they are installed on Linux, after one question in a terminal; --yes asks nothing
+                         (STREAMRD_NO_INSTALL_DOCKER=1 does the same)
+  --prepare              Install and start what this machine needs (Docker, the Compose plugin, curl, tar), then stop
   -y, --yes              Do not ask questions; use the defaults and the options given
   --advanced             Ask every question even though options were given
   --import-db FILE       Start from an existing StreamRD database backup (first install only)
@@ -89,6 +95,8 @@ while [ $# -gt 0 ]; do
     --no-zilean) ZILEAN=off; shift ;;
     --zurg) ZURG=on; shift ;;
     --no-zurg) ZURG=off; shift ;;
+    --no-install-docker) NO_INSTALL=true; shift ;;
+    --prepare) PREPARE_ONLY=true; shift ;;
     --media-manager) MEDIA_MANAGER=on; shift ;;
     --no-media-manager) MEDIA_MANAGER=off; shift ;;
     --media-server) MEDIA_SERVER="${2:?--media-server needs jellyfin, plex, both or none}"; shift 2 ;;
@@ -488,14 +496,16 @@ EOF
 prepare_zurg_mount() {
   local target="$DIR/mnt/zurg"
   [ "$(uname -s)" = Linux ] || die "Zurg needs a Linux host (FUSE mount propagation); Docker Desktop is not supported."
-  [ -e /dev/fuse ] || die "/dev/fuse is missing; install FUSE on the host (for example: apt install fuse3)."
-  if findmnt -n --mountpoint "$target" -o PROPAGATION 2>/dev/null | grep -q shared; then return 0; fi
-  if [ "$(id -u)" = 0 ]; then
-    mountpoint -q "$target" || mount --bind "$target" "$target"
-    mount --make-rshared "$target"
-  else
-    die "Run these once as root, then re-run install.sh:  sudo mount --bind $target $target && sudo mount --make-rshared $target"
+  if [ ! -e /dev/fuse ]; then
+    if [ -n "$PM" ] && allow_install "Zurg mounts Real-Debrid through FUSE, which this machine does not have (/dev/fuse is missing)."; then
+      log "Installing FUSE..."; pkg_install fuse3 || true; as_root modprobe fuse >/dev/null 2>&1 || true
+    fi
+    [ -e /dev/fuse ] || die "/dev/fuse is missing; install FUSE on the host (for example: apt install fuse3) and run this again."
   fi
+  if findmnt -n --mountpoint "$target" -o PROPAGATION 2>/dev/null | grep -q shared; then return 0; fi
+  root_available || die "Run these once as root, then re-run install.sh:  sudo mount --bind $target $target && sudo mount --make-rshared $target"
+  mountpoint -q "$target" || as_root mount --bind "$target" "$target"
+  as_root mount --make-rshared "$target"
 }
 
 
@@ -517,15 +527,197 @@ ensure_dirs() {
     || log "Could not create$missing; run: sudo mkdir -p $DIR/config/... && sudo chown -R 1000:1000 $DIR/config"
 }
 
+# ---- The host: the tools the installer needs, and Docker itself ---------------------------------------------------------------------
+# One command should be enough on a bare machine, so what is missing is installed: curl and tar, then Docker Engine with the Compose plugin
+# (Docker's own installation script, or the distribution's packages where that script does not support the system), and Docker is started
+# and set to start with the machine. Someone at a terminal is asked once first; --yes, or no terminal, goes ahead; --no-install-docker
+# installs nothing and only says what is missing. Everything that needs root runs directly (as root) or through sudo. Nobody is added to the
+# docker group (that would hand them root): when Docker answers only to root, the installer runs it through sudo instead.
+DOCKER_SCRIPT_URL="${STREAMRD_DOCKER_SCRIPT_URL:-https://get.docker.com}"
+COMPOSE_BASE="${STREAMRD_COMPOSE_BASE:-https://github.com/docker/compose/releases/latest/download}"
+COMPOSE_DIR="${STREAMRD_COMPOSE_DIR:-/usr/local/lib/docker/cli-plugins}"
+DOCKER_DOCS="https://docs.docker.com/engine/install/"
+INSTALL_OK=""; DOCKER_PREFIX=""; PM=""
+
+pkg_manager() {
+  local name
+  for name in apt-get dnf yum zypper pacman apk; do
+    if command -v "$name" >/dev/null 2>&1; then printf '%s' "$name"; return 0; fi
+  done
+  return 1
+}
+# Installs packages with the machine's package manager, without questions.
+pkg_install() {
+  case "$PM" in
+    apt-get) as_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq && as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" ;;
+    dnf|yum) as_root "$PM" install -y -q "$@" ;;
+    zypper) as_root zypper --non-interactive --quiet install "$@" ;;
+    pacman) as_root pacman -S --noconfirm --needed "$@" ;;
+    apk) as_root apk add --no-cache "$@" ;;
+    *) return 1 ;;
+  esac
+}
+# Whether something that needs root can be run: as root, with a sudo that works without a password, or with one that can ask for it.
+root_available() {
+  [ "$(id -u)" = 0 ] && return 0
+  command -v sudo >/dev/null 2>&1 || return 1
+  sudo -n true >/dev/null 2>&1 && return 0
+  have_terminal
+}
+as_root() {
+  if [ "$(id -u)" = 0 ]; then "$@"
+  elif command -v sudo >/dev/null 2>&1; then sudo "$@"
+  else die "That needs root, and sudo is not installed. Run this as root (for example: su -c 'bash install.sh'), or install what is missing yourself ($DOCKER_DOCS)."
+  fi
+}
+# allow_install "what is missing": succeeds when it may be installed now. A person at a terminal is asked once; otherwise it goes ahead.
+allow_install() {
+  [ "$NO_INSTALL" = false ] || return 1
+  root_available || die "$1 Installing it needs root, and this is neither root nor a user whose sudo works from here. Run this as root (for example: su -c 'bash install.sh'), or install what is missing yourself ($DOCKER_DOCS)."
+  if [ -z "$INSTALL_OK" ]; then
+    if [ "$ASSUME_YES" = false ] && have_terminal; then
+      if confirm "$1 Install it now? (It needs root; sudo may ask for your password.)" y; then INSTALL_OK=yes; else INSTALL_OK=no; fi
+    else INSTALL_OK=yes; fi
+  fi
+  [ "$INSTALL_OK" = yes ]
+}
+ensure_tools() {
+  local missing="" tool
+  for tool in curl tar; do command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"; done
+  [ -n "$missing" ] || return 0
+  [ -n "$PM" ] || die "Needed and not found:$missing. Install them with your system's package manager and run this again."
+  allow_install "Needed and not found:$missing." || die "Needed and not found:$missing. Install them with your system's package manager, or run this again without --no-install-docker."
+  log "Installing$missing..."
+  pkg_install $missing ca-certificates || die "Could not install$missing. Install them yourself and run this again."
+  for tool in $missing; do command -v "$tool" >/dev/null 2>&1 || die "$tool is still missing after installing it."; done
+}
+# Docker's own installation script (it supports Debian, Ubuntu, Raspberry Pi OS, Fedora, CentOS and RHEL and their relatives).
+docker_script() {
+  local script; script="$(mktemp)"
+  if curl -fsSL "$DOCKER_SCRIPT_URL" -o "$script" && as_root sh "$script"; then rm -f "$script"; return 0; fi
+  rm -f "$script"; log "Docker's installation script did not finish on this system."; return 1
+}
+docker_packages() {
+  case "$PM" in
+    apt-get) pkg_install docker.io ;;
+    dnf|yum) pkg_install docker || pkg_install moby-engine ;;
+    zypper) pkg_install docker ;;
+    pacman) pkg_install docker docker-compose ;;
+    apk) pkg_install docker docker-cli-compose ;;
+    *) return 1 ;;
+  esac
+}
+# Starts the Docker service and sets it to start with the machine, whichever init system there is. Best effort: the caller checks that it answers.
+start_docker_service() {
+  if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+    as_root systemctl enable --now docker >/dev/null 2>&1 || as_root systemctl start docker >/dev/null 2>&1 || true
+  elif command -v rc-service >/dev/null 2>&1; then
+    as_root rc-update add docker boot >/dev/null 2>&1 || true; as_root rc-service docker start >/dev/null 2>&1 || true
+  elif command -v service >/dev/null 2>&1; then
+    as_root service docker start >/dev/null 2>&1 || true
+  fi
+}
+install_docker() {
+  log "Installing Docker Engine with the Compose plugin..."
+  local done=false
+  case "$PM" in
+    apt-get|dnf|yum|zypper) log "Using Docker's installation script ($DOCKER_SCRIPT_URL)."; if docker_script; then done=true; fi ;;
+  esac
+  if [ "$done" = false ]; then
+    log "Installing the distribution's own Docker packages."
+    docker_packages || die "Docker could not be installed here. Install Docker Engine with the Compose plugin ($DOCKER_DOCS) and run this again."
+  fi
+  start_docker_service
+  command -v docker >/dev/null 2>&1 || die "Docker was installed but the docker command was not found. Open a new terminal and run this again."
+}
+# The Compose plugin from Docker's release page, accepted only if it matches the checksum published beside it.
+compose_binary() {
+  local arch name tmp hash
+  case "$(uname -m)" in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=aarch64 ;; armv7l|armv7) arch=armv7 ;; armv6l) arch=armv6 ;; *) return 1 ;; esac
+  name="docker-compose-linux-$arch"; tmp="$(mktemp -d)"
+  if curl -fsSL "$COMPOSE_BASE/$name" -o "$tmp/$name" && curl -fsSL "$COMPOSE_BASE/checksums.txt" -o "$tmp/checksums.txt"; then
+    hash="$(grep -E " \*?$name\$" "$tmp/checksums.txt" | head -n1 | cut -d' ' -f1 || true)"
+    if [ -n "$hash" ] && [ "$(sha256sum "$tmp/$name" | cut -d' ' -f1)" = "$hash" ]; then
+      if as_root install -D -m 0755 "$tmp/$name" "$COMPOSE_DIR/docker-compose"; then rm -rf "$tmp"; return 0; fi
+    else
+      log "The Compose plugin that was downloaded did not match its published checksum, so it was not installed."
+    fi
+  fi
+  rm -rf "$tmp"; return 1
+}
+install_compose() {
+  log "Installing the Docker Compose plugin..."
+  case "$PM" in
+    apt-get) pkg_install docker-compose-plugin >/dev/null 2>&1 || pkg_install docker-compose-v2 >/dev/null 2>&1 || true ;;
+    dnf|yum) pkg_install docker-compose-plugin >/dev/null 2>&1 || pkg_install docker-compose >/dev/null 2>&1 || true ;;
+    zypper|pacman) pkg_install docker-compose >/dev/null 2>&1 || true ;;
+    apk) pkg_install docker-cli-compose >/dev/null 2>&1 || true ;;
+  esac
+  if docker compose version >/dev/null 2>&1; then return 0; fi
+  if compose_binary && docker compose version >/dev/null 2>&1; then return 0; fi
+  die "The Docker Compose plugin could not be installed. See https://docs.docker.com/compose/install/linux/ and run this again."
+}
+# Docker answers only to root here (the user is not in the docker group): run it through sudo for the rest of this run.
+use_sudo_for_docker() {
+  [ "$(id -u)" != 0 ] || return 1
+  command -v sudo >/dev/null 2>&1 || return 1
+  sudo docker info >/dev/null 2>&1 || return 1
+  docker() { sudo docker "$@"; }
+  DOCKER_PREFIX="sudo "
+  log "Docker answers only to root on this machine, so the installer runs it with sudo (you are not added to the docker group)."
+  return 0
+}
+ensure_docker_running() {
+  local out="" waited=0
+  if out="$(docker info 2>&1)"; then return 0; fi
+  case "$out" in *ermission*denied*) if use_sudo_for_docker; then return 0; fi ;; esac
+  if [ "$(uname -s)" = Linux ] && [ -z "${DOCKER_HOST:-}" ]; then
+    [ "$NO_INSTALL" = false ] || die "Docker is installed but is not running. Start it (for example: sudo systemctl start docker) and run this again."
+    root_available || die "Docker is installed but is not running, and starting it needs root. Start it (for example: sudo systemctl start docker) and run this again."
+    log "Docker is not running; starting it..."
+    start_docker_service
+    while [ "$waited" -lt 45 ]; do
+      if out="$(docker info 2>&1)"; then return 0; fi
+      case "$out" in *ermission*denied*) if use_sudo_for_docker; then return 0; fi; break ;; esac
+      sleep 1; waited=$((waited + 1))
+    done
+  fi
+  die "Docker is installed but cannot be reached ($(printf '%s' "$out" | head -n1)). Start it, or run this as a user allowed to use Docker, and run this again."
+}
+# Everything the installer needs from the machine, installing what is missing (Linux) unless told not to.
+prepare_host() {
+  local os; os="$(uname -s)"
+  PM="$(pkg_manager || true)"
+  ensure_tools
+  if ! command -v docker >/dev/null 2>&1; then
+    case "$os" in
+      Linux) ;;
+      Darwin) die "Docker is not installed. On a Mac, install Docker Desktop (https://docs.docker.com/desktop/setup/install/mac-install/) or Colima, start it, and run this again." ;;
+      *) die "Docker is not installed. On Windows, install Docker Desktop with the WSL 2 backend and run this installer from a WSL terminal (https://docs.docker.com/desktop/setup/install/windows-install/)." ;;
+    esac
+    allow_install "Docker is not installed." || die "Docker is not installed. Install Docker Engine with the Compose plugin ($DOCKER_DOCS), or run this again without --no-install-docker."
+    install_docker
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    [ "$os" = Linux ] || die "The Docker Compose plugin is required (docker compose). See https://docs.docker.com/compose/install/"
+    allow_install "The Docker Compose plugin is not installed." || die "The Docker Compose plugin is required (docker compose). See https://docs.docker.com/compose/install/linux/, or run this again without --no-install-docker."
+    install_compose
+  fi
+  ensure_docker_running
+}
+
 resolve_tag() {
   if [ -n "$REF" ] && [ "$BUILD" = false ]; then TAG="${REF#v}"; return; fi
   TAG="latest"
 }
 
 main() {
-  for tool in curl tar docker; do command -v "$tool" >/dev/null 2>&1 || die "$tool is required but was not found."; done
-  docker compose version >/dev/null 2>&1 || die "The Docker Compose plugin is required (docker compose). See https://docs.docker.com/compose/install/"
-  docker info >/dev/null 2>&1 || die "Docker is not reachable. Start it, or run this as a user allowed to use Docker (for example with sudo)."
+  [ "$UNINSTALL" = false ] || NO_INSTALL=true   # removing what is installed never installs anything
+  prepare_host
+  if [ "$PREPARE_ONLY" = true ]; then
+    log "This machine is ready: Docker, the Compose plugin, curl and tar are installed, and Docker is running. Run install.sh again, without --prepare, to install StreamRD."
+    return 0
+  fi
   DIR="${DIR/#\~/$HOME}"
   if [ "$ASSUME_YES" = false ] && [ "$UNINSTALL" = false ] && have_terminal && { [ ! -f "$DIR/docker-compose.yml" ] || [ "$ADVANCED" = true ]; }; then
     wizard; DIR="${DIR/#\~/$HOME}"
@@ -658,7 +850,7 @@ main() {
   fi
 
   if [ "$START" = false ]; then
-    log "Ready. Start it with: cd $DIR && docker compose up -d$([ "$separate" = true ] && echo ' --remove-orphans   (once: it removes the old helper container)')"
+    log "Ready. Start it with: cd $DIR && ${DOCKER_PREFIX}docker compose up -d$([ "$separate" = true ] && echo ' --remove-orphans   (once: it removes the old helper container)')"
     return 0
   fi
 
@@ -694,8 +886,8 @@ Put a reverse proxy with HTTPS in front before exposing it to the internet.
   Folder     $DIR
   Settings   $DIR/config   (database, secrets, backups: back this up)
   Downloads  $DIR/data
-  Update     cd $DIR && docker compose pull && docker compose up -d     (or re-run install.sh)
-  Logs       cd $DIR && docker compose logs -f
+  Update     cd $DIR && ${DOCKER_PREFIX}docker compose pull && ${DOCKER_PREFIX}docker compose up -d     (or re-run install.sh)
+  Logs       cd $DIR && ${DOCKER_PREFIX}docker compose logs -f
   Remove     bash install.sh --uninstall --dir $DIR   (config/ and data/ are kept)
 $(addon_notes)
 EOF
