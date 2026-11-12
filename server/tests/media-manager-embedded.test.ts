@@ -73,6 +73,25 @@ it("finds its own container and gives a media server that container's folders, n
   expect(docker.calls.filter(entry => entry.startsWith("GET /containers/") && entry.includes(SELF_ID))).toHaveLength(1);   // it asked about itself once
 });
 
+it("keeps the final result of an update when it is read by two readers at once, one of whom read the updater while it still ran", async () => {
+  await start(); const { json } = await helper({ logSettleMs: 20 });
+  const box = { id: "c".repeat(64), name: "streamrd-updater", image: "sha256:x", running: true, alive: true, status: "running", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", output: ['{"time":"2026-11-12T10:00:00Z","message":"Waiting for the new version to start"}'], spec: { Labels: { "streamrd.role": "updater" } } };
+  docker.boxes.push(box);
+  const first = json("GET", "/update");   // reads it while it runs
+  setTimeout(() => { box.running = false; box.status = "exited"; box.exitCode = 1; box.finishedAt = "2026-11-12T10:00:05Z"; box.output.push('{"time":"2026-11-12T10:00:05Z","result":"failed","error":"The new version did not start properly. The previous version was restored; nothing was lost."}'); }, 2);
+  const [a, b, c] = await Promise.all([first, json("GET", "/update"), json("GET", "/update")]);
+  for (const view of [a, b, c]) expect(["running", "failed"]).toContain(view.state);
+  const later = await json("GET", "/update");
+  expect(later).toMatchObject({ state: "failed", error: expect.stringMatching(/previous version was restored/) });   // never "running" once it has ended
+  expect((await json("GET", "/update")).state).toBe("failed");
+  expect(docker.find("streamrd-updater")).toBeUndefined();
+  // An updater that vanished before anyone read its end is reported, not waited for for ever.
+  docker.boxes.push({ ...box, id: "b".repeat(64), alive: true, running: true, status: "running", output: [], finishedAt: "0001-01-01T00:00:00Z" });
+  const gone = await helper({ logSettleMs: 20 }); expect((await gone.json("GET", "/update")).state).toBe("running");
+  docker.find("streamrd-updater")!.alive = false;
+  expect(await gone.json("GET", "/update")).toMatchObject({ state: "failed", error: expect.stringMatching(/updater is gone/) });
+});
+
 it("starts Prowlarr from a fixed specification that gives it its own settings folder and nothing of the libraries or downloads", async () => {
   await start(); const { call, settled, json } = await helper();
   expect((await call("POST", "/servers/prowlarr/launch", {})).status).toBe(202);

@@ -357,7 +357,11 @@ function createManager(config) {
     return { name, ended, result, error, finishedAt: ended && typeof state.FinishedAt === 'string' ? state.FinishedAt : null, log };
   }
   /** How the last update went. The embedded helper may be a new process in a new container: the updater's account is the record. */
-  async function updateView() {
+  // One reader at a time. Two readers at once (the page, and the server recording the outcome after a start) each read the updater, and the one
+  // that read it while it still ran could write "running" after the other had written the final result, and nothing would ever correct it.
+  let reading = Promise.resolve();
+  function updateView() { const run = reading.then(readUpdate, readUpdate); reading = run.then(() => undefined, () => undefined); return run; }
+  async function readUpdate() {
     if (config.embedded && (upd.handed || upd.state === 'idle')) {
       let report = await updaterReport().catch(error => { console.error(`[helper] could not read the updater's account: ${error && error.message}`); return null; });
       // Docker can report a container as ended a moment before its output is all readable; look once more before calling an updater silent.
@@ -373,6 +377,9 @@ function createManager(config) {
           upd.finishedAt = report.finishedAt || new Date().toISOString(); upd.handed = false;
           await docker('DELETE', `/containers/${report.name}?force=true`).catch(() => undefined);
         }
+      } else if (upd.handed) {
+        // Handed over, and the updater is gone without anyone having read its end: say so rather than stay "running" for good.
+        upd.state = 'failed'; upd.error = 'The updater is gone and left no account. Check that StreamRD is running the version you expect.'; upd.finishedAt = new Date().toISOString(); upd.handed = false;
       }
     }
     return { state: upd.state, error: upd.error, startedAt: upd.startedAt, finishedAt: upd.finishedAt, log: upd.log.slice(-50) };
