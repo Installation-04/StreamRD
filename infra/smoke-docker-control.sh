@@ -21,7 +21,14 @@ email="control-smoke@example.invalid"; password="control-smoke-fixture123"
 media_port="${SMOKE_MEDIA_PORT:-18096}"
 token=""
 say() { printf '\n== %s\n' "$*"; }
-fail() { echo "FAIL: $*" >&2; docker logs --tail 80 "$name" >&2 2>&1 || true; exit 1; }
+fail() {
+  echo "FAIL: $*" >&2
+  { echo "-- containers"; docker ps -a --format '{{.Names}}  {{.Image}}  {{.Status}}'
+    echo "-- $name (last lines)"; docker logs --tail 60 "$name" 2>&1
+    for extra in "$name-updater" "$name-previous"; do docker inspect "$extra" >/dev/null 2>&1 && { echo "-- $extra"; docker logs --tail 40 "$extra" 2>&1; }; done
+  } >&2 || true
+  exit 1
+}
 
 for existing in streamrd-jellyfin streamrd-plex; do
   if docker ps -a --format '{{.Names}}' | grep -qx "$existing"; then echo "Refusing to run: a container named $existing exists (the launch would replace it)." >&2; exit 1; fi
@@ -95,7 +102,7 @@ say "Only the helper is root; StreamRD and everything it runs is user 1000, who 
 list="$(processes)"
 echo "$list" | jq -e '[.[] | select(.uid == 0) | .cmd] | all(test("tini|init.cjs|media-manager.cjs --embedded"))' >/dev/null || fail "an unexpected process runs as root: $(echo "$list" | jq -c '[.[] | select(.uid == 0)]')"
 echo "$list" | jq -e '[.[] | select(.uid == 0) | .cmd] | any(test("media-manager.cjs --embedded"))' >/dev/null || fail "the helper is not running"
-echo "$list" | jq -e '[.[] | select(.uid == 1000) | .cmd] | (any(test("dist/src/index.js")) and any(test("qbittorrent-nox")) and any(test("server.js")))' >/dev/null || fail "StreamRD's processes do not run as user 1000"
+echo "$list" | jq -e '[.[] | select(.uid == 1000) | .cmd] | (any(test("dist/src/index.js")) and any(test("qbittorrent-nox")) and any(test("server.js|next-server")))' >/dev/null || fail "StreamRD's processes do not run as user 1000: $(echo "$list" | jq -c '[.[] | {uid, cmd}]')"
 mode="$(docker exec "$name" stat -c %a /var/run/docker.sock)"
 if [ "${mode: -1}" = 0 ]; then
   docker exec -u 1000 "$name" node -e "require('net').connect('/var/run/docker.sock').once('connect',()=>process.exit(1)).once('error',e=>process.exit(e.code==='EACCES'?0:2))" || fail "user 1000 can open Docker's socket"
