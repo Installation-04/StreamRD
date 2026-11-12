@@ -20,7 +20,8 @@ After the one-time install, nothing should need a command or a file on the serve
 |---|---|---|---|
 | v0.24.0 | Server settings that were environment variables are choices in Admin → Server; Restart from Admin → System; Plex and Jellyfin start again with the machine, or not, as chosen; the launch shows a live log | M | none |
 | v0.24.0 | The helper that launches Plex and Jellyfin and runs updates lives inside the StreamRD container: one container, no extra script, updates from the page or with plain Docker (an install with the helper in a second container is moved by running the installer again) | L | none |
-| next | Zilean and Zurg started and stopped from the page; Phosphor and the bundled download client switched on and off from the page | M | none |
+| v0.25.1 | Prowlarr, Jellyfin and Plex are checked for a newer version and updated from Admin → System, whenever their own release comes out and not only with a StreamRD release; each can be left to update itself at night | M | none |
+| next | Zilean and Zurg started and stopped from the page, and updated the same way; Phosphor and the bundled download client switched on and off from the page | M | none |
 
 Plex and Jellyfin stay in containers of their own, started from the page: they are large separate programs with their own releases.
 What cannot move to the page: the first install, and adding access to Docker to an install that was made without it.

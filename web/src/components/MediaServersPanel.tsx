@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import ModuleUpdates from "./ModuleUpdates";
 import styles from "./AccountScanPanel.module.css";
 
 type Name = "jellyfin" | "plex";
@@ -130,6 +131,7 @@ export default function MediaServersPanel() {
         </article>;
       })}
     </div>
+    <ModuleUpdates only={["jellyfin", "plex"]} compact />
     <p style={{ opacity: 0.75, fontSize: 13 }}>In Plex or Jellyfin add Movies at <code>/library/streamrd/Movies</code> and TV Shows at <code>/library/streamrd/TV Shows</code>. Plex discovery on your network is limited by Docker&rsquo;s bridge network; the Plex and Jellyfin guide explains host networking.</p>
   </section>;
 }

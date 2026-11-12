@@ -1,5 +1,6 @@
 import { startRequestWorker } from "./requests/worker";
 import { startAutomaticApprovals } from "./requests/approval";
+import { startModuleUpdates } from "./modules";
 import { startProwlarr } from "./prowlarr";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
@@ -38,6 +39,7 @@ async function main() {
     startRequestWorker();
     startAutomaticApprovals();
     startProwlarr(); // Prowlarr, which finds releases for requests, is started by the Docker helper unless it was removed
+    startModuleUpdates(); // notes how the modules' updates went, and runs the night's updates for the modules set to update themselves
     void ensureZileanIndexer().catch(() => undefined);
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
     recordUpdateOutcomeWhenKnown(); // how the last update or rollback went, as the update helper recorded it

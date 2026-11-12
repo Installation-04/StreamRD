@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import ModuleUpdates from "./ModuleUpdates";
 
 interface Indexer { id: string; name: string; baseUrl: string; hasKey: boolean; builtin: boolean }
 interface Prowlarr { available: boolean; state: string; port: number; error: string | null; declined: boolean; keyFound: boolean; indexers: number; reachable: boolean }
@@ -46,6 +47,7 @@ export default function IndexersPanel() {
         {prow.available && !prow.declined && prow.state !== "absent" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => { if (window.confirm("Remove Prowlarr? Its settings are kept, and it will not be started again until you ask.")) void run("prowlarr-remove", async () => { await api("/api/admin/prowlarr", { method: "DELETE" }); await loadProw(); return "Prowlarr was removed."; }); }}>Remove</button>}
       </div>
     </div>}
+    {prow && prow.available && !prow.declined && prow.state === "running" && <ModuleUpdates only={["prowlarr"]} compact />}
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {list && list.length === 0 && <p role="note" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,138,31,.45)", background: "rgba(255,138,31,.08)" }}>No indexer yet, so requests need a magnet pasted by hand. Add one below.</p>}
     {list && list.length > 0 && <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>{list.map(indexer => <li key={indexer.id} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10 }}>
