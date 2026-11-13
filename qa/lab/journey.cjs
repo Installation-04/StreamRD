@@ -159,7 +159,9 @@ async function main() {
 
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);
-      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=6[01]\b/.test(now.src) ? now : null; }, 45_000, 500);   // the second that was asked for, not where the copied picture began
+      let seen;
+      const state = await until("playback after the seek", async () => { seen = await owner.video(); return seen && seen.at > 2 && /start=6[01]\b/.test(seen.src) ? seen : null; }, 45_000, 500)   // the second that was asked for, not where the copied picture began
+        .catch(async error => { await owner.shot("failed-seek"); throw Error(`${error.message} | video: ${JSON.stringify(seen)} | page: ${(await owner.text()).slice(0, 400)}`); });
       assert.equal(state.error, null);
       assert.match(state.src, /&video=1$/, "this file's copied picture cannot be decoded part-way in, so the player should have asked for it to be converted");
       assert.match(await owner.text(), /Converted for your browser/);

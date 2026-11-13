@@ -59,7 +59,7 @@ export async function ensureLogin(name: ServarrName, base: string, key: string):
   const logins = await readLogins(), kept = logins[name] ? decryptSecret(logins[name]!.password) : null;
   const host = await call<Record<string, unknown>>(base, name, key, "GET", "/config/host");
   if (kept && host.authenticationMethod === "forms" && host.username === USERNAME) return "kept";
-  if (!kept && typeof host.username === "string" && host.username) return "kept";   // someone chose a login of their own: it is theirs, and is not replaced
+  if (typeof host.username === "string" && host.username && (!kept || host.username !== USERNAME)) return "kept";   // someone chose a login of their own: it is theirs, and is not replaced
   const password = kept ?? randomBytes(18).toString("base64url");
   await call(base, name, key, "PUT", `/config/host/${String(host.id)}`, { ...host, authenticationMethod: "forms", authenticationRequired: "enabled", username: USERNAME, password, passwordConfirmation: password });
   logins[name] = { password: encryptSecret(password) }; await writeLogins(logins);
@@ -86,8 +86,14 @@ export async function linkToProwlarr(prowlarr: { base: string; key: string }, ap
 }
 
 export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; errors: string[] }
+let linking: Promise<LinkReport> | undefined;
+/** Manual requests and the background timer share one pass so credentials and links cannot race. */
+export function linkAddons(): Promise<LinkReport> {
+  if (!linking) linking = linkAddonsPass().finally(() => { linking = undefined; });
+  return linking;
+}
 /** One pass over every Servarr add-on that is running: a login for each, and Prowlarr told about the others. */
-export async function linkAddons(): Promise<LinkReport> {
+async function linkAddonsPass(): Promise<LinkReport> {
   const report: LinkReport = { logins: [], linked: [], waiting: [], errors: [] };
   if (dockerControl().mode === "off") return report;
   let status: Record<string, { state: string; address?: string }> = {};

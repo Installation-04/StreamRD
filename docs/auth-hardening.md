@@ -55,6 +55,11 @@ one bootstrap admin. ADMIN_EMAIL, when configured, reserves that admin role rath
 than granting it to an unrelated first signup. This is not email verification:
 initial setup still needs controlled access.
 
+Transient SQLite lock timeouts and transaction conflicts retry the whole signup
+transaction, up to three attempts. Each attempt rechecks registration policy and
+invitation use under the write lock. Password hashing stays outside the retries;
+duplicate-account conflicts and other errors are not retried.
+
 Existing async route callbacks use asyncHandler, and requireAuth forwards DB
 errors. Unexpected failures return generic JSON and a server-generated request ID.
 Central logs contain only method, registered route pattern and ID; raw exception

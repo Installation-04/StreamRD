@@ -1,12 +1,36 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.6.0 Server Sharing
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.27.0 Add-on integration — in progress
 
 This is the source of truth for the project tracker. Import the Markdown and CSV
 bundle into Notion when a workspace connection is available. **No live Notion page
 has been created yet:** this chat has no Notion connector or parent-page access.
 
-## Server-managed sharing — completed implementation
+## Current work: v0.27.0 Add-on integration
+
+As of 2026-11-13, the continuation point is Claude's `bf593bb` on
+`claude/streamrd-phosphor-audit-etur2v`. Stable, beta and dev currently contain
+v0.26.1. Follow [the branch workflow](../branches.md): changes enter `dev` by
+pull request, then promote through `beta` to `main` after checks pass.
+
+Generated encrypted logins and Prowlarr application links are implemented.
+Current validation also covers preserving an owner's replacement login,
+coalescing overlapping link passes, and bounded signup retries in both products.
+Local backend acceptance passes: 606 StreamRD tests and 492 Phosphor tests,
+with five StreamRD cases skipped; both backend typechecks and all four server/web
+production builds pass. Shared-source consistency also passes.
+The documented Google Chrome local-lab journey passes all 24 steps with no page
+errors, using synthetic providers and media. Container/add-on validation remains
+part of the PR's CI checks; no release or branch promotion has been performed.
+See [the v0.27.0 notes](../releases/v0.27.0.md) for behavior and verification limits.
+
+Remaining add-on integration: download clients, root folders, FlareSolverr in
+Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr setup. These remain open;
+installation alone does not establish working integration. Use
+[the roadmap](../roadmap.md) for current priorities and [the add-on guide](../add-ons.md)
+for supported behavior. The delivery records below describe earlier milestones.
+
+## v0.6.0 Server-managed sharing — historical delivery record
 
 The owner chose shared server libraries and playback instead of requiring invited
 users to bring their own debrid accounts. The v0.6.0 work implements
@@ -30,7 +54,7 @@ is a curated personal cinema; Phosphor is its distinct search-and-queue companio
 Both use the community's own accounts and infrastructure. Plex/Jellyfin export
 stays optional and uses real mounted files.
 
-## Active milestone: v0.5.0 Automatic Libraries
+## v0.5.0 Automatic Libraries — historical delivery record
 
 | Workstream | Owner | State | Acceptance |
 |---|---|---|---|
@@ -99,7 +123,11 @@ stays optional and uses real mounted files.
 5. Accessibility is part of design: readable contrast, labels, visible focus,
    reduced motion, small-screen layouts, and touch-friendly controls.
 
-## Next milestones
+## Earlier backlog
+
+This list predates the current add-on work; consult [the roadmap](../roadmap.md)
+before choosing the next milestone. In particular, native clients were removed
+from the repository and are not the current priority.
 
 | Priority | Opportunity | Acceptance evidence |
 |---|---|---|

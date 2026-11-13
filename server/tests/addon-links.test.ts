@@ -4,7 +4,7 @@ import path from "node:path";
 import http from "node:http";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { resetDb } from "./helpers";
-import { linkAddons, loginFor } from "../src/addon-links";
+import { ensureLogin, linkAddons, loginFor } from "../src/addon-links";
 
 // Sonarr and Prowlarr are played by small servers that answer as they do: a host config that can be read and changed, and, for Prowlarr, the
 // list of applications it sends indexers to. What the tests look at is what StreamRD asks of them, and that asking twice changes nothing.
@@ -49,7 +49,8 @@ it("gives each add-on a login of its own making and tells Prowlarr about Sonarr,
   const helper = await serve((req, _body, res) => json(res, { servers: { sonarr: { state: "running" }, prowlarr: { state: "running" }, radarr: { state: "absent" } } }));
   Object.assign(process.env, { MEDIA_MANAGER_URL: helper.url, MEDIA_MANAGER_TOKEN: "m".repeat(40), DOCKER_CONTROL_STATE: "embedded", SONARR_URL: sonarr.url, PROWLARR_URL: prowlarr.url });
 
-  const first = await linkAddons();
+  const [first, overlapping] = await Promise.all([linkAddons(), linkAddons()]);
+  expect(overlapping).toEqual(first);
   expect(first).toMatchObject({ logins: ["sonarr", "prowlarr"], linked: ["sonarr"], errors: [] });
   const made = await loginFor("sonarr");
   expect(made).toMatchObject({ username: "streamrd" }); expect(made!.password.length).toBeGreaterThanOrEqual(20);
@@ -75,4 +76,22 @@ it("leaves a login someone chose for themselves alone, and waits for an add-on t
   const report = await linkAddons();
   expect(report.logins).toEqual([]); expect(report.waiting).toEqual(["radarr"]); expect(await loginFor("sonarr")).toBeNull();
   expect(sonarr.calls.some(c => c.startsWith("PUT"))).toBe(false);
+});
+
+it("preserves an owner's replacement login after StreamRD has previously made one", async () => {
+  const host: Record<string, unknown> = { id: 1, authenticationMethod: "none", username: "" };
+  const sonarr = await serve((req, body, res) => {
+    if (req.headers["x-api-key"] !== KEY) return json(res, {}, 401);
+    if (req.url === "/api/v3/config/host" && req.method === "GET") return json(res, host);
+    if (req.url === "/api/v3/config/host/1" && req.method === "PUT") { Object.assign(host, JSON.parse(body)); return json(res, host); }
+    json(res, {}, 404);
+  });
+
+  expect(await ensureLogin("sonarr", sonarr.url, KEY)).toBe("set");
+  Object.assign(host, { username: "owner", password: "owner-chosen-password" });
+
+  expect(await ensureLogin("sonarr", sonarr.url, KEY)).toBe("kept");
+  expect(await ensureLogin("sonarr", sonarr.url, KEY)).toBe("kept");
+  expect(host).toMatchObject({ username: "owner", password: "owner-chosen-password" });
+  expect(sonarr.calls.filter(call => call.startsWith("PUT"))).toHaveLength(1);
 });
