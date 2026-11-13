@@ -383,6 +383,41 @@ async function main() {
       await until("Sonarr to be removed", async () => (await status()) === "Not installed", 30_000, 300);
     });
 
+    await step("add-on connection feedback distinguishes success, local-only download clients, starting apps and errors", async () => {
+      // UI response fixtures exercise feedback only; real connection compatibility
+      // is checked separately against the programs in smoke-addons.sh.
+      const empty = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], errors: [] };
+      let reply = { ...empty, downloadClients: ["sonarr"] };
+      const intercept = route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(reply) });
+      await owner.page.route("**/api/admin/addons/link", intercept);
+      try {
+        const connect = owner.page.getByRole("button", { name: "Connect add-ons", exact: true });
+        await connect.click();
+        await owner.page.getByText("Add-on connections updated. Existing choices were kept.", { exact: true }).waitFor();
+        assert.equal(await owner.page.getByRole("link", { name: "Download client settings", exact: true }).getAttribute("href"), "/admin/request-settings");
+        await owner.shot("addon-connections");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "the connection controls fit on a phone");
+        await owner.shot("addon-connections-mobile");
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        reply = { ...empty, downloadClientWaiting: ["sonarr"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "use a qBittorrent URL the add-ons can reach" }).waitFor();
+        reply = { ...empty, waiting: ["radarr"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "Some add-ons are still starting" }).waitFor();
+        reply = { ...empty, errors: ["lidarr: fixture connection failure"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "lidarr: fixture connection failure" }).waitFor();
+        reply = empty;
+        await connect.click();
+        await owner.page.getByText("Checked the running add-ons. Existing connections were kept.", { exact: true }).waitFor();
+      } finally {
+        await owner.page.unroute("**/api/admin/addons/link", intercept);
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+      }
+    });
+
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
       await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
       const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });

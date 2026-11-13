@@ -6,6 +6,8 @@ import { decryptSecret, encryptSecret } from "./crypto";
 import { logEvent } from "./logger";
 import { dockerControl } from "./maintenance";
 import { manager } from "./media-servers";
+import { getRequestSettings, qbitContext } from "./requests/config";
+import { normalizeQbitUrl } from "./requests/clients";
 
 /**
  * Makes the add-ons that StreamRD started work together without anyone typing a key: each Sonarr, Radarr, Lidarr and Prowlarr is given a login
@@ -69,6 +71,42 @@ export async function ensureLogin(name: ServarrName, base: string, key: string):
 
 interface Field { name: string; value?: unknown }
 interface Schema { implementation: string; implementationName?: string; configContract: string; fields: Field[] }
+type DownloadApp = "sonarr" | "radarr" | "lidarr";
+/** Loopback and wildcard addresses identify the add-on itself, not StreamRD's bundled client. */
+function localOnly(host: string): boolean {
+  host = host.replace(/\.$/, "");
+  return host === "localhost" || host.endsWith(".localhost") || host === "localhost.localdomain" || /^127\./.test(host) || host === "0.0.0.0" || host === "[::]" || host === "[::1]" || /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/i.test(host);
+}
+/** Adds the configured client only to a new add-on with no existing download-client choices. */
+export async function ensureDownloadClient(name: DownloadApp, base: string, key: string): Promise<"set" | "kept" | "unconfigured" | "local-only"> {
+  const { qbit } = await getRequestSettings();
+  if (!qbit.enabled) return "unconfigured";
+  const context = await qbitContext(qbit.ownerId);
+  const url = new URL(normalizeQbitUrl(context.settings.baseUrl));
+  if (localOnly(url.hostname)) return "local-only";
+  const known = await call<unknown>(base, name, key, "GET", "/downloadclient");
+  if (!Array.isArray(known)) throw new Error(`${SERVARR[name].implementation} returned an invalid download-client list`);
+  if (known.length) return "kept"; // An owner's existing choices, including disabled clients, are preserved.
+  const schemas = await call<Schema[]>(base, name, key, "GET", "/downloadclient/schema");
+  const schema = schemas.find(entry => entry.implementation.toLowerCase() === "qbittorrent");
+  if (!schema) throw new Error(`${SERVARR[name].implementation} has no qBittorrent client type`);
+  const categoryField = { sonarr: "tvCategory", radarr: "movieCategory", lidarr: "musicCategory" }[name];
+  const values: Record<string, unknown> = {
+    host: url.hostname, port: Number(url.port || (url.protocol === "https:" ? 443 : 80)), useSsl: url.protocol === "https:",
+    urlBase: url.pathname.replace(/\/+$/, ""), username: context.settings.username, password: context.settings.password, [categoryField]: `streamrd-${name}`,
+  };
+  const names = new Set(schema.fields.map(field => field.name));
+  if (["host", "port", "useSsl", "username", "password", categoryField, ...(values.urlBase ? ["urlBase"] : [])].some(field => !names.has(field))) throw new Error(`${SERVARR[name].implementation} returned an incomplete qBittorrent client type`);
+  // Configuration may change while the add-on answers. Never send retired credentials.
+  if ((await qbitContext(qbit.ownerId)).fingerprint !== context.fingerprint) throw new Error("The download-client connection changed while linking. Retry with its current settings.");
+  await call(base, name, key, "POST", "/downloadclient", {
+    name: "StreamRD qBittorrent", implementation: schema.implementation, configContract: schema.configContract,
+    enable: true, protocol: "torrent", priority: 1, removeCompletedDownloads: false, removeFailedDownloads: false, tags: [],
+    fields: schema.fields.map(field => field.name in values ? { ...field, value: values[field.name] } : field),
+  });
+  void logEvent("info", "system", `${SERVARR[name].implementation} was connected to the configured qBittorrent client`).catch(() => undefined);
+  return "set";
+}
 /** Tells Prowlarr about an add-on, so what Prowlarr finds is sent to it. Returns false when Prowlarr already knows it. */
 export async function linkToProwlarr(prowlarr: { base: string; key: string }, app: { name: ServarrName; base: string; key: string }, prowlarrUrl: string, appUrl: string): Promise<boolean> {
   const implementation = SERVARR[app.name].implementation;
@@ -85,7 +123,7 @@ export async function linkToProwlarr(prowlarr: { base: string; key: string }, ap
   return true;
 }
 
-export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; errors: string[] }
+export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; errors: string[] }
 let linking: Promise<LinkReport> | undefined;
 /** Manual requests and the background timer share one pass so credentials and links cannot race. */
 export function linkAddons(): Promise<LinkReport> {
@@ -94,7 +132,7 @@ export function linkAddons(): Promise<LinkReport> {
 }
 /** One pass over every Servarr add-on that is running: a login for each, and Prowlarr told about the others. */
 async function linkAddonsPass(): Promise<LinkReport> {
-  const report: LinkReport = { logins: [], linked: [], waiting: [], errors: [] };
+  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], errors: [] };
   if (dockerControl().mode === "off") return report;
   let status: Record<string, { state: string; address?: string }> = {};
   try { status = (await manager<{ servers: typeof status }>("GET", "/status")).servers; } catch { return report; }
@@ -116,6 +154,14 @@ async function linkAddonsPass(): Promise<LinkReport> {
     // on a user-defined Docker network, not on the default bridge.
     try { if (await linkToProwlarr(prowlarr, { name, ...one }, prowlarr.base, one.base)) report.linked.push(name); }
     catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  for (const name of ["sonarr", "radarr", "lidarr"] as const) {
+    const one = up[name]; if (!one) continue;
+    try {
+      const result = await ensureDownloadClient(name, one.base, one.key);
+      if (result === "set") report.downloadClients.push(name);
+      if (result === "local-only") report.downloadClientWaiting.push(name);
+    } catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
   }
   return report;
 }

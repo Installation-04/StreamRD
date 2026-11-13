@@ -149,4 +149,54 @@ curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq
   length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
 ' >/dev/null || fail "the second pass changed the application list"
 echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
+say "Sonarr, Radarr and Lidarr connect to real qBittorrent without deleting completed or failed downloads"
+# Only this disposable fixture exposes the bundled client on the container's
+# bridge interface. Production keeps its loopback-only default.
+docker exec --interactive --env "SMOKE_TOKEN=$token" "$name" node <<'NODE'
+const fs = require('node:fs'), os = require('node:os');
+(async () => {
+  const password = fs.readFileSync('/config/secrets/qbittorrent-password', 'utf8').trim(), username = process.env.QBIT_USERNAME || 'admin';
+  const origin = 'http://127.0.0.1:8082';
+  const login = await fetch(origin + '/api/v2/auth/login', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username, password }) });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  if (!login.ok || (await login.text()).trim() !== 'Ok.' || !cookie) throw Error('The disposable qBittorrent login failed');
+  const changed = await fetch(origin + '/api/v2/app/setPreferences', { method: 'POST', headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ json: JSON.stringify({ web_ui_address: '0.0.0.0', web_ui_domain_list: '*' }) }) });
+  if (!changed.ok) throw Error('Could not configure the disposable qBittorrent interface');
+  const address = Object.values(os.networkInterfaces()).flat().find(one => one && !one.internal && one.family === 'IPv4')?.address;
+  if (!address) throw Error('No bridge address for the disposable download client');
+  const saved = await fetch('http://127.0.0.1:47821/api/admin/request-settings', { method: 'PUT', headers: { Authorization: `Bearer ${process.env.SMOKE_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ qbit: { enabled: true, baseUrl: `http://${address}:8082`, username, password } }) });
+  if (!saved.ok) throw Error(`Could not save the disposable download client: HTTP ${saved.status}`);
+  console.log('Disposable bridge-accessible qBittorrent connection configured.');
+})().catch(error => { console.error(error.message); process.exitCode = 1; });
+NODE
+connected=""
+for attempt in $(seq 1 20); do
+  report="$(call POST /api/admin/addons/link)"
+  if echo "$report" | jq -e '(.errors | length) == 0 and (.downloadClientWaiting | length) == 0' >/dev/null; then connected=yes; break; fi
+  sleep 3
+done
+[ "$connected" = yes ] || fail "download-client linking failed: $report"
+docker exec --interactive "$name" node <<'NODE'
+const fs = require('node:fs');
+(async () => {
+  const status = await fetch(process.env.MEDIA_MANAGER_URL + '/status', { headers: { Authorization: `Bearer ${process.env.MEDIA_MANAGER_TOKEN}` } });
+  if (!status.ok) throw Error('The Docker helper did not return add-on addresses');
+  const { servers } = await status.json();
+  const password = fs.readFileSync('/config/secrets/qbittorrent-password', 'utf8').trim();
+  for (const [name, port, api, category] of [['sonarr', 8989, 'v3', 'tvCategory'], ['radarr', 7878, 'v3', 'movieCategory'], ['lidarr', 8686, 'v1', 'musicCategory']]) {
+    const key = /<ApiKey>([^<]+)<\/ApiKey>/.exec(fs.readFileSync(`/config/${name}/config/config.xml`, 'utf8'))?.[1];
+    const base = `http://${servers[name].address}:${port}/api/${api}/downloadclient`, headers = { 'X-Api-Key': key, 'Content-Type': 'application/json' };
+    const response = await fetch(base, { headers });
+    if (!response.ok) throw Error(`${name}: download-client list HTTP ${response.status}`);
+    const clients = await response.json(), client = clients[0];
+    if (clients.length !== 1 || client.implementation !== 'QBittorrent' || !client.enable || client.removeCompletedDownloads !== false || client.removeFailedDownloads !== false) throw Error(`${name}: unexpected download-client configuration`);
+    if (!client.fields.some(field => field.name === category && field.value === `streamrd-${name}`)) throw Error(`${name}: wrong download category`);
+    const tested = await fetch(base + '/test', { method: 'POST', headers, body: JSON.stringify({ ...client, fields: client.fields.map(field => field.name === 'password' ? { ...field, value: password } : field) }), signal: AbortSignal.timeout(20000) });
+    if (!tested.ok) throw Error(`${name}: real qBittorrent connection test HTTP ${tested.status}`);
+    console.log(`${name}: one qBittorrent connection; real connection test passed; automatic removal disabled.`);
+  }
+})().catch(error => { console.error(error.message); process.exitCode = 1; });
+NODE
+report="$(call POST /api/admin/addons/link)"
+echo "$report" | jq -e '(.downloadClients | length) == 0 and (.downloadClientWaiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed download clients: $report"
 echo 'Every add-on installed, answered, stopped, started again and was removed with its settings kept.'

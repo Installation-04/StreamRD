@@ -43,5 +43,24 @@ Decided in one place (`SERVERS` in `infra/single-container/media-manager.cjs`), 
 ## Sign-in and links
 A minute or two after Sonarr, Radarr, Lidarr or Prowlarr runs, StreamRD gives it a login it made up (kept encrypted; **Show login** on the card) and tells Prowlarr about every Sonarr, Radarr and Lidarr that runs. An add-on whose login someone already chose is left alone.
 
+**Connect add-ons** runs that check immediately and reports connection errors or
+apps that are still starting. **Download client settings** opens the qBittorrent
+connection configured under Admin → Request settings.
+
+When that connection is enabled and its owning administrator is still active,
+StreamRD adds it to Sonarr, Radarr and Lidarr if they have no download clients.
+Existing clients, including disabled ones, are left alone. Each app gets its own
+`streamrd-sonarr`, `streamrd-radarr` or `streamrd-lidarr` category; automatic removal
+of completed and failed downloads is disabled. Host, port, HTTPS and a reverse-proxy
+URL base come from the saved connection. Credentials stay out of linking reports
+and logs, and are rechecked before being sent to the add-on.
+
+Use a qBittorrent URL reachable from the add-on containers. `localhost`, loopback
+and wildcard addresses cannot identify StreamRD from another container, so those
+connections are reported as waiting. The bundled qBittorrent client keeps its
+loopback-only default; this integration does not expose it on the network.
+
 ## Not done yet
-A download client, root folders, FlareSolverr in Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr still use their own first-run screens.
+Bundled-client reachability, root folders, FlareSolverr in Prowlarr, and Bazarr,
+Seerr, Tautulli and Maintainerr setup remain open. A successful connection test
+does not establish successful downloading or importing of media.

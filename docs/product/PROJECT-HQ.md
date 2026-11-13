@@ -18,17 +18,21 @@ pull request, then promote through `beta` to `main` after checks pass.
 Generated encrypted logins and Prowlarr application links are implemented.
 Current validation also covers preserving an owner's replacement login,
 coalescing overlapping link passes, and bounded signup retries in both products.
-Local backend acceptance passes: 606 StreamRD tests and 492 Phosphor tests,
+Follow-up integration connects an enabled administrator-owned qBittorrent client
+to empty add-on client lists, preserving existing choices and reporting local-only
+addresses as waiting. Bundled-client network reachability remains separate.
+Local backend acceptance passes: 621 StreamRD tests and 492 Phosphor tests,
 with five StreamRD cases skipped; both backend typechecks and all four server/web
 production builds pass. Shared-source consistency also passes.
-The documented Google Chrome local-lab journey passes all 24 steps with no page
-errors, using synthetic providers and media. All ten CI checks pass on `cb41957`,
-including real Prowlarr/Sonarr linking. Follow-up work extends that real-container
-acceptance to Radarr and Lidarr; subsequent commits require their own passing
-checks. No release or branch promotion has been performed.
+The documented Google Chrome local-lab journey passes all 25 steps with no page
+errors, using synthetic providers and media. All ten CI checks pass on `43146a9`,
+including real Prowlarr links to Sonarr, Radarr and Lidarr and an unchanged second
+pass. The current qBittorrent integration adds a separate real connection-test
+gate; subsequent commits require their own passing checks. No release or branch
+promotion has been performed.
 See [the v0.27.0 notes](../releases/v0.27.0.md) for behavior and verification limits.
 
-Remaining add-on integration: download clients, root folders, FlareSolverr in
+Remaining add-on integration: bundled download-client reachability, root folders, FlareSolverr in
 Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr setup. These remain open;
 installation alone does not establish working integration. Use
 [the roadmap](../roadmap.md) for current priorities and [the add-on guide](../add-ons.md)
