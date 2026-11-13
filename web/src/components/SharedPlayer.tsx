@@ -25,6 +25,12 @@ const clock = (seconds: number) => { const total = Math.max(0, Math.floor(second
  * Playback is resolved by the server's own account. A file a browser cannot open (MKV, DTS, HEVC...) is converted by the server while you watch, and the
  * player then draws its own seek bar, because a converted stream has no length of its own: seeking restarts the stream at the chosen second.
  */
+/** Tells the server why the browser gave up on a converted video (browser family, kind of problem, how far it got): it only sees its own side of a stream. */
+function reportProblem(streamUrl: string | undefined, kind: "network" | "decode" | "unsupported" | "memory" | "other", detail: string, at: number, code: number | null) {
+  if (!streamUrl || typeof navigator === "undefined") return;
+  const agent = navigator.userAgent, browser = /Firefox\//.test(agent) ? "Firefox" : /Edg\//.test(agent) ? "Edge" : /Chrome\//.test(agent) ? "Chrome" : /Safari\//.test(agent) ? "Safari" : "other";
+  try { void fetch(`${API_BASE}${streamUrl}/problem`, { method: "POST", credentials: "include", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, detail: detail.slice(0, 160), browser, at: Math.max(0, Math.round(at)), code }) }).catch(() => undefined); } catch { /* a report is a courtesy */ }
+}
 export default function SharedPlayer() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [item, setItem] = useState<AccountMedia | null>(null), [loadError, setLoadError] = useState(""), [busy, setBusy] = useState(true), [playError, setPlayError] = useState(""), [pending, setPending] = useState<number | null>(null);
@@ -43,7 +49,7 @@ export default function SharedPlayer() {
   const [landing, setLanding] = useState<{ at: number; start: number } | null>(null), [skipping, setSkipping] = useState(false), [buffering, setBuffering] = useState(true);
   // Through the browser's streaming API (Chrome, Firefox, Safari on a computer or iPad) the video has a real clock, so positions are the video's own;
   // otherwise the stream is a plain <video src> that is opened again at each skip and is asked where it starts.
-  const [mseCapable, setMseCapable] = useState(false), [mseBroken, setMseBroken] = useState(false);
+  const [mseCapable, setMseCapable] = useState(false), [mseBroken, setMseBroken] = useState(false), fellBack = useRef(false);
   useEffect(() => { setMseCapable(mseSupported()); }, []);
   const useMse = Boolean(converted) && mseCapable && !mseBroken && (converted?.durationSeconds ?? 0) > 0;
   const base = converted && !useMse ? (landing && landing.at === startAt ? landing.start : startAt) : 0;
@@ -77,7 +83,13 @@ export default function SharedPlayer() {
     const url = converted.url; setVideoError(false);
     const handle = startMse({ video: element, duration: converted.durationSeconds, initial: startRef.current, forceVideo,
       streamUrl: (start, force) => `${API_BASE}${url}?start=${start.toFixed(3)}${force ? "&video=1" : ""}`, startUrl: (at, force) => `${API_BASE}${url}/start?at=${at.toFixed(3)}${force ? "&video=1" : ""}`,
-      onProblem: (kind, message) => { if (kind === "unsupported") setMseBroken(true); else { setReason(message); setVideoError(true); } } });
+      onProblem: (kind, message) => {
+        reportProblem(url, /no room/.test(message) ? "memory" : kind, message, element.currentTime, null);
+        if (kind === "unsupported") { setMseBroken(true); return; }
+        // Something went wrong part-way through: before the viewer is told, the same video is tried once through the plain video element, from where it stopped.
+        if (!fellBack.current) { fellBack.current = true; setStartAt(Math.max(0, Math.floor(element.currentTime))); setMseBroken(true); return; }
+        setReason(message); setVideoError(true);
+      } });
     return () => handle.destroy();
   }, [useMse, converted?.url, converted?.durationSeconds, forceVideo]);
   // When a converted video fails to play, ask the server why (its own message; never the link).
@@ -109,7 +121,7 @@ export default function SharedPlayer() {
 
   const play = useCallback(async (fileToken?: string) => {
     request.current?.abort(); const controller = new AbortController(); request.current = controller;
-    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null); setPlayback(null); setStartAt(0); setScrub(null); setForceVideo(false);
+    setBusy(true); setPlayError(""); setPending(null); setVideoError(false); setEnded(false); setCountdown(null); video.current?.pause(); setStream(null); setPlayback(null); setStartAt(0); setScrub(null); setForceVideo(false); fellBack.current = false; setMseBroken(false);
     try {
       const result = await api<AccountPlayResult>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/play`, { method: "POST", signal: controller.signal, body: JSON.stringify(fileToken ? { fileToken } : {}) });
       if (controller.signal.aborted || !mounted.current) return;
@@ -215,6 +227,7 @@ export default function SharedPlayer() {
     {stream && <video ref={video} key={playKey} className={styles.video} controls={!converted} autoPlay playsInline preload={converted ? "auto" : "metadata"} aria-label={`Playing ${name}`}
       onError={event => {
         const element = event.currentTarget, code = element.error?.code;
+        if (converted) reportProblem(converted.url, code === 3 || code === 4 ? "decode" : "other", element.error?.message ?? "", baseRef.current + element.currentTime, code ?? null);
         /* While the player is still on its way to the asked second, the picture is converted from that second, not from where the copied stream began. */
         if (converted && converted.mode !== "video" && !forceVideo && (code === 3 || code === 4)) { saveProgress(true); setStartAt(Math.max(0, Math.floor(holding.current ? startAt : baseRef.current + element.currentTime))); setForceVideo(true); return; }
         setVideoError(true);

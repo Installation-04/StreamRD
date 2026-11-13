@@ -17,6 +17,7 @@ const fs = require("node:fs"), os = require("node:os"), path = require("node:pat
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "streamrd-journey-")), port = Number(process.env.LAB_PORT || 8080), base = `http://127.0.0.1:${port}`;
 const artifacts = process.env.QA_ARTIFACT_DIR || path.join(dir, "artifacts");
 const KEY = "lab-debrid-key-0123456789", sleep = ms => new Promise(done => setTimeout(done, ms));
+const firefoxRun = process.env.JOURNEY_BROWSER === "firefox";
 const report = { steps: [], pageErrors: [], startedAt: new Date().toISOString() };
 const step = async (name, run) => { const at = Date.now(); process.stdout.write(`• ${name} … `); await run(); report.steps.push({ name, ms: Date.now() - at }); console.log(`ok (${((Date.now() - at) / 1000).toFixed(1)}s)`); };
 /** Polls until check() returns something truthy; the last value seen is in the failure message. */
@@ -38,8 +39,10 @@ async function startLab() {
 async function main() {
   fs.mkdirSync(artifacts, { recursive: true });
   const lab = await startLab();
-  const { chromium } = require("playwright");
-  const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
+  const { chromium, firefox } = require("playwright");
+  // JOURNEY_BROWSER=firefox runs the journey as far as the converted video, in Firefox with a small allowance of memory for video (a real
+  // Blu-ray rip does not fit Firefox's own, which is smaller than Chrome's), and checks that it keeps playing.
+  const browser = firefoxRun ? await firefox.launch({ firefoxUserPrefs: { "media.autoplay.default": 0, "media.autoplay.blocking_policy": 0, "media.mediasource.eviction_threshold.video": 20_000_000, "media.mediasource.eviction_threshold.audio": 5_000_000 } }) : await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
   const person = async name => {
     const context = await browser.newContext({ viewport: { width: 1366, height: 850 }, colorScheme: "dark", acceptDownloads: true }), page = await context.newPage();
     page.on("pageerror", error => report.pageErrors.push({ who: name, message: error.message.slice(0, 300) }));
@@ -133,6 +136,16 @@ async function main() {
       assert.match(await owner.text(), /Audio converted for your browser/);
       assert.doesNotMatch(await owner.text(), /may not play in your browser|could not be played/, "a converted stream that is playing needs no warning");
     });
+
+    if (firefoxRun) {
+      await step("Firefox keeps playing the converted video on through its small allowance of memory, and does not stop with an error", async () => {
+        const state = await until("half a minute of picture", async () => { const now = await owner.video(); assert.equal(now.error, null, "the video element reported an error"); assert.doesNotMatch(await owner.text(), /could not play|could not be played/i, "the player gave up on the video"); return now.at > 30 ? now : null; }, 90_000, 1000);
+        assert.ok(!state.paused, "the video is still playing");
+        await owner.shot("firefox-converted");
+      });
+      assert.deepEqual(report.pageErrors, [], "no page raised a script error");
+      return;
+    }
 
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);

@@ -24,7 +24,8 @@ export interface MseOptions {
 }
 export interface MsePlayback { destroy: () => void }
 
-const AHEAD_START = 90, BEHIND_KEEP = 40, BATCH = 192 * 1024;
+// Seconds kept loaded ahead of the picture, and the most bytes that may be: Firefox allows about 100 MB for a video, and a Blu-ray rip is 10 MB a second.
+const AHEAD_START = 90, AHEAD_BYTES = 48 * 1024 * 1024, BEHIND_KEEP = 40, BATCH = 192 * 1024, SLICE = 1024 * 1024;
 
 export function mseSupported(): boolean {
   try { return typeof window !== "undefined" && typeof MediaSource !== "undefined" && typeof MediaSource.isTypeSupported === "function" && typeof ReadableStream !== "undefined" && Boolean(window.fetch); } catch { return false; }
@@ -83,7 +84,7 @@ export function startMse(options: MseOptions): MsePlayback {
   let buffer: SourceBuffer | null = null, mime = "", generation = 0, controller: AbortController | null = null, destroyed = false;
   // How many seconds ahead of the picture are kept loaded. It shrinks when the browser says its memory for this video is full: Firefox allows
   // far less than Chrome (about 100 MB for the picture), and a Blu-ray rip at 90 seconds ahead is more than that.
-  let aheadMax = AHEAD_START;
+  let aheadMax = AHEAD_START, appended = 0;   // appended: bytes handed to the browser since the stream being read was opened
   // The stream being read: where it starts and the second it was opened for. A skip to what it is about to deliver needs no new stream.
   let loading: { from: number; target: number } | null = null;
   const sleep = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
@@ -104,7 +105,19 @@ export function startMse(options: MseOptions): MsePlayback {
     }
     return freed;
   }
+  /**
+   * Hands bytes to the browser a megabyte at a time. A read of the network stream can return everything that piled up while the page was
+   * busy (Firefox returned 50 MB in one read of a Blu-ray rip), and a single append larger than the browser's whole allowance for this video
+   * can never fit, however much room is made.
+   */
   async function append(bytes: Uint8Array, gen: number) {
+    for (let at = 0; at < bytes.length; at += SLICE) {
+      if (quiet() || gen !== generation) return;
+      if (at > 0) await room(gen);
+      await appendSlice(bytes.subarray(at, Math.min(bytes.length, at + SLICE)), gen);
+    }
+  }
+  async function appendSlice(bytes: Uint8Array, gen: number) {
     if (!buffer || quiet() || gen !== generation) return;
     await idle();
     if (quiet() || gen !== generation) return;
@@ -112,7 +125,7 @@ export function startMse(options: MseOptions): MsePlayback {
     // and try again until it fits. Only a picture that has not moved for a minute while it should be playing is given up on.
     let lastAt = video.currentTime, lastMoved = Date.now();
     for (;;) {
-      try { buffer.appendBuffer(bytes as BufferSource); await idle(); return; }
+      try { buffer.appendBuffer(bytes as BufferSource); await idle(); appended += bytes.length; return; }
       catch (error) {
         if ((error as DOMException).name !== "QuotaExceededError") throw error;
         if (quiet() || gen !== generation) return;
@@ -129,8 +142,10 @@ export function startMse(options: MseOptions): MsePlayback {
   async function room(gen: number) {
     for (;;) {
       if (quiet() || gen !== generation) return;
-      const at = video.currentTime, ahead = ranges().filter(([from, to]) => from <= at + 1 && to > at).map(([, to]) => to - at)[0] ?? 0;
-      if (ahead < aheadMax) break;
+      const at = video.currentTime, list = ranges(), ahead = list.filter(([from, to]) => from <= at + 1 && to > at).map(([, to]) => to - at)[0] ?? 0;
+      // How many seconds fit in the byte allowance, from how big this video's seconds have turned out to be.
+      const seconds = loading && list.length ? list[list.length - 1][1] - loading.from : 0, perSecond = seconds >= 3 ? appended / seconds : 0;
+      if (ahead < Math.min(aheadMax, perSecond > 0 ? Math.max(6, AHEAD_BYTES / perSecond) : aheadMax)) break;
       await sleep(500);
     }
     const old = ranges()[0]; if (buffer && old && old[1] < video.currentTime - BEHIND_KEEP) { await idle(); try { buffer.remove(old[0], Math.min(old[1], video.currentTime - BEHIND_KEEP)); } catch { /* it is only tidying */ } }
@@ -141,7 +156,7 @@ export function startMse(options: MseOptions): MsePlayback {
     let start = target;
     try { const answer = await fetch(options.startUrl(target, force), { credentials: "include", signal: mine.signal }); if (answer.ok) { const value = (await answer.json() as { start?: number }).start; if (typeof value === "number" && value >= 0 && value <= target + 0.001) start = value; } } catch { if (mine.signal.aborted) return; }
     if (quiet() || gen !== generation) return;
-    loading = { from: start, target };
+    loading = { from: start, target }; appended = 0;
     let response: Response;
     try { response = await fetch(options.streamUrl(target, force), { credentials: "include", signal: mine.signal }); } catch { if (!mine.signal.aborted) options.onProblem("network", "The video stream could not be reached."); return; }
     if (!response.ok || !response.body) { let message = "The server could not start this video."; try { message = ((await response.json()) as { error?: string }).error ?? message; } catch { /* keep the default */ } if (gen === generation) options.onProblem("network", message); return; }
@@ -189,6 +204,16 @@ export function startMse(options: MseOptions): MsePlayback {
     void begin(at, options.forceVideo);
   };
   video.addEventListener("seeking", onSeeking);
+  // A browser short of memory can let go of the data under the picture itself (Firefox did, keeping what came after): the picture then waits
+  // in a hole for data that is already behind the stream being read. When that has lasted a few seconds, the stream is opened again at the picture.
+  let stuckSince = 0;
+  const watch = setInterval(() => {
+    if (!buffer || destroyed || video.paused || video.ended || video.seeking) { stuckSince = 0; return; }
+    const at = video.currentTime, list = ranges();
+    if (list.some(([from, to]) => at >= from - 0.05 && at <= to + 0.05) || !list.some(([from]) => from > at + 0.05)) { stuckSince = 0; return; }
+    stuckSince = stuckSince || Date.now();
+    if (Date.now() - stuckSince > 3000) { stuckSince = 0; void begin(at, options.forceVideo); }
+  }, 1000);
   mediaSource.addEventListener("sourceopen", () => {
     if (destroyed || mediaSource.readyState !== "open") return;
     if (options.duration > 0) { try { mediaSource.duration = options.duration; } catch { /* set when a buffer exists */ } }
@@ -196,7 +221,7 @@ export function startMse(options: MseOptions): MsePlayback {
   }, { once: true });
   video.src = url;
   return { destroy() {
-    destroyed = true; loading = null; controller?.abort(); video.removeEventListener("seeking", onSeeking);
+    destroyed = true; loading = null; controller?.abort(); video.removeEventListener("seeking", onSeeking); clearInterval(watch);
     try { video.removeAttribute("src"); video.load(); } catch { /* the page is going away */ }
     URL.revokeObjectURL(url);
   } };
