@@ -40,7 +40,7 @@ check "$d/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.jellyfin.yml:do
 check "$d/.env" '^JELLYFIN_PORT=8097$'; check "$d/.env" '^PLEX_PORT=32401$'
 check "$d/docker-compose.jellyfin.yml" '/library/streamrd:ro'; check "$d/docker-compose.plex.yml" '/data:ro'
 absent "$d/docker-compose.jellyfin.yml" '/mnt/zurg'
-for dir in streamrd/library phosphor/library jellyfin/config plex/config; do [ -d "$d/config/$dir" ] || { echo "FAIL: config/$dir missing" >&2; exit 1; }; done
+for dir in streamrd/library phosphor/library jellyfin/config plex/config streamrd/library/Movies "streamrd/library/TV Shows" phosphor/library/Movies "phosphor/library/TV Shows"; do [ -d "$d/config/$dir" ] || { echo "FAIL: config/$dir missing" >&2; exit 1; }; done   # Movies and TV Shows are there before anything is exported
 
 run --dir "$d"                       # a plain re-run keeps what was chosen
 check "$d/.env" 'jellyfin.yml:docker-compose.plex.yml'

@@ -69,7 +69,7 @@ it("finds its own container and gives a media server that container's folders, n
   ]);
   expect(JSON.stringify(spec)).not.toMatch(/Privileged|docker\.sock|"NetworkMode":"host"|CapAdd|PidMode/);
   // The folders the server is given exist before Docker mounts them (Docker would make them as root).
-  for (const folder of ["jellyfin/config", "jellyfin/cache", "streamrd/library", "phosphor/library"]) expect(fs.statSync(path.join(folders, "config", folder)).isDirectory(), folder).toBe(true);
+  for (const folder of ["jellyfin/config", "jellyfin/cache", "streamrd/library", "phosphor/library", "streamrd/library/Movies", "streamrd/library/TV Shows", "phosphor/library/Movies", "phosphor/library/TV Shows"]) expect(fs.statSync(path.join(folders, "config", folder)).isDirectory(), folder).toBe(true);   // Movies and TV Shows exist before anything is exported
   expect(fs.existsSync(path.join(folders, "config", "plex"))).toBe(false);
   expect(docker.calls.filter(entry => entry.startsWith("GET /containers/") && entry.includes(SELF_ID))).toHaveLength(1);   // it asked about itself once
 });

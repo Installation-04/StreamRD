@@ -44,6 +44,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
   async function requestMovie(name, id) {
     await viewer.goto(`${url}/discover`, { waitUntil: 'networkidle' });
     await viewer.getByLabel('Search movies or shows', { exact: true }).fill(name);
+    await viewer.getByRole('combobox', { name: /^Media type/ }).selectOption('movie');   // StreamRD searches movies and shows together unless told otherwise
     await viewer.getByRole('combobox', { name: /^Metadata source/ }).selectOption('tmdb');
     await viewer.getByRole('link', { name: `View ${name}`, exact: true }).click();
     await viewer.getByRole('heading', { name, exact: true }).waitFor();
@@ -94,6 +95,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
 
     await viewer.goto(`${url}/discover`, { waitUntil: 'networkidle' });
     await viewer.getByLabel('Search movies or shows', { exact: true }).fill('Elephants Dream');
+    await viewer.getByRole('combobox', { name: /^Media type/ }).selectOption('movie');
     await viewer.getByRole('combobox', { name: /^Metadata source/ }).selectOption('tmdb');
     await viewer.getByRole('link', { name: 'View Elephants Dream', exact: true }).waitFor();
     await viewerNoOverflow('desktop request discovery'); await viewerShot('request-discovery');

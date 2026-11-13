@@ -46,7 +46,7 @@ export interface DiscoveryDetail {
     request: MediaRequest | null;
 }
 export type DiscoveryResults = {
-    results: MetadataCandidate[];
+    results: Array<MetadataCandidate & { status?: "available" | "requested" | "processing" | "declined" | "attention" | null }>;
 };
 export const STATUS_LABEL: Record<RequestStatus, string> = { requested: "Awaiting approval", approved: "Approved", submitting: "Sending to downloader", queued: "Queued", downloading: "Downloading", downloaded: "Download complete", available: "Available on server", rejected: "Not approved", cancelled: "Cancelled", attention: "Needs administrator", failed: "Download failed" };
 export const destinationLabel = (destination: MediaRequest["destination"]) => destination === "cloud" ? "Cloud download" : destination === "local" ? "Local · qBittorrent" : "Destination not assigned";

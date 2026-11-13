@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rateLimit } from "../util/rateLimit";
 import { asyncHandler } from "../http";
-import { alignedStart, streamConverted, streamStatus } from "../transcode";
+import { alignedStart, reportStreamProblem, streamConverted, streamStatus } from "../transcode";
 
 /**
  * Converted playback. The path carries an unguessable, short-lived id handed out by an authorised play request (see transcode.ts), so a
@@ -30,3 +30,13 @@ streamRouter.get("/:id/status", rateLimit({ windowMs: 60_000, max: 60 }), (req, 
   if (!id.success) { res.status(400).json({ error: "Invalid stream request." }); return; }
   res.setHeader("Cache-Control", "no-store"); res.json(streamStatus(id.data));
 });
+/** The player's account of why it stopped (browser family, kind of problem, how far it got): written to the log, nothing else. */
+const problem = z.object({
+  kind: z.enum(["network", "decode", "unsupported", "stalled", "memory", "other"]), detail: z.string().trim().max(160).default(""),
+  browser: z.enum(["Firefox", "Chrome", "Safari", "Edge", "other"]).default("other"), at: z.number().finite().min(0).max(604_800).default(0), code: z.number().int().min(0).max(10).nullable().default(null),
+}).strict();
+streamRouter.post("/:id/problem", rateLimit({ windowMs: 60_000, max: 12 }), asyncHandler(async (req, res) => {
+  const id = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).safeParse(req.params.id), parsed = problem.safeParse(req.body ?? {});
+  if (!id.success || !parsed.success) { res.status(400).json({ error: "Invalid report." }); return; }
+  res.status(reportStreamProblem(id.data, parsed.data) ? 204 : 404).end();
+}));

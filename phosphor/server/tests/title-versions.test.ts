@@ -5,7 +5,7 @@ import { db } from "../src/db";
 import { signSession } from "../src/auth/jwt";
 import { queueAccountScans, runAccountLibraryJob, setAccountImportHook } from "../src/account-library";
 import { scanAccountPage } from "../src/providers/account-library";
-import { backfillGroups, idKey, qualityLabel, titleKey } from "../src/versions";
+import { backfillGroups, idKey, qualityLabel, regroupSeries, titleKey } from "../src/versions";
 
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
 const scan = vi.mocked(scanAccountPage);
@@ -32,6 +32,7 @@ it("names titles and release qualities", () => {
   expect(titleKey("Up", 2009, "movie")).not.toBe(titleKey("Up", 2009, "series"));
   expect(titleKey("Up", 2009, "movie")).not.toBe(titleKey("Up", 2010, "movie"));
   expect(titleKey("!!!", null, "movie")).toBeNull();
+  expect(titleKey("The Terminal List", 2022, "series")).toBe(titleKey("the terminal list", null, "series"));   // a show is named without its year
   expect(idKey({ imdbId: "tt0133093" })).toBe("imdb:tt0133093"); expect(idKey({ tmdbId: "603" })).toBe("tmdb:603"); expect(idKey({ imdbId: "nope" })).toBeNull();
   expect(qualityLabel("Movie.2020.2160p.UHD.BluRay.REMUX.HDR.HEVC-GRP")).toBe("4K · Remux · HEVC · HDR");
   expect(qualityLabel("Movie.2020.1080p.WEB-DL.DDP5.1.x264-GRP")).toBe("1080p · WEB · H.264");
@@ -87,6 +88,21 @@ it("joins different names of one matched title and names titles that existed bef
   expect((await byRef("x")).groupKey).toBe("imdb:tt0078748"); expect((await byRef("y")).groupKey).toBe("imdb:tt0078748"); expect((await byRef("z")).groupKey).toMatch(/^movie\|aliens\|1986$/);
   expect((await request(app).get(`/api/shared-libraries/${lib}/items`).set(auth(viewer.token))).body.total).toBe(2);    // Alien (two versions) and Aliens
   expect(await backfillGroups()).toBe(0);                                                  // idempotent
+});
+it("puts the seasons of a show together when one is named with a year and another is not, also for seasons imported before shows were named without one", async () => {
+  const owner = await user("admin"), viewer = await user();
+  await imports(owner, [{ providerRef: "s1", name: "The.Terminal.List.S01.2022.1080p.WEB.x264.mkv" }, { providerRef: "s2", name: "The.Terminal.List.S02.1080p.WEB.x264.mkv" }, { providerRef: "other", name: "Another.Show.S01.1080p.WEB.x264.mkv" }]);
+  const lib = await library(owner);
+  expect((await byRef("s1")).groupKey).toBe((await byRef("s2")).groupKey);                  // one show, whatever year a release name carries
+  expect((await request(app).get(`/api/shared-libraries/${lib}/items`).set(auth(viewer.token))).body.total).toBe(2);   // the show once, and the other show
+  // Seasons that were saved under the old name, with the year: they are put together at the next start, and nothing else changes.
+  await db.accountMedia.update({ where: { id: (await byRef("s1")).id }, data: { groupKey: "series|the terminal list|2022", isPrimary: true } });
+  expect((await request(app).get(`/api/shared-libraries/${lib}/items`).set(auth(viewer.token))).body.total).toBe(3);   // as it was: two shows of that name
+  expect(await regroupSeries()).toBe(1);
+  expect((await byRef("s1")).groupKey).toBe("series|the terminal list|");
+  expect((await request(app).get(`/api/shared-libraries/${lib}/items`).set(auth(viewer.token))).body.total).toBe(2);
+  expect((await byRef("s1")).name).toBe((await db.accountMedia.findFirstOrThrow({ where: { providerRef: "s1" } })).name);   // untouched but for the group
+  expect(await regroupSeries()).toBe(0);                                                    // idempotent
 });
 it("keeps each account's titles apart and respects a viewing limit when listing versions", async () => {
   const owner = await user("admin"), other = await user("admin");

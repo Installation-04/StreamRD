@@ -24,6 +24,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.25.2 | The installer installs what a bare Linux machine lacks: curl, tar, Docker Engine and the Compose plugin, with Docker started and set to start with the machine, so one command is enough; `--no-install-docker` refuses, `--prepare` stops after preparing the machine | M | none |
 | v0.25.3 | Phosphor is off unless asked for (`install.sh --phosphor`); an install already running it keeps it | S | none |
 | v0.26.0 | Admin → Add-ons: Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, Prowlarr, FlareSolverr and Maintainerr installed, stopped, updated and removed with one button each, with a log box | M | none |
+| v0.26.1 | Converted video keeps playing in Firefox; a video that stops says why in the log; Plex and Jellyfin list Movies and TV Shows from the first start; a refused request says why; a show's seasons are one show, with an episode picker; Discover searches movies and shows together with one-click requests | M | none (seasons are regrouped by name) |
 | next | Add-ons sign themselves in and link to each other: logins and API keys, Prowlarr to Sonarr and Radarr, a download client, Bazarr and Seerr to their sources | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | next | TV shows work like Plex: seasons grouped under their show when the Real-Debrid account is scanned, with an episode browser | L | additive |

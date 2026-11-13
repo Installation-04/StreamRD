@@ -150,6 +150,16 @@ export const activeConversions = () => active;
 /** What ffmpeg complained about, with the link taken out, for the log and for the player's explanation. */
 const tidy = (text: string) => text.replace(/https?:\/\/\S+/g, "<link>").replace(/\s+/g, " ").trim().slice(-600);
 /** What the player may ask after a converted stream failed to play. Nothing here reveals the link. */
+/**
+ * What the player says when it gives up on a converted video (the browser, how far it got and why), so Admin → Logs and the diagnostic
+ * bundle can say what happened in the browser; the server only ever sees its own side of a stream. Nothing here identifies a file or a link.
+ */
+export function reportStreamProblem(id: string, problem: { kind: string; detail: string; browser: string; at: number; code: number | null }): boolean {
+  const entry = streams.get(id);
+  if (!entry || entry.expires < Date.now()) return false;
+  void logEvent("warn", "playback", `The ${problem.browser} player stopped a converted video (${entry.mode}) at ${Math.floor(problem.at)}s: ${problem.kind}${problem.detail ? `, ${problem.detail}` : ""}`.slice(0, 300), { userId: entry.userId, meta: { mode: entry.mode, kind: problem.kind, browser: problem.browser, at: Math.floor(problem.at), code: problem.code } }).catch(() => undefined);
+  return true;
+}
 export function streamStatus(id: string): { known: boolean; lastError: string | null; running: boolean } {
   const entry = streams.get(id);
   return entry && entry.expires >= Date.now() ? { known: true, lastError: entry.lastError ?? null, running: Boolean(entry.stop) } : { known: false, lastError: null, running: false };

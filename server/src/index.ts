@@ -8,7 +8,7 @@ import { startMetadataWorker } from "./metadata/automation";
 import { startLinkHealthWorker } from "./link-health";
 import { createApp } from "./app";
 import { backfillRatings } from "./ratings";
-import { backfillGroups } from "./versions";
+import { backfillGroups, regroupSeries } from "./versions";
 import { config } from "./config";
 import { db, enableWal, encryptStoredSecrets } from "./db";
 import { logEvent } from "./logger";
@@ -35,7 +35,7 @@ async function main() {
     startMetadataWorker();
     startLinkHealthWorker();
     void backfillRatings().catch(() => undefined); // ratings of titles matched before viewing limits existed
-    void backfillGroups().catch(() => undefined); // names titles imported before versions existed
+    void backfillGroups().then(() => regroupSeries()).catch(() => undefined); // names titles imported before versions existed, and puts a show's seasons together
     startRequestWorker();
     startAutomaticApprovals();
     startProwlarr(); // Prowlarr, which finds releases for requests, is started by the Docker helper unless it was removed

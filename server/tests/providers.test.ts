@@ -69,6 +69,19 @@ describe("RealDebridProvider", () => {
       rd.addTorrent(creds, "https://example.com/file.torrent")
     ).rejects.toThrowError(/magnet/i);
   });
+
+  it("removes a torrent it just added when the file selection is refused, and says what was refused", async () => {
+    const json = (status: number, body?: unknown) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${new URL(url).pathname}`);
+      if (url.endsWith("/torrents/addMagnet")) return Promise.resolve(json(201, { id: "T1" }));
+      if (url.includes("/torrents/selectFiles/")) return Promise.resolve(json(403, { error: "permission_denied" }));
+      return Promise.resolve(json(204));
+    }));
+    await expect(rd.addTorrent(creds, "magnet:?xt=urn:btih:" + "a".repeat(40))).rejects.toMatchObject({ statusCode: 403, message: expect.stringMatching(/permission_denied/) });
+    expect(calls).toEqual(["POST /rest/1.0/torrents/addMagnet", "POST /rest/1.0/torrents/selectFiles/T1", "DELETE /rest/1.0/torrents/delete/T1"]);   // nothing is left behind in the account
+  });
 });
 
 describe("AllDebridProvider", () => {

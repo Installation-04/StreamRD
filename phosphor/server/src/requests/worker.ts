@@ -2,7 +2,8 @@ import { MediaRequest, Prisma } from "@prisma/client";
 import { db } from "../db";
 import { accountProviderContext, queueAccountScans } from "../account-library";
 import { getProvider } from "../providers/registry";
-import { PROVIDER_IDS, ProviderId } from "../providers/types";
+import { PROVIDER_IDS, ProviderError, ProviderId } from "../providers/types";
+import { logEvent } from "../logger";
 import { QbitClient, RequestClientError, TransferState, validateMagnet } from "./clients";
 import { qbitContext } from "./config";
 
@@ -15,6 +16,25 @@ export async function cloudContext(userId: string, providerId: string, client: S
   return { fingerprint: ctx.fingerprint, creds: ctx.creds, provider };
 }
 const next = (seconds: number) => new Date(Date.now() + seconds * 1000);
+/**
+ * When the cloud provider answered a submission with a refusal, why, in words the administrator can act on. Null when it did not answer
+ * (a timeout, a server error, no connection): then nobody can tell whether the transfer was created, and it is not submitted again by itself.
+ * Real-Debrid names its refusals with a short code; the code is matched here and never shown.
+ */
+export function refusalOf(error: unknown): string | null {
+  if (!(error instanceof ProviderError)) return null;
+  let name = "The provider"; try { name = getProvider(error.provider).displayName || name; } catch { /* keep the general name */ }
+  const detail = error.message.replace(/^\[[^\]]*\]\s*/, "").toLowerCase(), code = error.statusCode ?? 0;
+  if (/infring|blocked|banned/.test(detail)) return `${name} refused this torrent (it blocks some releases).`;
+  if (/premium|permission_denied|account_locked|not_allowed.*account/.test(detail)) return `${name} would not accept it: the account needs an active premium subscription.`;
+  if (/bad_token|expired_token|invalid_token|auth/.test(detail) || code === 401) return `${name} did not accept the saved key. Save it again in Setup, then approve this request again.`;
+  if (/ip_not_allowed|action_not_allowed|ip_address|vpn|proxy/.test(detail) || code === 403) return `${name} refused this server's address (a VPN or data-centre address is often not allowed).`;
+  if (/too_many_active|active_downloads|slot|limit/.test(detail) && code !== 429) return `${name} says too many downloads are already active on the account.`;
+  if (/too_many_requests/.test(detail) || code === 429) return `${name} is limiting requests from this server. Try again in a few minutes.`;
+  if (/magnet|torrent|invalid|bad_request|file/.test(detail) && code >= 400 && code < 500) return `${name} could not read this release's magnet link or its files.`;
+  if (code >= 400 && code < 500) return `${name} refused the request (${detail.slice(0, 60) || code}).`;
+  return null;
+}
 const WORKING = ["approved", "submitting", "queued", "downloading", "downloaded"];
 async function claim() {
   return db.$transaction(async tx => {
@@ -117,6 +137,15 @@ export async function runRequestJob(): Promise<boolean> {
       return true;
     }
     const submission = job.status === "submitting";
+    // The provider's own answer is kept in the log, so a refusal is never reported as an unknown outcome.
+    if (submission) void logEvent("warn", "provider_error", `Submitting "${job.name}" to ${job.providerId ?? "the provider"} failed: ${(error instanceof Error ? error.message : "unknown error").replace(/^\[[^\]]*\]\s*/, "").slice(0, 160)}`, { provider: job.providerId ?? undefined, meta: { requestId: job.id } }).catch(() => undefined);
+    const refused = submission && job.destination === "cloud" && !job.providerRef ? refusalOf(error) : null;
+    if (refused) {
+      // The provider said no (and a torrent it had just added was removed again): the request can be approved again once that is fixed.
+      const message = `${refused} Fix that, then approve this request again.`;
+      await finish(job, { status: "attention", startedAt: null, downloadState: "approval_blocked", error: message, attempts: { increment: 1 }, nextPollAt: next(365 * 86400) }, message);
+      return true;
+    }
     const changedConnection = error instanceof RequestClientError && /source|connection changed|administrator|configured|configuration/.test(error.message);
     const terminal = submission || changedConnection || job.attempts >= 4;
     const message = submission ? confirmedRef ? "Submission returned a transfer reference, but its connection changed. Restore the original connection and resume tracking; do not add it again." : "Could not confirm submission. Inspect the destination and reconcile its transfer reference before retrying; this request will not be submitted automatically again." : changedConnection ? "The approved connection is no longer available or has changed. Restore it before resuming tracking." : "Could not refresh the transfer. Check the download client and resume tracking if needed.";

@@ -6,7 +6,7 @@ import { requireAuth, requireAdmin } from "../auth/middleware";
 import { db } from "../db";
 import { asyncHandler } from "../http";
 import { searchMetadata, fetchMetadata } from "../metadata/providers";
-import { MetadataError } from "../metadata/types";
+import { MetadataCandidate, MetadataDetails, MetadataError } from "../metadata/types";
 import { PROVIDER_IDS } from "../providers/types";
 import { assertRequestActor, canonicalMediaKey, lockRequests, mediaAvailability, requestAvailability, requestEvents, requestView, RequestError, REQUEST_STATUSES, ACTIVE_REQUEST_STATUSES } from "../requests/media";
 import { RequestClientError, validateMagnet } from "../requests/clients";
@@ -46,11 +46,33 @@ async function followed(req: Request, admin = false) {
 }
 const pageInput = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), cursor: id.optional(), status: z.enum(REQUEST_STATUSES).optional(), q: z.string().trim().max(200).optional() }).strict();
 
+/** Where a search result stands for this person, in one word: already in a library they can open, or the state of the request for it. */
+const REQUEST_STATE: Record<string, "requested" | "processing" | "available" | "declined" | "attention"> = {
+  requested: "requested", approved: "requested", submitting: "processing", queued: "processing", downloading: "processing", downloaded: "processing",
+  available: "available", rejected: "declined", cancelled: "declined", attention: "attention", failed: "attention",
+};
+async function withStatus(userId: string, results: MetadataCandidate[]) {
+  if (!results.length) return [];
+  const rows = await db.mediaRequest.findMany({ where: { OR: results.map(found => ({ provider: found.provider, externalId: found.id, mediaType: found.type })) }, select: { provider: true, externalId: true, mediaType: true, status: true } });
+  const out: Array<MetadataCandidate & { status: "available" | "requested" | "processing" | "declined" | "attention" | null }> = [];
+  for (const found of results) {
+    const light: MetadataDetails = { ...found, genres: [], backdropUrl: null, cast: [], runtimeMinutes: null, rating: null, ratingSource: null, contentRating: null, imdbId: found.provider === "free" && /^tt\d{7,10}$/.test(found.id) ? found.id : null, tmdbId: found.provider === "tmdb" ? found.id : null, providerUrl: "", fetchedAt: "" };
+    const open = (await mediaAvailability(userId, light)).length > 0, row = rows.find(entry => entry.provider === found.provider && entry.externalId === found.id && entry.mediaType === found.type);
+    out.push({ ...found, status: open ? "available" : row ? REQUEST_STATE[row.status] ?? "requested" : null });
+  }
+  return out;
+}
+/** One search for movies and shows together, the way a request page works; a type narrows it. Each result says where it stands for this person. */
 discoveryRouter.get("/search", lookupLimit, action(async (req, res) => {
-  const query = parse(z.object({ q: z.string().trim().min(1).max(200), type: z.enum(["movie", "series"]), provider: z.enum(["tmdb", "omdb", "free"]).optional() }).strict(), req.query);
-  const results = await searchMetadata({ query: query.q, type: query.type, provider: query.provider });
+  const query = parse(z.object({ q: z.string().trim().min(1).max(200), type: z.enum(["movie", "series", "all"]).default("all"), provider: z.enum(["tmdb", "omdb", "free"]).optional() }).strict(), req.query);
+  const kind = query.type ?? "all", types: Array<"movie" | "series"> = kind === "all" ? ["movie", "series"] : [kind];
+  const settled = await Promise.allSettled(types.map(type => searchMetadata({ query: query.q, type, provider: query.provider })));
+  const lists = settled.flatMap(outcome => outcome.status === "fulfilled" ? [outcome.value] : []);
+  if (!lists.length) throw (settled[0] as PromiseRejectedResult).reason;   // every search failed: say why, as before
+  const merged: MetadataCandidate[] = [];
+  for (let at = 0; merged.length < 30 && lists.some(list => at < list.length); at++) for (const list of lists) if (at < list.length && merged.length < 30) merged.push(list[at]);   // best of each kind first
   await assertRequestActor(req.session!);
-  res.json({ results });
+  res.json({ results: await withStatus(req.session!.sub, merged) });
 }));
 discoveryRouter.get("/:provider/:type/:id", lookupLimit, action(async (req, res) => {
   const selection = parse(identity, req.params), media = await fetchMetadata(selection);

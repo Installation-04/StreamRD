@@ -63,12 +63,17 @@ jobs:
         env:
           QA_ARTIFACT_DIR: ${{ runner.temp }}/journey
         run: node qa/lab/journey.cjs
+      - name: Converted video in Firefox (a small allowance of memory for video, as a Blu-ray rip needs more than Firefox gives)
+        env:
+          QA_ARTIFACT_DIR: ${{ runner.temp }}/journey-firefox
+          JOURNEY_BROWSER: firefox
+        run: cd qa && npx playwright install --with-deps firefox && cd .. && node qa/lab/journey.cjs
       - name: Upload the journey report and screenshots
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: streamrd-journey
-          path: ${{ runner.temp }}/journey
+          path: ${{ runner.temp }}/journey*
           if-no-files-found: ignore
 
   web:

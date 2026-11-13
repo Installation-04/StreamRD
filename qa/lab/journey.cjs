@@ -17,6 +17,7 @@ const fs = require("node:fs"), os = require("node:os"), path = require("node:pat
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "streamrd-journey-")), port = Number(process.env.LAB_PORT || 8080), base = `http://127.0.0.1:${port}`;
 const artifacts = process.env.QA_ARTIFACT_DIR || path.join(dir, "artifacts");
 const KEY = "lab-debrid-key-0123456789", sleep = ms => new Promise(done => setTimeout(done, ms));
+const firefoxRun = process.env.JOURNEY_BROWSER === "firefox";
 const report = { steps: [], pageErrors: [], startedAt: new Date().toISOString() };
 const step = async (name, run) => { const at = Date.now(); process.stdout.write(`• ${name} … `); await run(); report.steps.push({ name, ms: Date.now() - at }); console.log(`ok (${((Date.now() - at) / 1000).toFixed(1)}s)`); };
 /** Polls until check() returns something truthy; the last value seen is in the failure message. */
@@ -38,11 +39,23 @@ async function startLab() {
 async function main() {
   fs.mkdirSync(artifacts, { recursive: true });
   const lab = await startLab();
-  const { chromium } = require("playwright");
-  const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
+  const { chromium, firefox } = require("playwright");
+  // JOURNEY_BROWSER=firefox runs the journey as far as the converted video, in Firefox with a small allowance of memory for video (a real
+  // Blu-ray rip does not fit Firefox's own, which is smaller than Chrome's), and checks that it keeps playing.
+  const browser = firefoxRun ? await firefox.launch({ firefoxUserPrefs: { "media.autoplay.default": 0, "media.autoplay.blocking_policy": 0, "media.mediasource.eviction_threshold.video": 60_000_000, "media.mediasource.eviction_threshold.audio": 10_000_000 } }) : await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
   const person = async name => {
     const context = await browser.newContext({ viewport: { width: 1366, height: 850 }, colorScheme: "dark", acceptDownloads: true }), page = await context.newPage();
     page.on("pageerror", error => report.pageErrors.push({ who: name, message: error.message.slice(0, 300) }));
+    if (process.env.JOURNEY_DEBUG) {   // what the page hands to the browser's streaming API, and what the browser answers
+      await page.addInitScript(() => {
+        const log = (...a) => console.log("[mse] " + a.join(" "));
+        const append = SourceBuffer.prototype.appendBuffer;
+        SourceBuffer.prototype.appendBuffer = function (data) { try { const r = append.call(this, data); log("append ok", data.byteLength, "ranges", Array.from({ length: this.buffered.length }, (_, i) => `${this.buffered.start(i).toFixed(1)}-${this.buffered.end(i).toFixed(1)}`).join(",")); return r; } catch (e) { log("append THROWS", e.name, data.byteLength); throw e; } };
+        const remove = SourceBuffer.prototype.remove; SourceBuffer.prototype.remove = function (a, b) { log("remove", a.toFixed(1), b.toFixed(1)); return remove.call(this, a, b); };
+        document.addEventListener("error", e => log("element error", e.target && e.target.tagName, e.target && e.target.error && e.target.error.code, e.target && e.target.error && e.target.error.message), true);
+      });
+      page.on("console", message => { const text = message.text(); if (text.startsWith("[mse]")) console.log(text.slice(0, 200)); });
+    }
     const plays = []; page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/play")) plays.push(Date.now()); });
     const text = async () => (await page.locator("body").innerText()).replace(/\s*\n+\s*/g, " / ");
     const shot = file => page.screenshot({ path: path.join(artifacts, `${file}.png`) }).catch(() => undefined);
@@ -134,6 +147,16 @@ async function main() {
       assert.doesNotMatch(await owner.text(), /may not play in your browser|could not be played/, "a converted stream that is playing needs no warning");
     });
 
+    if (firefoxRun) {
+      await step("Firefox keeps playing the converted video on through its small allowance of memory, and does not stop with an error", async () => {
+        const state = await until("half a minute of picture", async () => { const now = await owner.video(); assert.equal(now.error, null, "the video element reported an error"); assert.doesNotMatch(await owner.text(), /could not play|could not be played/i, "the player gave up on the video"); return now.at > 30 ? now : null; }, 90_000, 1000);
+        assert.ok(!state.paused, "the video is still playing");
+        await owner.shot("firefox-converted");
+      });
+      assert.deepEqual(report.pageErrors, [], "no page raised a script error");
+      return;
+    }
+
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);
       const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=6[01]\b/.test(now.src) ? now : null; }, 45_000, 500);   // the second that was asked for, not where the copied picture began
@@ -165,6 +188,10 @@ async function main() {
       await owner.open("TV Shows", "Example Show"); await owner.page.getByRole("button", { name: /play from server/i }).click();
       await until("the episode list", async () => /S01E03/.test(await owner.text()), 20_000);
       assert.doesNotMatch(await owner.text(), /\/Example\.Show/, "file names are shown without the provider's leading slash");
+      assert.match(await owner.text(), /Choose an episode\./, "a season pack is laid out by season and episode, not as a list of file names");
+      assert.equal(await owner.page.getByRole("tab", { name: /Season 1/ }).getAttribute("aria-selected"), "true");
+      assert.match(await owner.page.getByRole("tabpanel", { name: "Season 1" }).innerText(), /Episode 1[\s\S]*Episode 2[\s\S]*Episode 3/, "the episodes are in order");
+      await owner.shot("episodes");
       await owner.page.getByRole("button", { name: /S01E01/ }).click();
       await until("episode 1", async () => { const now = await owner.video(); return now && now.at > 2 && /S01E01/.test(await owner.text()); }, 45_000, 500);
       await owner.seek(0.93);
@@ -217,9 +244,15 @@ async function main() {
       await until("the viewer's setup page", async () => /Server-managed playback/.test(await friend.text()), 20_000, 300);
       assert.doesNotMatch(await friend.text(), /private debrid library/i, "a viewer is not sent to import from a debrid account");
       await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
-      await friend.page.getByRole("searchbox").first().or(friend.page.getByRole("textbox").first()).fill("Cosmos Laundromat"); await friend.page.keyboard.press("Enter");
-      await friend.page.getByRole("link", { name: /cosmos laundromat/i }).first().click(); await friend.page.waitForLoadState("networkidle");
-      await friend.page.getByRole("button", { name: /request movie/i }).click();
+      // One search covers movies and shows, and a title is requested with one click on its card, as on a request page.
+      await friend.page.getByLabel("Search movies or shows", { exact: true }).fill("Cosmos Laundromat");
+      assert.equal(await friend.page.getByRole("combobox", { name: /^Media type/ }).inputValue(), "all", "the search covers movies and shows unless told otherwise");
+      const ask = friend.page.getByRole("button", { name: "Request Cosmos Laundromat" }).first();
+      await until("a result with a Request button", async () => ask.isVisible(), 20_000, 300);
+      await ask.click();
+      await until("the card to say the title is requested", async () => /Requested|On its way/.test(await friend.page.getByRole("region", { name: "Discovery results" }).innerText()), 20_000, 300);
+      await friend.shot?.("discover-request");
+      await friend.page.goto(`${base}/requests`, { waitUntil: "networkidle" });
       await until("the request to be received", async () => /Awaiting approval/.test(await friend.text()), 20_000);
     });
 
@@ -336,7 +369,7 @@ async function main() {
       const log = () => card.getByRole("log").innerText().catch(() => "");
       await until("the download to show in the log", async () => /Downloading image lscr\.io\/linuxserver\/sonarr/.test(await log()), 20_000, 300);
       await until("Sonarr to be running", async () => (await status()) === "Running", 60_000, 500);
-      assert.match(await log(), /Started\. It listens on port 8989/);
+      await until("the start in the log", async () => /Started\. It listens on port 8989/.test(await log()), 20_000, 500);   // the log is read a moment after the status
       assert.equal(await card.getByRole("link", { name: "Open Sonarr" }).getAttribute("href"), `http://${new URL(base).hostname}:8989`);
       await owner.shot("addons-marketplace");
       await card.getByRole("button", { name: "Stop", exact: true }).click();
