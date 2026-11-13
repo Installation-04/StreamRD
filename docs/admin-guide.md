@@ -63,7 +63,9 @@ row has its own **Copy** and **Details** (its extra data), and **Download all
 matching…** saves every matching entry (up to 50,000) as a text log, JSON lines or
 CSV with the same filters. Turn on **Live** to refresh every 10 seconds. Spreadsheet
 exports neutralize cells that start with `=`, `+`, `-` or `@`. Downloading is itself
-recorded as an administrator action. Logs can contain user ids and provider names;
+recorded as an administrator action. When a converted video stops in someone's browser, the player reports it: a *playback* warning says which
+browser, what kind of problem and how far it got (never a link or a file name), and a request the provider refuses is logged with the provider's own
+answer, so "it stopped after a few seconds" can be answered from here and from the diagnostic bundle. Logs can contain user ids and provider names;
 share exports carefully.
 
 ## Updates, backups and restore (System page)

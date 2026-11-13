@@ -42,10 +42,20 @@ async function main() {
   const { chromium, firefox } = require("playwright");
   // JOURNEY_BROWSER=firefox runs the journey as far as the converted video, in Firefox with a small allowance of memory for video (a real
   // Blu-ray rip does not fit Firefox's own, which is smaller than Chrome's), and checks that it keeps playing.
-  const browser = firefoxRun ? await firefox.launch({ firefoxUserPrefs: { "media.autoplay.default": 0, "media.autoplay.blocking_policy": 0, "media.mediasource.eviction_threshold.video": 20_000_000, "media.mediasource.eviction_threshold.audio": 5_000_000 } }) : await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
+  const browser = firefoxRun ? await firefox.launch({ firefoxUserPrefs: { "media.autoplay.default": 0, "media.autoplay.blocking_policy": 0, "media.mediasource.eviction_threshold.video": 60_000_000, "media.mediasource.eviction_threshold.audio": 10_000_000 } }) : await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" }), args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
   const person = async name => {
     const context = await browser.newContext({ viewport: { width: 1366, height: 850 }, colorScheme: "dark", acceptDownloads: true }), page = await context.newPage();
     page.on("pageerror", error => report.pageErrors.push({ who: name, message: error.message.slice(0, 300) }));
+    if (process.env.JOURNEY_DEBUG) {   // what the page hands to the browser's streaming API, and what the browser answers
+      await page.addInitScript(() => {
+        const log = (...a) => console.log("[mse] " + a.join(" "));
+        const append = SourceBuffer.prototype.appendBuffer;
+        SourceBuffer.prototype.appendBuffer = function (data) { try { const r = append.call(this, data); log("append ok", data.byteLength, "ranges", Array.from({ length: this.buffered.length }, (_, i) => `${this.buffered.start(i).toFixed(1)}-${this.buffered.end(i).toFixed(1)}`).join(",")); return r; } catch (e) { log("append THROWS", e.name, data.byteLength); throw e; } };
+        const remove = SourceBuffer.prototype.remove; SourceBuffer.prototype.remove = function (a, b) { log("remove", a.toFixed(1), b.toFixed(1)); return remove.call(this, a, b); };
+        document.addEventListener("error", e => log("element error", e.target && e.target.tagName, e.target && e.target.error && e.target.error.code, e.target && e.target.error && e.target.error.message), true);
+      });
+      page.on("console", message => { const text = message.text(); if (text.startsWith("[mse]")) console.log(text.slice(0, 200)); });
+    }
     const plays = []; page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/play")) plays.push(Date.now()); });
     const text = async () => (await page.locator("body").innerText()).replace(/\s*\n+\s*/g, " / ");
     const shot = file => page.screenshot({ path: path.join(artifacts, `${file}.png`) }).catch(() => undefined);
