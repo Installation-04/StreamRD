@@ -85,7 +85,8 @@ function prepareQbit(accessHost = '') {
   let config = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '[LegalNotice]\nAccepted=true\n[BitTorrent]\nSession\\DefaultSavePath=' + path.join(root, 'downloads') + '/\nSession\\Port=6881\n[Preferences]\nDownloads\\SavePath=' + path.join(root, 'downloads') + '/\nConnection\\PortRangeMin=6881\n';
   const salt = crypto.randomBytes(16);
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512');
-  for (const [key, value] of Object.entries({ 'WebUI\\Address': accessHost ? '0.0.0.0' : '127.0.0.1', 'WebUI\\Port': '8082', 'WebUI\\Username': username, 'WebUI\\Password_PBKDF2': `"@ByteArray(${salt.toString('base64')}:${hash.toString('base64')})"`, 'WebUI\\LocalHostAuth': 'true', 'WebUI\\AuthSubnetWhitelistEnabled': 'false', 'WebUI\\HostHeaderValidation': 'true', 'WebUI\\ServerDomains': '127.0.0.1;localhost' + (accessHost ? ';' + accessHost : '') })) config = ini('Preferences', key, value, config);
+  // Qt treats unquoted semicolons as INI comments; keep the whole host list.
+  for (const [key, value] of Object.entries({ 'WebUI\\Address': accessHost ? '0.0.0.0' : '127.0.0.1', 'WebUI\\Port': '8082', 'WebUI\\Username': username, 'WebUI\\Password_PBKDF2': `"@ByteArray(${salt.toString('base64')}:${hash.toString('base64')})"`, 'WebUI\\LocalHostAuth': 'true', 'WebUI\\AuthSubnetWhitelistEnabled': 'false', 'WebUI\\HostHeaderValidation': 'true', 'WebUI\\ServerDomains': '"127.0.0.1;localhost' + (accessHost ? ';' + accessHost : '') + '"' })) config = ini('Preferences', key, value, config);
   fs.writeFileSync(file, config, { mode: 0o600 }); fs.chmodSync(file, 0o600);
   return ['--profile=' + path.join(configRoot, 'qbittorrent'), '--webui-port=8082'];
 }

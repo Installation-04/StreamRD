@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 image="${1:-streamrd-all-in-one:local}"
 suffix="$(openssl rand -hex 6)"
-name="streamrd-bundled-$suffix"; network="$name-network"; config="$name-config"; data="$name-data"; token=""
+name="streamrd-bundled-$suffix"; network="$name-network"; config="$name-config"; data="$name-data"; token=""; report="not attempted"
 # The helper owns fixed add-on names. Refuse to touch another installation.
 for addon in sonarr radarr lidarr prowlarr bazarr seerr tautulli flaresolverr maintainerr; do
   if docker container inspect "streamrd-$addon" >/dev/null 2>&1; then echo "Refusing to replace existing streamrd-$addon" >&2; exit 1; fi
@@ -19,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
-fail() { echo "FAIL: $*" >&2; docker logs --tail 40 "$name" >&2 || true; exit 1; }
+fail() { echo "FAIL: $*; last linking report: $report" >&2; docker logs --tail 40 "$name" >&2 || true; exit 1; }
 wait_for() { local tries="$1"; shift; for ((i=0; i<tries; i++)); do if "$@" >/dev/null 2>&1; then return; fi; sleep 2; done; fail "timed out: $*"; }
 port() { docker port "$name" 8080/tcp | head -1 | sed 's/.*://'; }
 call() { curl --fail-with-body -sS -X "$1" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' ${3:+-d "$3"} "http://127.0.0.1:$(port)$2"; }
@@ -60,8 +60,23 @@ closed || fail 'listener opened before restart'
 restart
 settings | jq -e '.settings.qbit | .bundledAccessActive and (.bundledRestartRequired == false)' >/dev/null || fail 'restart did not apply approval'
 wait_for 30 protected
+# Confirm what Qt actually parsed, rather than only checking the text we wrote.
+docker exec -i --env "SMOKE_HOST=$name" "$name" node <<'NODE'
+(async () => {
+  const password = require('node:fs').readFileSync('/config/secrets/qbittorrent-password', 'utf8').trim();
+  const origin = 'http://127.0.0.1:8082';
+  const login = await fetch(origin + '/api/v2/auth/login', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ username: 'admin', password }) });
+  const cookie = login.headers.get('set-cookie')?.split(';')[0];
+  if (!login.ok || (await login.text()).trim() !== 'Ok.' || !cookie) throw Error('Local fixture login failed');
+  const response = await fetch(origin + '/api/v2/app/preferences', { headers: { Cookie: cookie } });
+  if (!response.ok) throw Error(`Preferences HTTP ${response.status}`);
+  const prefs = await response.json(), domains = prefs.web_ui_domain_list.split(';');
+  if (!domains.includes(process.env.SMOKE_HOST) || !domains.includes('localhost') || domains.includes('*') || !prefs.web_ui_host_header_validation_enabled || prefs.bypass_local_auth || prefs.bypass_auth_subnet_whitelist_enabled) throw Error('Runtime host or authentication policy differs from approved configuration');
+  console.log('Runtime host list includes the stable peer name; host validation and authentication remain enabled.');
+})().catch(error => { console.error(error.message); process.exitCode = 1; });
+NODE
 # Wait for Sonarr's first-run API and StreamRD's generated authentication.
-linked() { call POST /api/admin/addons/link | jq -e '(.errors | length) == 0 and (.downloadClientWaiting | length) == 0 and (.waiting | index("sonarr") == null)'; }
+linked() { report="$(call POST /api/admin/addons/link)"; printf '%s' "$report" | jq -e '(.errors | length) == 0 and (.downloadClientWaiting | length) == 0 and (.waiting | index("sonarr") == null)'; }
 wait_for 90 linked
 verify_client() {
   docker exec -i --env "SMOKE_HOST=$name" "$name" node <<'NODE'

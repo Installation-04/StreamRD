@@ -18,11 +18,12 @@ it("opens and closes only the bundled listener while retaining authentication an
   prepare("streamrd-fixture");
   let config = fs.readFileSync(file, "utf8");
   expect(config).toContain("WebUI\\Address=0.0.0.0");
-  expect(config).toContain("WebUI\\ServerDomains=127.0.0.1;localhost;streamrd-fixture");
+  expect(config).toContain('WebUI\\ServerDomains="127.0.0.1;localhost;streamrd-fixture"');
   for (const expected of ["WebUI\\LocalHostAuth=true", "WebUI\\HostHeaderValidation=true", "WebUI\\AuthSubnetWhitelistEnabled=false", "Session\\DefaultSavePath=", "Session\\Port=6881", "WebUI\\Password_PBKDF2="]) expect(config).toContain(expected);
   expect(fs.statSync(file).mode & 0o777).toBe(0o600);
   prepare(); config = fs.readFileSync(file, "utf8");
   expect(config).toContain("WebUI\\Address=127.0.0.1");
   expect(config).not.toContain("streamrd-fixture");
+  expect(config).toContain('WebUI\\ServerDomains="127.0.0.1;localhost"');
   expect(config).toContain("WebUI\\LocalHostAuth=true");
 });
