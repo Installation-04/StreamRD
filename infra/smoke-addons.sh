@@ -38,6 +38,18 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
+# retry TRIES COMMAND...: tries again with a longer wait each time (5, 10, 20, 40 s), because registries rate-limit the addresses CI runners share
+# (toomanyrequests): a fixed few seconds does not outlast that.
+retry() {
+  local tries="$1"; shift; local n=0 pause=5
+  until "$@"; do
+    n=$((n + 1)); [ "$n" -lt "$tries" ] || return 1
+    echo "(attempt $n of $tries failed: $*; trying again in ${pause}s)" >&2
+    sleep "$pause"; pause=$((pause * 2)); [ "$pause" -le 60 ] || pause=60
+  done
+}
+# The image each add-on is started from is the helper's own table, read from it, so there is one place that says it.
+image_of() { node -e "const s=require('./infra/single-container/media-manager.cjs').SERVERS[process.argv[1]]; console.log(s.image + ':' + s.tag)" "$1"; }
 until_true() { local limit="$1" what="$2"; shift 2; local waited=0; until "$@" >/dev/null 2>&1; do waited=$((waited + 2)); [ "$waited" -lt "$limit" ] || fail "timed out waiting for $what"; sleep 2; done; }
 web_port() { docker port "$name" 8080/tcp | head -1 | sed 's/.*://'; }
 call() { curl -sS -X "$1" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' ${3:+-d "$3"} "http://127.0.0.1:$(web_port)$2"; }
@@ -60,6 +72,9 @@ for entry in "${ADDONS[@]}"; do
   set -- $entry; addon="$1"; port="$2"; path="$3"; writes="$4"; container="streamrd-$addon"; shown=$((port + 10000))
   say "$addon: install, answer, stop, start, remove"
   body='{}'; [ "$addon" = flaresolverr ] || body="{\"port\":$shown}"
+  # The image is downloaded here first, patiently, so that a registry that turns a runner away for a while does not fail the check; the helper
+  # then finds it on the machine. What the helper does when it has to download is covered by its own tests and by the Prowlarr and Jellyfin steps.
+  reference="$(image_of "$addon")"; retry 6 docker pull "$reference" >/dev/null || fail "could not download $reference"
   # A registry may refuse a runner for a while; the launch is asked again, a few times, before it counts as failed.
   running() { [ "$(state_of "$addon")" = running ]; }
   tries=0; waited=0
