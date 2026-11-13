@@ -43,7 +43,13 @@ it("gives each add-on a login of its own making and tells Prowlarr about Sonarr,
     if (req.url === "/api/v1/config/host/1") { Object.assign(phost, JSON.parse(body)); return json(res, phost); }
     if (req.url === "/api/v1/applications" && req.method === "GET") return json(res, apps);
     if (req.url === "/api/v1/applications/schema") return json(res, [{ implementation: "Sonarr", configContract: "SonarrSettings", fields: [{ name: "prowlarrUrl" }, { name: "baseUrl" }, { name: "apiKey" }, { name: "syncCategories", value: [5000] }] }]);
-    if (req.url === "/api/v1/applications" && req.method === "POST") { apps.push(JSON.parse(body)); return json(res, {}, 201); }
+    if (req.url === "/api/v1/applications" && req.method === "POST") {
+      const app = JSON.parse(body);
+      // A default Docker bridge has no container-name DNS. Prowlarr validates
+      // the connection, so an unresolvable alias is refused by the real API.
+      if (app.fields.some((field: { name: string; value?: unknown }) => ["baseUrl", "prowlarrUrl"].includes(field.name) && String(field.value).startsWith("http://streamrd-"))) return json(res, {}, 400);
+      apps.push(app); return json(res, {}, 201);
+    }
     json(res, {}, 404);
   });
   const helper = await serve((req, _body, res) => json(res, { servers: { sonarr: { state: "running" }, prowlarr: { state: "running" }, radarr: { state: "absent" } } }));
@@ -58,11 +64,10 @@ it("gives each add-on a login of its own making and tells Prowlarr about Sonarr,
   expect(apps).toHaveLength(1);
   expect(apps[0]).toMatchObject({ implementation: "Sonarr", configContract: "SonarrSettings", syncLevel: "fullSync" });
   const fields = Object.fromEntries((apps[0].fields as Array<{ name: string; value: unknown }>).map(f => [f.name, f.value]));
-  expect(fields).toMatchObject({ baseUrl: "http://streamrd-sonarr:8989", prowlarrUrl: "http://streamrd-prowlarr:9696", apiKey: KEY, syncCategories: [5000] });
+  expect(fields).toMatchObject({ baseUrl: sonarr.url, prowlarrUrl: prowlarr.url, apiKey: KEY, syncCategories: [5000] });
   const stored = (await (await import("../src/db")).db.setting.findUnique({ where: { key: "addons.logins" } }))!.value;
   expect(stored).not.toContain(made!.password);   // kept encrypted
 
-  apps[0].fields = [{ name: "baseUrl", value: "http://streamrd-sonarr:8989" }]; apps[0].implementation = "Sonarr";
   const second = await linkAddons();
   expect(second).toMatchObject({ logins: [], linked: [] });   // nothing to do
   expect(sonarr.calls.filter(c => c.startsWith("PUT"))).toHaveLength(1); expect(apps).toHaveLength(1);

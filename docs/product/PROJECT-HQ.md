@@ -2,9 +2,11 @@
 
 > CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.27.0 Add-on integration — in progress
 
-This is the source of truth for the project tracker. Import the Markdown and CSV
-bundle into Notion when a workspace connection is available. **No live Notion page
-has been created yet:** this chat has no Notion connector or parent-page access.
+This is the public repository record for the project tracker. A private Notion
+progress home and delivery database were created for v0.27.0, including a status
+board, evidence links and a needs-attention view. Its private link is available in
+the project chat. Repository and Notion updates are explicit, not automatically
+synchronized; preserve verification evidence in both.
 
 ## Current work: v0.27.0 Add-on integration
 

@@ -112,7 +112,9 @@ async function linkAddonsPass(): Promise<LinkReport> {
   const prowlarr = up.prowlarr;
   if (prowlarr) for (const name of ["sonarr", "radarr", "lidarr"] as const) {
     const one = up[name]; if (!one) continue;
-    try { if (await linkToProwlarr(prowlarr, { name, ...one }, `http://streamrd-prowlarr:${SERVARR.prowlarr.port}`, `http://streamrd-${name}:${SERVARR[name].port}`)) report.linked.push(name); }
+    // Reuse the addresses that passed the probe. Container aliases only resolve
+    // on a user-defined Docker network, not on the default bridge.
+    try { if (await linkToProwlarr(prowlarr, { name, ...one }, prowlarr.base, one.base)) report.linked.push(name); }
     catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
   }
   return report;
