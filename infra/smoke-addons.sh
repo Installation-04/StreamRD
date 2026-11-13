@@ -25,7 +25,7 @@ fail() {
   } >&2 || true
   exit 1
 }
-for entry in "${ADDONS[@]}"; do
+for entry in "${ADDONS[@]}" "prowlarr 9696 / no"; do
   set -- $entry
   if docker ps -a --format '{{.Names}}' | grep -qx "streamrd-$1"; then echo "Refusing to run: a container named streamrd-$1 exists (the launch would replace it)." >&2; exit 1; fi
 done
@@ -112,10 +112,13 @@ for entry in "${ADDONS[@]}"; do
   docker exec "$name" sh -c "ls /config/$addon" >/dev/null 2>&1 || [ "$addon" = flaresolverr ] || fail "removing $addon took its settings with it"
   docker images --format '{{.Repository}} {{.ID}}' | awk -v a="/$addon" 'index($1, a) {print $2}' | xargs -r docker rmi >/dev/null 2>&1 || true   # keep the runner's disk free for the next one
 done
-say "Prowlarr, Sonarr: signed in and linked by StreamRD, against the real programs"
-for addon in prowlarr sonarr; do
+say "Prowlarr, Sonarr, Radarr and Lidarr: signed in and linked by StreamRD, against the real programs"
+for addon in prowlarr sonarr radarr lidarr; do
   tries=0; waited=0; body='{}'
-  [ "$addon" = prowlarr ] || body="{\"port\":18989}"
+  if [ "$addon" != prowlarr ]; then
+    port="$(node -e 'console.log(require("./infra/single-container/media-manager.cjs").SERVERS[process.argv[1]].port)' "$addon")"
+    body="{\"port\":$((port + 10000))}"
+  fi
   retry 6 docker pull "$(image_of "$addon")" >/dev/null || fail "could not download $addon"
   call POST "/api/admin/addons/$addon/launch" "$body" | jq -e '.addons' >/dev/null || fail "the launch of $addon was refused"
   until [ "$(state_of "$addon")" = running ]; do sleep 3; waited=$((waited + 3)); [ "$waited" -lt 600 ] || fail "$addon never started"; done
@@ -123,17 +126,27 @@ done
 linked=""
 for attempt in $(seq 1 40); do
   report="$(call POST /api/admin/addons/link)"
-  if echo "$report" | jq -e '(.errors | length) == 0 and (.waiting | length) == 0 and (.linked | index("sonarr")) != null' >/dev/null 2>&1; then linked=yes; break; fi
-  if echo "$report" | jq -e '(.errors | length) == 0 and (.waiting | length) == 0' >/dev/null 2>&1 && [ -n "$(call GET /api/admin/addons/sonarr/login | jq -r '.password // empty')" ]; then linked=yes; break; fi
+  if echo "$report" | jq -e '(.errors | length) == 0 and (.waiting | length) == 0' >/dev/null 2>&1; then
+    pkey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/prowlarr/config/config.xml | sed 's/<[^>]*>//g')"
+    # The background pass may have created a link already, so inspect actual
+    # application records rather than treating an empty report as proof.
+    if curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
+      . as $apps | ["Sonarr", "Radarr", "Lidarr"] | all(. as $kind | [$apps[] | select(.implementation == $kind)] | length == 1)
+    ' >/dev/null; then linked=yes; break; fi
+  fi
   sleep 6
 done
 [ "$linked" = yes ] || fail "the add-ons were not linked: $report"
-login="$(call GET /api/admin/addons/sonarr/login)"; pass="$(echo "$login" | jq -r .password)"; [ "${#pass}" -ge 20 ] || fail "no login was made for Sonarr"
-skey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/sonarr/config/config.xml | sed 's/<[^>]*>//g')"
-pkey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/prowlarr/config/config.xml | sed 's/<[^>]*>//g')"
-[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18989/api/v3/system/status")" = 401 ] || fail "Sonarr answers without a key or a login"
-[ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $skey" "http://127.0.0.1:18989/api/v3/system/status")" = 200 ] || fail "Sonarr does not accept its own key after the login was set"
-curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e 'map(select(.implementation == "Sonarr")) | length == 1' >/dev/null || fail "Prowlarr does not know Sonarr"
-report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
-echo 'Sonarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
+for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18686 v1"; do
+  read -r addon label shown api <<< "$entry"
+  login="$(call GET "/api/admin/addons/$addon/login")"; pass="$(echo "$login" | jq -r '.password // empty')"; [ "${#pass}" -ge 20 ] || fail "no login was made for $label"
+  key="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' "/config/$addon/config/config.xml" | sed 's/<[^>]*>//g')"
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$shown/api/$api/system/status")" = 401 ] || fail "$label answers without a key or a login"
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/system/status")" = 200 ] || fail "$label does not accept its own key after the login was set"
+done
+report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
+curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
+  length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
+' >/dev/null || fail "the second pass changed the application list"
+echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
 echo 'Every add-on installed, answered, stopped, started again and was removed with its settings kept.'

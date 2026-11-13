@@ -1,4 +1,5 @@
 Name,Status,Priority,Milestone,Owner,Acceptance
+Real Radarr and Lidarr link acceptance,In validation,P1,v0.27.0,Continuation,Exactly one authenticated Prowlarr link per application and an unchanged second pass in real-container CI
 Generated add-on logins and Prowlarr application links,Implementation complete,P0,v0.27.0,Claude and continuation,Encrypted logins and repeatable links with owner replacements preserved and overlapping passes coalesced
 Concurrent signup lock recovery,Verified locally,P0,v0.27.0,Continuation,Full backend suites pass with bounded retries preserving policy invitation and bootstrap administrator checks in both products
 Add-on download clients and root folders,Backlog,P1,v0.27.x,Community,Working connections through supported APIs with existing settings preserved

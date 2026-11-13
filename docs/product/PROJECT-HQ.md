@@ -22,8 +22,10 @@ Local backend acceptance passes: 606 StreamRD tests and 492 Phosphor tests,
 with five StreamRD cases skipped; both backend typechecks and all four server/web
 production builds pass. Shared-source consistency also passes.
 The documented Google Chrome local-lab journey passes all 24 steps with no page
-errors, using synthetic providers and media. Container/add-on validation remains
-part of the PR's CI checks; no release or branch promotion has been performed.
+errors, using synthetic providers and media. All ten CI checks pass on `cb41957`,
+including real Prowlarr/Sonarr linking. Follow-up work extends that real-container
+acceptance to Radarr and Lidarr; subsequent commits require their own passing
+checks. No release or branch promotion has been performed.
 See [the v0.27.0 notes](../releases/v0.27.0.md) for behavior and verification limits.
 
 Remaining add-on integration: download clients, root folders, FlareSolverr in
