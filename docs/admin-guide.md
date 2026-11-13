@@ -89,7 +89,7 @@ environment, never from the admin page. If the hook refuses, the backup is kept 
 nothing changes. After the update the new image starts, applies database upgrades
 (with another verified snapshot when needed) and the page shows the new version.
 
-**Add-ons (Prowlarr, Jellyfin, Plex).** With Docker control on, each of these that is running is listed with its version. *Check for updates*
+**Add-ons.** *Admin → Add-ons* installs Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, Prowlarr, FlareSolverr and Maintainerr with one button each, with a log box that follows the download and the start; see [Add-ons](add-ons.md). **Updates.** With Docker control on, each add-on or media server that is running is listed with its version. *Check for updates*
 looks for a newer version of that program without changing anything, *Update now* restarts it on the newer one (its settings are kept, and the
 previous version is put back if the new one does not start), and *Update by itself at night* does both between 03:00 and 05:00, once a night. The
 night option is off until you turn it on, because an update stops what a media server is playing. Details, and what an update cannot undo, are in

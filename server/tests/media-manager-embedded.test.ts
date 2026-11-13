@@ -5,8 +5,8 @@ import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { dockerEngine, Engine, EngineOptions, HELPER, REF, SELF_ID } from "./docker-engine";
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
-const { createManager, containerIdFrom, hostPath } = require(HELPER) as {
-  createManager: (config: Record<string, unknown>) => { server: http.Server }; containerIdFrom: (text: string) => string;
+const { createManager, containerIdFrom, hostPath, SERVERS } = require(HELPER) as {
+  createManager: (config: Record<string, unknown>) => { server: http.Server }; containerIdFrom: (text: string) => string; SERVERS: Record<string, Record<string, unknown>>;
   hostPath: (mounts: Array<Record<string, unknown>>, target: string) => string | null };
 
 // The helper as it runs inside the StreamRD container: it is told nothing about the machine and finds out from Docker which container
@@ -55,7 +55,7 @@ it("works out where a folder inside the container lives on the machine, by its c
 
 it("finds its own container and gives a media server that container's folders, network and time zone, from a fixed specification", async () => {
   await start(); const { json, settled, call } = await helper();
-  expect(await json("GET", "/status")).toEqual({ servers: { jellyfin: { state: "absent" }, plex: { state: "absent" }, prowlarr: { state: "absent" } }, embedded: true });
+  expect(await json("GET", "/status")).toEqual({ servers: Object.fromEntries(Object.keys(SERVERS).map(name => [name, { state: "absent" }])), embedded: true });
   expect((await call("POST", "/servers/jellyfin/launch", { port: 8097 })).status).toBe(202);
   expect(await settled("jellyfin")).toEqual({ state: "running", port: 8097, autostart: true, address: "172.17.0.10" });
   const spec = docker.find("streamrd-jellyfin")!.spec;
@@ -106,6 +106,40 @@ it("starts Prowlarr from a fixed specification that gives it its own settings fo
   expect(fs.statSync(path.join(folders, "config", "prowlarr", "config")).isDirectory()).toBe(true);
   expect(fs.existsSync(path.join(folders, "config", "jellyfin"))).toBe(false);   // nothing is made for the others
   expect((await json("GET", "/servers/prowlarr/logs")).deploy.map((entry: { message: string }) => entry.message)).toContain("Started. It listens on port 9696");
+});
+
+// What each add-on is made of, written down: the catalog is the only place that decides it, so this is what a reviewer checks.
+const ADDONS: Array<[string, { image: string; port: number; env: string[]; user?: string; init?: boolean; folders: Array<[string, string]>; data?: boolean; published?: boolean }]> = [
+  ["sonarr", { image: "lscr.io/linuxserver/sonarr", port: 8989, env: ["PUID=1000", "PGID=1000"], folders: [["sonarr/config", "/config"]], data: true }],
+  ["radarr", { image: "lscr.io/linuxserver/radarr", port: 7878, env: ["PUID=1000", "PGID=1000"], folders: [["radarr/config", "/config"]], data: true }],
+  ["lidarr", { image: "lscr.io/linuxserver/lidarr", port: 8686, env: ["PUID=1000", "PGID=1000"], folders: [["lidarr/config", "/config"]], data: true }],
+  ["bazarr", { image: "lscr.io/linuxserver/bazarr", port: 6767, env: ["PUID=1000", "PGID=1000"], folders: [["bazarr/config", "/config"]], data: true }],
+  ["seerr", { image: "ghcr.io/seerr-team/seerr", port: 5055, env: [], user: "1000:1000", init: true, folders: [["seerr/config", "/app/config"]] }],
+  ["tautulli", { image: "lscr.io/linuxserver/tautulli", port: 8181, env: ["PUID=1000", "PGID=1000"], folders: [["tautulli/config", "/config"]] }],
+  ["flaresolverr", { image: "ghcr.io/flaresolverr/flaresolverr", port: 8191, env: ["LOG_LEVEL=info"], folders: [], published: false }],
+  ["maintainerr", { image: "ghcr.io/maintainerr/maintainerr", port: 6246, env: [], user: "1000:1000", folders: [["maintainerr/data", "/opt/data"]] }],
+];
+it.each(ADDONS)("starts %s from a fixed specification: its own folder, StreamRD's data folder only where it writes, a port only where it has a page", async (name, want) => {
+  await start(); const { call, settled, json } = await helper();
+  expect((await call("POST", `/servers/${name}/launch`, { port: want.port + 1, autostart: false })).status).toBe(202);
+  expect(await settled(name)).toMatchObject({ state: "running", autostart: false, ...(want.published === false ? {} : { port: want.port + 1 }) });
+  const spec = docker.find(`streamrd-${name}`)!.spec;
+  expect(spec).toMatchObject({ Image: `${want.image}:latest`, Env: ["TZ=Europe/Paris", ...want.env], Labels: { "streamrd.managed": "true", "streamrd.server": name } });
+  expect(spec.User).toBe(want.user);
+  expect(spec.HostConfig.Init).toBe(want.init);
+  expect(spec.HostConfig.RestartPolicy).toEqual({ Name: "no" });
+  if (want.published === false) expect(spec.HostConfig.PortBindings).toBeUndefined();   // reached by name from the other containers only
+  else expect(spec.HostConfig.PortBindings).toEqual({ [`${want.port}/tcp`]: [{ HostPort: String(want.port + 1) }] });
+  expect(spec.NetworkingConfig).toEqual({ EndpointsConfig: { streamrd_default: { Aliases: [`streamrd-${name}`] } } });
+  expect(mountsOf(`streamrd-${name}`)).toEqual([
+    ...want.folders.map(([folder, target]) => ({ Type: "bind", Source: `/home/owner/streamrd/config/${folder}`, Target: target, ReadOnly: false })),
+    ...(want.data ? [{ Type: "bind", Source: "/home/owner/streamrd/data", Target: path.join(folders, "data"), ReadOnly: false }] : []),
+  ]);
+  expect(JSON.stringify(spec)).not.toMatch(/Privileged|docker\.sock|library|CapAdd|PidMode|"NetworkMode":"host"/);
+  for (const [folder] of want.folders) expect(fs.statSync(path.join(folders, "config", folder)).isDirectory(), folder).toBe(true);
+  for (const other of ["jellyfin", "plex", "streamrd", "phosphor"]) expect(fs.existsSync(path.join(folders, "config", other)), other).toBe(false);   // nothing is made for the others
+  expect((await json("GET", `/servers/${name}/logs`)).deploy.map((entry: { message: string }) => entry.message)).toContain(want.published === false ? "Started. Only StreamRD and the other containers can reach it, by name" : `Started. It listens on port ${want.port + 1}`);
+  expect((await call("POST", "/servers/nothing/launch", {})).status).toBe(404);
 });
 
 const PROWLARR = "lscr.io/linuxserver/prowlarr:latest";

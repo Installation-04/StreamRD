@@ -115,9 +115,18 @@ const guard = (run: Parameters<typeof asyncHandler>[0]) => asyncHandler(async (r
 });
 prowlarrRouter.get("/", guard(async (_req, res) => { res.json({ prowlarr: await prowlarrView() }); }));
 /** Start it (again): clears a removal and launches. */
-prowlarrRouter.post("/start", limit, guard(async (req, res) => {
+export async function requestProwlarr() {
   const stored = await read(); await write({ ...stored, declined: false });
-  const outcome = await ensureProwlarr();
+  return ensureProwlarr();
+}
+/** Remove it, and keep it off: its settings stay in the settings folder. */
+export async function removeProwlarr() {
+  const stored = await read(); await write({ ...stored, declined: true });
+  if (dockerControl().mode !== "off") await manager("DELETE", "/servers/prowlarr");
+  await db.setting.deleteMany({ where: { key: INDEXERS } }); reached = null;
+}
+prowlarrRouter.post("/start", limit, guard(async (req, res) => {
+  const outcome = await requestProwlarr();
   if (outcome === "unavailable") { res.status(409).json({ error: "Starting Prowlarr from here needs Docker control, which is off on this server (see Admin → System)." }); return; }
   void logEvent("info", "admin_action", "Started Prowlarr", { userId: req.session!.sub }).catch(() => undefined);
   res.status(202).json({ prowlarr: await prowlarrView() });
@@ -126,11 +135,8 @@ prowlarrRouter.post("/sync", limit, guard(async (_req, res) => {
   const count = await syncIndexers();
   res.json({ indexers: count, prowlarr: await prowlarrView() });
 }));
-/** Remove it, and keep it off: its settings stay in the settings folder. */
 prowlarrRouter.delete("/", limit, guard(async (req, res) => {
-  const stored = await read(); await write({ ...stored, declined: true });
-  if (dockerControl().mode !== "off") await manager("DELETE", "/servers/prowlarr");
-  await db.setting.deleteMany({ where: { key: INDEXERS } }); reached = null;
+  await removeProwlarr();
   void logEvent("info", "admin_action", "Removed Prowlarr", { userId: req.session!.sub }).catch(() => undefined);
   res.json({ prowlarr: await prowlarrView() });
 }));

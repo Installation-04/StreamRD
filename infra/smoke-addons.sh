@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Every add-on in the marketplace, installed from the web API against a real Docker daemon, one after the other: the real image downloads,
+# runs from its fixed specification (its own folder, the data folder only where it writes, no Docker socket), answers, is stopped and
+# started again, and is removed with its settings kept.
+#
+# It needs a Docker daemon, curl and jq, and downloads about two gigabytes of images. Usage: bash infra/smoke-addons.sh [image]
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+image="${1:-streamrd-all-in-one:local}"
+suffix="$(openssl rand -hex 6)"
+name="streamrd-addons-$suffix"; config="streamrd-addons-config-$suffix"; data="streamrd-addons-data-$suffix"
+email="addons-smoke@example.invalid"; password="addons-smoke-fixture123"
+token=""
+# name  default-port  what answers (path)   writes-the-data-folder
+ADDONS=(
+  "sonarr 8989 / yes" "radarr 7878 / yes" "lidarr 8686 / yes" "bazarr 6767 / yes"
+  "seerr 5055 / no" "tautulli 8181 / no" "flaresolverr 8191 / no" "maintainerr 6246 / no"
+)
+say() { printf '\n== %s\n' "$*"; }
+fail() {
+  echo "FAIL: $*" >&2
+  { echo "-- containers"; docker ps -a --format '{{.Names}}  {{.Image}}  {{.Status}}'
+    echo "-- $name (last lines)"; docker logs --tail 40 "$name" 2>&1
+    for entry in "${ADDONS[@]}"; do set -- $entry; docker inspect "streamrd-$1" >/dev/null 2>&1 && { echo "-- streamrd-$1"; docker logs --tail 25 "streamrd-$1" 2>&1; }; done
+  } >&2 || true
+  exit 1
+}
+for entry in "${ADDONS[@]}"; do
+  set -- $entry
+  if docker ps -a --format '{{.Names}}' | grep -qx "streamrd-$1"; then echo "Refusing to run: a container named streamrd-$1 exists (the launch would replace it)." >&2; exit 1; fi
+done
+cleanup() {
+  local code=$?; set +e
+  for entry in "${ADDONS[@]}"; do set -- $entry; docker rm -f "streamrd-$1" >/dev/null 2>&1; done
+  docker rm -f "$name" streamrd-prowlarr >/dev/null 2>&1
+  docker volume rm "$config" "$data" >/dev/null 2>&1
+  return "$code"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+until_true() { local limit="$1" what="$2"; shift 2; local waited=0; until "$@" >/dev/null 2>&1; do waited=$((waited + 2)); [ "$waited" -lt "$limit" ] || fail "timed out waiting for $what"; sleep 2; done; }
+web_port() { docker port "$name" 8080/tcp | head -1 | sed 's/.*://'; }
+call() { curl -sS -X "$1" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' ${3:+-d "$3"} "http://127.0.0.1:$(web_port)$2"; }
+state_of() { call GET /api/admin/addons | jq -r --arg n "$1" '.addons[] | select(.name == $n) | .state'; }
+error_of() { call GET /api/admin/addons | jq -r --arg n "$1" '.addons[] | select(.name == $n) | .error // ""'; }
+inspect() { docker inspect -f "$1" "$2"; }
+
+say "Start StreamRD as an installed copy has it: root, Docker's socket, one volume each for settings and downloads"
+docker volume create "$config" >/dev/null; docker volume create "$data" >/dev/null
+docker run -d --name "$name" --user 0:0 --security-opt no-new-privileges:true \
+  -v /var/run/docker.sock:/var/run/docker.sock -v "$config:/config" -v "$data:/data" -e CONFIG_DIR=/config -p 127.0.0.1::8080 "$image" >/dev/null
+until_true 240 "StreamRD to be healthy" docker exec "$name" node /opt/single-container/health.cjs
+body="$(curl -sS -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$email\",\"password\":\"$password\",\"displayName\":\"Add-ons fixture\"}" "http://127.0.0.1:$(web_port)/api/auth/signup")"
+token="$(printf '%s' "$body" | jq -r '.token // empty')"; [ -n "$token" ] || fail "could not sign up: $body"
+[ "$(call GET /api/admin/addons | jq -r '.control.mode')" = embedded ] || fail "Docker control is not on"
+[ "$(call GET /api/admin/addons | jq -r '[.addons[].name] | length')" = 9 ] || fail "the marketplace does not list nine add-ons"
+volume_path="$(docker volume inspect -f '{{.Mountpoint}}' "$config")"
+
+for entry in "${ADDONS[@]}"; do
+  set -- $entry; addon="$1"; port="$2"; path="$3"; writes="$4"; container="streamrd-$addon"; shown=$((port + 10000))
+  say "$addon: install, answer, stop, start, remove"
+  body='{}'; [ "$addon" = flaresolverr ] || body="{\"port\":$shown}"
+  # A registry may refuse a runner for a while; the launch is asked again, a few times, before it counts as failed.
+  running() { [ "$(state_of "$addon")" = running ]; }
+  tries=0; waited=0
+  until running; do
+    case "$(state_of "$addon")" in
+      absent|failed) tries=$((tries + 1)); [ "$tries" -le 4 ] || fail "$addon did not start: $(error_of "$addon")"
+        [ "$tries" -eq 1 ] || { echo "($addon: $(error_of "$addon"); trying again)" >&2; sleep $((tries * 10)); }
+        call POST "/api/admin/addons/$addon/launch" "$body" | jq -e '.addons' >/dev/null || fail "the launch of $addon was refused" ;;
+    esac
+    sleep 3; waited=$((waited + 3)); [ "$waited" -lt 900 ] || fail "$addon never started"
+  done
+  [ "$(inspect '{{.HostConfig.RestartPolicy.Name}}' "$container")" = unless-stopped ] || fail "$addon does not start again with the machine"
+  docker inspect "$container" | jq -e --arg root "$volume_path" --arg writes "$writes" '
+    (.[0].Mounts | map(select(.Destination == "/var/run/docker.sock")) | length == 0) and
+    (.[0].Mounts | map(select(.Destination | startswith("/library")) ) | length == 0) and
+    ((.[0].Mounts | map(select(.Destination == "/data")) | length) == (if $writes == "yes" then 1 else 0 end)) and
+    (.[0].Mounts | map(select(.Destination == "/data" and .RW == false)) | length == 0) and
+    (.[0].HostConfig.Privileged == false)' >/dev/null || fail "$addon was given more than its specification allows: $(inspect '{{json .Mounts}}' "$container")"
+  if [ "$addon" = flaresolverr ]; then
+    [ -z "$(inspect '{{json .HostConfig.PortBindings}}' "$container" | jq -r 'select(. != {} and . != null)')" ] || fail "FlareSolverr has a port on the machine"
+    ip="$(inspect '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container")"
+    answers() { curl -fsS "http://$ip:$port/" | grep -qi 'FlareSolverr is ready'; }
+  else
+    answers() { code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$shown$path" || true)"; [[ "$code" =~ ^[23] ]]; }
+  fi
+  until_true 300 "$addon to answer" answers || { echo "-- $(docker logs --tail 30 "$container" 2>&1)" >&2; fail "$addon is running but does not answer"; }
+  if [ "$writes" = yes ]; then docker exec "$container" sh -c 'touch /data/.addon-write-check && rm /data/.addon-write-check' || fail "$addon cannot write to the data folder"; fi
+  call POST "/api/admin/addons/$addon/stop" | jq -e '.addons' >/dev/null || fail "$addon could not be stopped"
+  [ "$(state_of "$addon")" = stopped ] || fail "$addon is not stopped"
+  call POST "/api/admin/addons/$addon/launch" "$body" | jq -e '.addons' >/dev/null || fail "$addon could not be started again"
+  until_true 300 "$addon to run again" running
+  until_true 240 "$addon to answer again" answers
+  call DELETE "/api/admin/addons/$addon" | jq -e '.addons' >/dev/null || fail "$addon could not be removed"
+  until_true 60 "$addon to be removed" test -z "$(docker ps -aq --filter "name=^/$container$")"
+  docker exec "$name" sh -c "ls /config/$addon" >/dev/null 2>&1 || [ "$addon" = flaresolverr ] || fail "removing $addon took its settings with it"
+  docker images --format '{{.Repository}} {{.ID}}' | awk -v a="/$addon" 'index($1, a) {print $2}' | xargs -r docker rmi >/dev/null 2>&1 || true   # keep the runner's disk free for the next one
+done
+echo 'Every add-on installed, answered, stopped, started again and was removed with its settings kept.'

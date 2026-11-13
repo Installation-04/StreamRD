@@ -13,6 +13,7 @@ const NAV = [
   { href: "/admin/metadata", label: "Metadata" },
   { href: "/admin/system", label: "System" },
   { href: "/admin/library", label: "Plex / Jellyfin" },
+  { href: "/admin/addons", label: "Add-ons" },
   { href: "/admin", label: t("admin.overview") },
   { href: "/admin/users", label: t("admin.users") },
   { href: "/admin/server", label: t("admin.server") },

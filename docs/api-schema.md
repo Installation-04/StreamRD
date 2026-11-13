@@ -221,7 +221,23 @@ Prowlarr, Jellyfin and Plex are updated through the Docker helper, whenever a ne
 | POST | `/api/admin/modules/:module/update` | Check, and if the image is newer, make the container again from it (same port, folders and start-with-the-machine choice; the old container is kept until the new one runs and is put back if it does not). 202 with the view; `update.state` goes `running`, then `updated`, `current` or `failed` (with `error`). Only for a running module. |
 | PUT | `/api/admin/modules/:module/auto` | `{ enabled }` → the view. Whether the module updates itself at night (off by default). |
 
-`:module` is `prowlarr`, `jellyfin` or `plex`.
+`:module` is any name in the add-on list below, or `jellyfin` or `plex`.
+
+### Add-ons (administrators only)
+
+The marketplace on Admin → Add-ons. The Docker helper makes each container from a fixed specification; the caller chooses only a name from the
+catalog, a port and whether it starts with the machine. 409 when Docker control is off.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/admin/addons` | `{ control: { mode, reason }, groups, addons: [{ name, label, group, blurb, home, licence, ui, needs, state, port, autostart, error }] }`. `state`: `absent`, `stopped`, `running`, `pulling`, `starting`, `failed`, or `unknown` when Docker control is off. |
+| POST | `/api/admin/addons/:addon/launch` | `{ port?, autostart? }` (nothing else is accepted) → 202 with the list. Installs, or starts it again; the choice is kept. |
+| POST | `/api/admin/addons/:addon/stop` | Stops it. |
+| DELETE | `/api/admin/addons/:addon` | Removes the container; its settings under `config/` stay. Removing Prowlarr is remembered, so it is not started again until asked. |
+| PUT | `/api/admin/addons/:addon/autostart` | `{ enabled }`. Whether it starts again with the machine. |
+| GET | `/api/admin/addons/:addon/logs?tail=` | `{ deploy: [{ time, message }], container: [lines] }`, tokens blanked. |
+
+`:addon` is `sonarr`, `radarr`, `lidarr`, `bazarr`, `seerr`, `tautulli`, `prowlarr`, `flaresolverr` or `maintainerr`; any other name is 404.
 ## My List (any signed-in viewer)
 
 | Method | Path | Description |

@@ -327,6 +327,27 @@ async function main() {
       assert.match(await log(), /A newer version is available \(2\.0\.0\)/);
     });
 
+    await step("An add-on (Sonarr) is installed from the marketplace page: its log follows the download, it opens, stops, starts again and is removed", async () => {
+      await owner.page.goto(`${base}/admin/addons`, { waitUntil: "networkidle" });
+      const card = owner.page.getByRole("article", { name: "Sonarr", exact: true }), status = () => card.getByRole("status", { name: "Sonarr status" }).innerText().catch(() => "");
+      await until("the marketplace to list Sonarr", async () => (await status()) === "Not installed", 20_000, 300);
+      for (const other of ["Radarr", "Lidarr", "Bazarr", "Seerr", "Tautulli", "Prowlarr", "FlareSolverr", "Maintainerr"]) assert.ok(await owner.page.getByRole("article", { name: other, exact: true }).isVisible(), `${other} is in the marketplace`);
+      await card.getByRole("button", { name: "Install", exact: true }).click();
+      const log = () => card.getByRole("log").innerText().catch(() => "");
+      await until("the download to show in the log", async () => /Downloading image lscr\.io\/linuxserver\/sonarr/.test(await log()), 20_000, 300);
+      await until("Sonarr to be running", async () => (await status()) === "Running", 60_000, 500);
+      assert.match(await log(), /Started\. It listens on port 8989/);
+      assert.equal(await card.getByRole("link", { name: "Open Sonarr" }).getAttribute("href"), `http://${new URL(base).hostname}:8989`);
+      await owner.shot("addons-marketplace");
+      await card.getByRole("button", { name: "Stop", exact: true }).click();
+      await until("Sonarr to be stopped", async () => (await status()) === "Stopped", 30_000, 300);
+      await card.getByRole("button", { name: "Start", exact: true }).click();
+      await until("Sonarr to run again", async () => (await status()) === "Running", 60_000, 500);
+      owner.page.once("dialog", dialog => void dialog.accept());
+      await card.getByRole("button", { name: "Remove", exact: true }).click();
+      await until("Sonarr to be removed", async () => (await status()) === "Not installed", 30_000, 300);
+    });
+
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
       await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
       const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });
