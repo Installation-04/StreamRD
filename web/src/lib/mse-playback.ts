@@ -24,7 +24,7 @@ export interface MseOptions {
 }
 export interface MsePlayback { destroy: () => void }
 
-const AHEAD_MAX = 90, BEHIND_KEEP = 40, BATCH = 192 * 1024;
+const AHEAD_START = 90, BEHIND_KEEP = 40, BATCH = 192 * 1024;
 
 export function mseSupported(): boolean {
   try { return typeof window !== "undefined" && typeof MediaSource !== "undefined" && typeof MediaSource.isTypeSupported === "function" && typeof ReadableStream !== "undefined" && Boolean(window.fetch); } catch { return false; }
@@ -81,32 +81,56 @@ export function codecsOf(init: Uint8Array): string | null {
 export function startMse(options: MseOptions): MsePlayback {
   const { video } = options, mediaSource = new MediaSource(), url = URL.createObjectURL(mediaSource);
   let buffer: SourceBuffer | null = null, mime = "", generation = 0, controller: AbortController | null = null, destroyed = false;
+  // How many seconds ahead of the picture are kept loaded. It shrinks when the browser says its memory for this video is full: Firefox allows
+  // far less than Chrome (about 100 MB for the picture), and a Blu-ray rip at 90 seconds ahead is more than that.
+  let aheadMax = AHEAD_START;
   // The stream being read: where it starts and the second it was opened for. A skip to what it is about to deliver needs no new stream.
   let loading: { from: number; target: number } | null = null;
   const sleep = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
   const quiet = () => destroyed;
   const ranges = () => { const list: Array<[number, number]> = []; try { for (let i = 0; i < video.buffered.length; i++) list.push([video.buffered.start(i), video.buffered.end(i)]); } catch { /* not attached */ } return list; };
   const idle = async () => { while (buffer && buffer.updating && !quiet()) await new Promise<void>(done => buffer!.addEventListener("updateend", () => done(), { once: true })); };
+  const loadedAhead = () => { const at = video.currentTime; return ranges().filter(([from, to]) => from <= at + 1 && to > at).map(([, to]) => to - at)[0] ?? 0; };
+  /** Lets go of what is not needed to play on: what has been watched, or, when the picture is waiting for data, what is loaded somewhere else. True when something was freed. */
+  async function freeRoom(): Promise<boolean> {
+    if (!buffer) return false;
+    const at = video.currentTime; let freed = false;
+    for (const [from, to] of ranges()) {
+      const end = Math.min(to, at - 2);
+      if (end - from > 0.5) { await idle(); try { buffer.remove(from, end); freed = true; } catch { /* try again */ } await idle(); }
+    }
+    if (!freed && loadedAhead() === 0) {
+      for (const [from, to] of ranges()) if (from > at + 0.5) { await idle(); try { buffer.remove(from, to); freed = true; } catch { /* try again */ } await idle(); }
+    }
+    return freed;
+  }
   async function append(bytes: Uint8Array, gen: number) {
     if (!buffer || quiet() || gen !== generation) return;
     await idle();
     if (quiet() || gen !== generation) return;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // A full buffer is not a failure: it is the browser asking for the picture to catch up. Make room, keep fewer seconds ahead from now on,
+    // and try again until it fits. Only a picture that has not moved for a minute while it should be playing is given up on.
+    let lastAt = video.currentTime, lastMoved = Date.now();
+    for (;;) {
       try { buffer.appendBuffer(bytes as BufferSource); await idle(); return; }
       catch (error) {
         if ((error as DOMException).name !== "QuotaExceededError") throw error;
-        // The browser's memory for this video is full: let go of what has been watched, then try again.
-        const keep = Math.max(0, video.currentTime - 8); for (const [from, to] of ranges()) if (from < keep) { await idle(); try { buffer.remove(from, Math.min(to, keep)); } catch { /* try again below */ } await idle(); }
+        if (quiet() || gen !== generation) return;
+        if (await freeRoom()) continue;
+        aheadMax = Math.max(8, Math.min(aheadMax, Math.floor(loadedAhead() * 0.7)));
+        await sleep(400);
+        if (Math.abs(video.currentTime - lastAt) > 0.01) { lastAt = video.currentTime; lastMoved = Date.now(); }
+        else if (video.paused || video.seeking) lastMoved = Date.now();
+        else if (Date.now() - lastMoved > 60_000) throw new Error("The browser has no room for more of this video.");
       }
     }
-    throw new Error("The browser has no room for more of this video.");
   }
   /** Keeps the buffer to what is useful: a minute and a half ahead of the picture, forty seconds behind it. */
   async function room(gen: number) {
     for (;;) {
       if (quiet() || gen !== generation) return;
       const at = video.currentTime, ahead = ranges().filter(([from, to]) => from <= at + 1 && to > at).map(([, to]) => to - at)[0] ?? 0;
-      if (ahead < AHEAD_MAX) break;
+      if (ahead < aheadMax) break;
       await sleep(500);
     }
     const old = ranges()[0]; if (buffer && old && old[1] < video.currentTime - BEHIND_KEEP) { await idle(); try { buffer.remove(old[0], Math.min(old[1], video.currentTime - BEHIND_KEEP)); } catch { /* it is only tidying */ } }
