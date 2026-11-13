@@ -448,6 +448,35 @@ async function main() {
       }
     });
 
+    await step("bundled access is owner-controlled and explains the required restart", async () => {
+      await owner.page.goto(`${base}/admin/request-settings`, { waitUntil: "networkidle" });
+      const bundled = owner.page.getByRole("checkbox", { name: "Allow add-ons to reach the bundled client after restart", exact: true });
+      assert.equal(await bundled.isChecked(), false);
+      assert.equal(await bundled.isDisabled(), true);
+      await owner.page.getByRole("checkbox", { name: "Enable local qBittorrent downloads", exact: true }).check();
+      await owner.page.getByLabel("qBittorrent Web UI URL", { exact: true }).fill("http://127.0.0.1:8082");
+      await owner.page.getByLabel("qBittorrent username", { exact: true }).fill("fixture-owner");
+      await owner.page.getByLabel("qBittorrent password", { exact: true }).fill("synthetic-bundled-password");
+      await owner.page.getByRole("checkbox", { name: "Allow installed add-ons to use this connection", exact: true }).check();
+      try {
+        await bundled.check();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await owner.page.getByText("Restart required to apply bundled client access.", { exact: false }).waitFor();
+        assert.match(await owner.text(), /Running access: local to this container/);
+        await bundled.scrollIntoViewIfNeeded(); await owner.shot("bundled-client-access");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        await bundled.scrollIntoViewIfNeeded();
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "bundled controls fit on a phone");
+        await owner.shot("bundled-client-access-mobile");
+        await bundled.uncheck();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("bundled approval withdrawn", async () => !await owner.page.getByText("Restart required to apply bundled client access.", { exact: false }).count(), 15_000, 300);
+      } finally {
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await owner.api("POST", "/api/admin/request-settings/reset", {});
+      }
+    });
+
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
       await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
       const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });

@@ -64,12 +64,33 @@ add-on connections and does not revoke credentials already copied to them.
 Resetting the saved connection clears its sharing permission. Sharing choices
 do not change the fingerprints used to track existing request transfers.
 
-Use a qBittorrent URL reachable from the add-on containers. `localhost`, loopback
-and wildcard addresses cannot identify StreamRD from another container, so those
-connections are reported as waiting. The bundled qBittorrent client keeps its
-loopback-only default; this integration does not expose it on the network.
+Use a qBittorrent URL reachable from the add-on containers. Loopback and wildcard
+addresses are reported as waiting unless the bundled-client option below applies.
+
+### Bundled qBittorrent
+
+The bundled client stays local by default. On a single-container installation
+with Docker control and **one named Docker bridge network**, its connection owner can:
+
+1. Configure and enable `http://127.0.0.1:8082` using the bundled credentials.
+2. Approve **Allow installed add-ons to use this connection**.
+3. Check **Allow add-ons to reach the bundled client after restart** and save.
+4. Restart from **Admin → System**, then connect the add-ons.
+
+Saving permission alone does not change the running listener. Download settings
+shows current access and whether a restart is required. After restart, the client
+accepts authenticated connections from its Docker network; port 8082 is not
+published on the host. Add-ons use StreamRD's stable container name, while local
+requests continue using the saved loopback address. The container name must stay
+the same across updates. Authentication and host validation remain enabled.
+
+To close access, withdraw bundled permission (or sharing approval), save, and
+restart. Resetting the connection also withdraws permission. Existing add-on
+settings and torrents are preserved. Credential copies already sent to add-ons
+are not revoked. Default bridge, host, multiple networks and other network modes leave this option
+unavailable; use a reachable external client or change the installation's network.
 
 ## Not done yet
-Bundled-client reachability, root folders, FlareSolverr in Prowlarr, and Bazarr,
+Root folders, FlareSolverr in Prowlarr, and Bazarr,
 Seerr, Tautulli and Maintainerr setup remain open. A successful connection test
 does not establish successful downloading or importing of media.

@@ -9,10 +9,11 @@ import { asyncHandler } from "../http";
 import { parseBody } from "../routes/helpers";
 import { rateLimit } from "../util/rateLimit";
 import { normalizeQbitUrl, QbitClient, QbitSettings, RequestClientError } from "./clients";
+import { bundledAccessActive, bundledPeerHost, isBundledQbitUrl } from "../bundled-qbit";
 
 const KEY = "requests.qbit";
-const empty = (): QbitSettings => ({ enabled: false, baseUrl: "", username: "", password: "", ownerId: "", shareWithAddons: false });
-const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(1500), ownerId: z.string(), shareWithAddons: z.boolean().default(false) });
+const empty = (): QbitSettings => ({ enabled: false, baseUrl: "", username: "", password: "", ownerId: "", shareWithAddons: false, allowBundledAccess: false });
+const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(1500), ownerId: z.string(), shareWithAddons: z.boolean().default(false), allowBundledAccess: z.boolean().default(false) });
 /** The password is stored encrypted (see crypto.ts); callers always see it in clear. */
 const readStored = (value: string | undefined): QbitSettings => { const stored = storedSchema.parse(JSON.parse(value ?? "null")); return { ...stored, password: decryptSecret(stored.password) ?? "" }; };
 const serialize = (value: QbitSettings): string => JSON.stringify({ ...value, password: encryptSecret(value.password) });
@@ -27,12 +28,13 @@ export async function qbitContext(userId: string, client: SettingsDb = db) {
   normalizeQbitUrl(qbit.baseUrl);
   // Sharing is not part of a request's credentials. Preserve the historical
   // fingerprint so this defaulted setting cannot orphan existing transfers.
-  const { shareWithAddons: _sharing, ...requestSettings } = qbit;
+  const { shareWithAddons: _sharing, allowBundledAccess: _bundled, ...requestSettings } = qbit;
   return { settings: qbit, fingerprint: createHash("sha256").update(JSON.stringify(requestSettings)).digest("hex") };
 }
 function publicSettings(qbit: QbitSettings, viewerId: string, canReset = qbit.ownerId === viewerId) {
   const ownedByYou = qbit.ownerId === viewerId;
-  return { qbit: { enabled: qbit.enabled, baseUrl: ownedByYou ? qbit.baseUrl : "", username: ownedByYou ? qbit.username : "", passwordConfigured: Boolean(qbit.password), shareWithAddons: ownedByYou && Boolean(qbit.shareWithAddons), ownedByYou, canReset } };
+  const requested = Boolean(qbit.allowBundledAccess && qbit.enabled && qbit.shareWithAddons && isBundledQbitUrl(qbit.baseUrl));
+  return { qbit: { enabled: qbit.enabled, baseUrl: ownedByYou ? qbit.baseUrl : "", username: ownedByYou ? qbit.username : "", passwordConfigured: Boolean(qbit.password), shareWithAddons: ownedByYou && Boolean(qbit.shareWithAddons), allowBundledAccess: ownedByYou && Boolean(qbit.allowBundledAccess), bundledAvailable: Boolean(bundledPeerHost()), bundledAccessActive: bundledAccessActive(), bundledRestartRequired: requested !== bundledAccessActive(), ownedByYou, canReset } };
 }
 export const requestSettingsRouter = Router();
 requestSettingsRouter.use(requireAuth, requireAdmin, (_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
@@ -43,7 +45,7 @@ requestSettingsRouter.get("/", asyncHandler(async (req, res) => {
   res.json({ settings: publicSettings(qbit, req.session!.sub, Boolean(qbit.ownerId && (!liveOwner || qbit.ownerId === req.session!.sub))) });
 }));
 requestSettingsRouter.put("/", limit, asyncHandler(async (req, res) => {
-  const body = parseBody(z.object({ qbit: z.object({ enabled: z.boolean().optional(), baseUrl: z.string().trim().max(2048).optional(), username: z.string().trim().max(200).optional(), password: z.string().max(500).optional(), clearPassword: z.boolean().optional(), shareWithAddons: z.boolean().optional() }).strict() }).strict(), req.body, res);
+  const body = parseBody(z.object({ qbit: z.object({ enabled: z.boolean().optional(), baseUrl: z.string().trim().max(2048).optional(), username: z.string().trim().max(200).optional(), password: z.string().max(500).optional(), clearPassword: z.boolean().optional(), shareWithAddons: z.boolean().optional(), allowBundledAccess: z.boolean().optional() }).strict() }).strict(), req.body, res);
   if (!body) return;
   try {
     const saved = await db.$transaction(async tx => {
@@ -59,6 +61,10 @@ requestSettingsRouter.put("/", limit, asyncHandler(async (req, res) => {
       if (input.clearPassword) value.enabled = false;
       if (value.enabled && (!value.baseUrl || !value.username || !value.password)) throw new RequestClientError("A URL, username and password are required to enable qBittorrent.", 400);
       if (!value.password || !value.baseUrl) value.enabled = false;
+      value.allowBundledAccess = input.allowBundledAccess ?? current.allowBundledAccess ?? false;
+      if (input.allowBundledAccess && (!value.enabled || !value.shareWithAddons || !isBundledQbitUrl(value.baseUrl))) throw new RequestClientError("Enable and approve sharing of the bundled http://127.0.0.1:8082 connection first.", 400);
+      if (!value.enabled || !value.shareWithAddons || !isBundledQbitUrl(value.baseUrl)) value.allowBundledAccess = false;
+      if (value.allowBundledAccess && !bundledPeerHost()) throw new RequestClientError("Bundled access needs the single-container installation on a named Docker bridge network. Save a reachable external connection or leave bundled access off.", 409);
       await tx.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: serialize(value) }, update: { value: serialize(value) } });
       return value;
     }, { maxWait: 10000, timeout: 10000 });

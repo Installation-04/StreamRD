@@ -185,6 +185,10 @@ files, not values baked into the image. The API-level SQLite backup/restore tool
 ## Enable local requests
 
 Create your administrator account, then open **Admin → Download settings**.
+The bundled Web UI listens on loopback by default and requires authentication.
+Optional [owner-approved add-on access](add-ons.md#bundled-qbittorrent) requires
+a named Docker bridge and a restart; it does not publish port 8082.
+
 Configure the bundled qBittorrent connection with:
 
 - Web UI URL: `http://127.0.0.1:8082`

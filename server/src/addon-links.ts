@@ -8,6 +8,7 @@ import { dockerControl } from "./maintenance";
 import { manager } from "./media-servers";
 import { getRequestSettings, qbitContext } from "./requests/config";
 import { normalizeQbitUrl } from "./requests/clients";
+import { bundledAccessActive, bundledPeerHost, isBundledQbitUrl } from "./bundled-qbit";
 
 /**
  * Makes the add-ons that StreamRD started work together without anyone typing a key: each Sonarr, Radarr, Lidarr and Prowlarr is given a login
@@ -82,7 +83,8 @@ export async function ensureDownloadClient(name: DownloadApp, base: string, key:
   const { qbit } = await getRequestSettings();
   if (!qbit.enabled || !qbit.shareWithAddons) return "unconfigured";
   const context = await qbitContext(qbit.ownerId);
-  const url = new URL(normalizeQbitUrl(context.settings.baseUrl));
+  const bundled = context.settings.allowBundledAccess && bundledAccessActive() && isBundledQbitUrl(context.settings.baseUrl);
+  const url = new URL(bundled ? `http://${bundledPeerHost()}:8082` : normalizeQbitUrl(context.settings.baseUrl));
   if (localOnly(url.hostname)) return "local-only";
   const known = await call<unknown>(base, name, key, "GET", "/downloadclient");
   if (!Array.isArray(known)) throw new Error(`${SERVARR[name].implementation} returned an invalid download-client list`);
@@ -99,7 +101,7 @@ export async function ensureDownloadClient(name: DownloadApp, base: string, key:
   if (["host", "port", "useSsl", "username", "password", categoryField, ...(values.urlBase ? ["urlBase"] : [])].some(field => !names.has(field))) throw new Error(`${SERVARR[name].implementation} returned an incomplete qBittorrent client type`);
   // Configuration may change while the add-on answers. Never send retired credentials.
   const fresh = await qbitContext(qbit.ownerId);
-  if (!fresh.settings.shareWithAddons || fresh.fingerprint !== context.fingerprint) throw new Error("The download-client connection changed while linking. Retry with its current settings.");
+  if (!fresh.settings.shareWithAddons || (bundled && !fresh.settings.allowBundledAccess) || fresh.fingerprint !== context.fingerprint) throw new Error("The download-client connection changed while linking. Retry with its current settings.");
   await call(base, name, key, "POST", "/downloadclient", {
     name: "StreamRD qBittorrent", implementation: schema.implementation, configContract: schema.configContract,
     enable: true, protocol: "torrent", priority: 1, removeCompletedDownloads: false, removeFailedDownloads: false, tags: [],

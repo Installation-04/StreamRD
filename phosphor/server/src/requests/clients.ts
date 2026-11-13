@@ -2,7 +2,7 @@
 export class RequestClientError extends Error {
   constructor(message: string, readonly status = 409) { super(message); }
 }
-export interface QbitSettings { enabled: boolean; baseUrl: string; username: string; password: string; ownerId: string; shareWithAddons?: boolean }
+export interface QbitSettings { enabled: boolean; baseUrl: string; username: string; password: string; ownerId: string; shareWithAddons?: boolean; allowBundledAccess?: boolean }
 export interface TransferState { ref: string; phase: "queued" | "downloading" | "finished" | "error"; progress: number | null; state: string }
 export function validateMagnet(sourceUrl: string): string {
   if (sourceUrl.length > 8192) throw new RequestClientError("Use a valid magnet with a BitTorrent v1 info hash.", 400);

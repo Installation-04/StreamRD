@@ -75,7 +75,7 @@ function ini(section, key, value, text) {
   if (at < 0) lines.splice(end, 0, `${key}=${value}`); else lines[at] = `${key}=${value}`;
   return lines.join('\n');
 }
-function prepareQbit() {
+function prepareQbit(accessHost = '') {
   const password = secret('qbittorrent-password', process.env.QBIT_PASSWORD);
   const username = process.env.QBIT_USERNAME || 'admin';
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(username)) throw Error('Invalid QBIT_USERNAME');
@@ -85,7 +85,7 @@ function prepareQbit() {
   let config = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '[LegalNotice]\nAccepted=true\n[BitTorrent]\nSession\\DefaultSavePath=' + path.join(root, 'downloads') + '/\nSession\\Port=6881\n[Preferences]\nDownloads\\SavePath=' + path.join(root, 'downloads') + '/\nConnection\\PortRangeMin=6881\n';
   const salt = crypto.randomBytes(16);
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512');
-  for (const [key, value] of Object.entries({ 'WebUI\\Address': '127.0.0.1', 'WebUI\\Port': '8082', 'WebUI\\Username': username, 'WebUI\\Password_PBKDF2': `"@ByteArray(${salt.toString('base64')}:${hash.toString('base64')})"`, 'WebUI\\LocalHostAuth': 'true', 'WebUI\\AuthSubnetWhitelistEnabled': 'false', 'WebUI\\ServerDomains': '127.0.0.1;localhost' })) config = ini('Preferences', key, value, config);
+  for (const [key, value] of Object.entries({ 'WebUI\\Address': accessHost ? '0.0.0.0' : '127.0.0.1', 'WebUI\\Port': '8082', 'WebUI\\Username': username, 'WebUI\\Password_PBKDF2': `"@ByteArray(${salt.toString('base64')}:${hash.toString('base64')})"`, 'WebUI\\LocalHostAuth': 'true', 'WebUI\\AuthSubnetWhitelistEnabled': 'false', 'WebUI\\HostHeaderValidation': 'true', 'WebUI\\ServerDomains': '127.0.0.1;localhost' + (accessHost ? ';' + accessHost : '') })) config = ini('Preferences', key, value, config);
   fs.writeFileSync(file, config, { mode: 0o600 }); fs.chmodSync(file, 0o600);
   return ['--profile=' + path.join(configRoot, 'qbittorrent'), '--webui-port=8082'];
 }
@@ -118,10 +118,27 @@ async function main() {
   const environments = {};
   for (const product of products) {
     const directory = path.join(configRoot, product); fs.mkdirSync(directory, { recursive: true });
-    environments[product] = { NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '', CORS_ORIGINS: process.env.CORS_ORIGINS || '', DATA_ENCRYPTION_KEY: secret(product + '-data-key', process.env[product.toUpperCase() + '_DATA_KEY']), TMDB_DEFAULT_API_KEY: process.env.TMDB_DEFAULT_API_KEY || '' };
+    environments[product] = { BUNDLED_QBIT_HOST: '', BUNDLED_QBIT_ACCESS_ACTIVE: 'false', NODE_ENV: 'production', PORT: product === 'streamrd' ? '47821' : '61337', DATABASE_URL: 'file:' + path.join(directory, product + '.db'), JWT_SECRET: secret(product + '-jwt', process.env[product.toUpperCase() + '_JWT_SECRET']), MEDIA_SOURCE_ROOT: process.env.MEDIA_SOURCE_ROOT || path.join(root, 'downloads'), MEDIA_LIBRARY_ROOT: path.join(directory, 'library'), ADMIN_EMAIL: process.env[product.toUpperCase() + '_ADMIN_EMAIL'] || process.env.ADMIN_EMAIL || '', CORS_ORIGINS: process.env.CORS_ORIGINS || '', DATA_ENCRYPTION_KEY: secret(product + '-data-key', process.env[product.toUpperCase() + '_DATA_KEY']), TMDB_DEFAULT_API_KEY: process.env.TMDB_DEFAULT_API_KEY || '' };
     await migrate('/opt/' + product + '/server', environments[product]);
   }
-  if (qbitEnabled) launch('qbittorrent', 'qbittorrent-nox', prepareQbit(), configRoot);
+  let accessHost = '';
+  if (qbitEnabled) {
+    const policy = require('/opt/streamrd/server/dist/src/bundled-qbit.js');
+    let peer = '';
+    if (process.env.DOCKER_CONTROL_STATE === 'embedded' && process.env.MEDIA_MANAGER_URL && process.env.MEDIA_MANAGER_TOKEN) {
+      try {
+        const response = await fetch(process.env.MEDIA_MANAGER_URL + '/peer', { headers: { Authorization: `Bearer ${process.env.MEDIA_MANAGER_TOKEN}` }, signal: AbortSignal.timeout(3000), redirect: 'error' });
+        const body = response.ok ? await response.json() : {};
+        if (typeof body.host === 'string' && policy.validPeerHost(body.host)) peer = body.host;
+      } catch { /* An unavailable helper leaves the client local. */ }
+    }
+    environments.streamrd.BUNDLED_QBIT_HOST = peer;
+    const { PrismaClient } = require('/opt/streamrd/server/node_modules/@prisma/client');
+    const client = new PrismaClient({ datasources: { db: { url: environments.streamrd.DATABASE_URL } } });
+    try { accessHost = await policy.approvedBundledHost(client, peer); } finally { await client.$disconnect(); }
+    environments.streamrd.BUNDLED_QBIT_ACCESS_ACTIVE = accessHost ? 'true' : 'false';
+    launch('qbittorrent', 'qbittorrent-nox', prepareQbit(accessHost), configRoot);
+  }
   for (const product of products) {
     launch(product + '-api', process.execPath, ['dist/src/index.js'], '/opt/' + product + '/server', environments[product]);
     launch(product + '-web', process.execPath, ['server.js'], '/opt/' + product + '/web', { NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', PORT: product === 'streamrd' ? '3000' : '3100', HOSTNAME: '127.0.0.1' });

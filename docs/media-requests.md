@@ -92,6 +92,10 @@ setting. An active administrator can reset an abandoned
 configuration after its former owner is inactive, demoted or removed; reset erases
 its credentials and requires a new connection. It does not delete any torrents.
 
+For the bundled client, optional [add-on access](add-ons.md#bundled-qbittorrent)
+requires separate owner permission and a server restart on a named Docker bridge.
+The running state and restart notice appear in Download settings.
+
 qBittorrent uses its configured save locations and category rules. Mount the
 resulting video directory into the relevant media servers when you want Plex or
 Jellyfin to scan it. The request tracker does not copy, proxy or transcode files.

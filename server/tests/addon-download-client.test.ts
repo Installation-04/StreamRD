@@ -36,10 +36,11 @@ async function addon(version = "v3", onSchema?: () => Promise<void>, categoryFie
   return `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 }
 beforeEach(async () => {
+  delete process.env.BUNDLED_QBIT_HOST; delete process.env.BUNDLED_QBIT_ACCESS_ACTIVE;
   await resetDb(); clients.length = 0; calls.length = 0;
   ownerId = (await db.user.create({ data: { email: "download-owner@fixture.invalid", displayName: "Owner", hashedPassword: "unused-fixture-hash", role: "admin" } })).id;
 });
-afterEach(async () => { await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve())))); });
+afterEach(async () => { delete process.env.BUNDLED_QBIT_HOST; delete process.env.BUNDLED_QBIT_ACCESS_ACTIVE; await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve())))); });
 
 it.each(["sonarr", "radarr", "lidarr"] as const)("connects %s once using schema defaults and the enabled owner's credentials", async name => {
   const categoryField = { sonarr: "tvCategory", radarr: "movieCategory", lidarr: "musicCategory" }[name];
@@ -99,4 +100,21 @@ it("rechecks configuration before sending credentials after a slow schema respon
   await settings(); const base = await addon("v3", async () => { await settings({ username: "changed-owner" }); });
   await expect(ensureDownloadClient("sonarr", base, KEY)).rejects.toThrow("changed while linking");
   expect(clients).toEqual([]); expect(calls.some(call => call.startsWith("POST"))).toBe(false);
+});
+
+it("uses stable container DNS only after bundled access is approved and running", async () => {
+  process.env.BUNDLED_QBIT_HOST = "streamrd-fixture";
+  await settings({ baseUrl: "http://127.0.0.1:8082", allowBundledAccess: true }); const base = await addon();
+  expect(await ensureDownloadClient("sonarr", base, KEY)).toBe("local-only");
+  process.env.BUNDLED_QBIT_ACCESS_ACTIVE = "true";
+  expect(await ensureDownloadClient("sonarr", base, KEY)).toBe("set");
+  const fields = Object.fromEntries((clients[0].fields as { name: string; value: unknown }[]).map(field => [field.name, field.value]));
+  expect(fields).toMatchObject({ host: "streamrd-fixture", port: 8082, useSsl: false, password: PASSWORD });
+});
+it("honors withdrawn bundled approval during a slow schema response", async () => {
+  process.env.BUNDLED_QBIT_HOST = "streamrd-fixture"; process.env.BUNDLED_QBIT_ACCESS_ACTIVE = "true";
+  await settings({ baseUrl: "http://127.0.0.1:8082", allowBundledAccess: true });
+  const base = await addon("v3", async () => { await settings({ baseUrl: "http://127.0.0.1:8082", allowBundledAccess: false }); });
+  await expect(ensureDownloadClient("sonarr", base, KEY)).rejects.toThrow("changed while linking");
+  expect(clients).toEqual([]);
 });

@@ -47,6 +47,9 @@ jobs:
       - name: Every add-on from the marketplace against a real Docker daemon (install, answer, stop, start, remove)
         timeout-minutes: 40
         run: bash infra/smoke-addons.sh streamrd-all-in-one:local
+      - name: Owner-controlled bundled qBittorrent access across restarts
+        timeout-minutes: 15
+        run: bash infra/smoke-bundled-qbit.sh streamrd-all-in-one:local
       - uses: actions/upload-artifact@v6
         if: always()
         with:
