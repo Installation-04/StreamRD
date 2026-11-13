@@ -88,11 +88,11 @@ export default function AddonsMarketplace() {
               {one.state === "failed" && one.error && <p className={styles.error} role="alert">{one.error}</p>}
               {one.ui && !installed && !live && <label className={styles.field}>{one.label} port<input type="number" inputMode="numeric" min={1024} max={65535} value={ports[one.name] ?? String(one.port)} onChange={event => setPorts(current => ({ ...current, [one.name]: event.target.value }))} /></label>}
               <div className={styles.row}>
-                {!installed && <button type="button" className="btn" disabled={Boolean(busy) || live || !control} onClick={() => void launch(one)}>{busy === `launch:${one.name}` || live ? "Installing…" : one.state === "failed" ? "Try again" : "Install"}</button>}
-                {one.state === "stopped" && <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void launch(one)}>Start</button>}
-                {one.state === "running" && one.ui && <a className="btn" href={`http://${host}:${one.port}`} target="_blank" rel="noreferrer">Open {one.label}</a>}
-                {one.state === "running" && <button type="button" className="btn btn-secondary" disabled={Boolean(busy)} onClick={() => void stop(one)}>Stop</button>}
-                {(installed || one.state === "failed") && <button type="button" className="btn btn-secondary" disabled={Boolean(busy)} onClick={() => remove(one)}>Remove</button>}
+                {!installed && <button type="button" className="btn btn-sm" disabled={Boolean(busy) || live || !control} onClick={() => void launch(one)}>{busy === `launch:${one.name}` || live ? "Installing…" : one.state === "failed" ? "Try again" : "Install"}</button>}
+                {one.state === "stopped" && <button type="button" className="btn btn-sm" disabled={Boolean(busy)} onClick={() => void launch(one)}>Start</button>}
+                {one.state === "running" && one.ui && <a className="btn btn-sm" href={`http://${host}:${one.port}`} target="_blank" rel="noreferrer">Open {one.label}</a>}
+                {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void stop(one)}>Stop</button>}
+                {(installed || one.state === "failed") && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => remove(one)}>Remove</button>}
               </div>
               {installed && <label className={styles.check}><input type="checkbox" checked={one.autostart} disabled={Boolean(busy)} onChange={event => void autostart(one, event.target.checked)} />
                 <span>Start {one.label} again when this machine restarts</span></label>}

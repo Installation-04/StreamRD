@@ -59,7 +59,7 @@ export default function ModuleUpdates({ only, compact = false }: { only?: string
   const rows = modules.map(one => {
     const now = status(one), running = one.state === "running", busyHere = busy !== "" || one.update?.state === "running";
     const version = one.version ? `Version ${one.version}` : one.built ? `Image built ${when(one.built)}` : "Version not reported by the image";
-    return <li key={one.name} className={styles.row} data-module={one.name}>
+    return <li key={one.name} className={compact ? `${styles.row} ${styles.stack}` : styles.row} data-module={one.name}>
       <div>
         <div className={styles.name}>{one.label}{!compact && <> <span className={styles.tag}>{one.what}</span></>}</div>
         <div className={styles.meta}>

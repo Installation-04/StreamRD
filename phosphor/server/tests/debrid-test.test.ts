@@ -27,6 +27,8 @@ it("explains a failed connection test in plain words, never with the provider's 
   const offline = await test(); expect(offline.status).toBe(502);
   for (const response of [refused, limited, down, offline]) expect(JSON.stringify(response.body)).not.toMatch(/bad_token|too_many|service_unavailable|ENOTFOUND|a-private-key/);
 
+  // The server writes these log lines in the background, so they are waited for rather than read at once.
+  await vi.waitFor(async () => expect(await db.logEvent.count({ where: { type: "provider_error", userId: user.id } })).toBe(4), { timeout: 5000, interval: 20 });
   const logged = await db.logEvent.findMany({ where: { type: "provider_error", userId: user.id } });
   expect(logged).toHaveLength(4); expect(logged.every(line => line.provider === "realdebrid" && line.level === "warn" && !/a-private-key/.test(line.message))).toBe(true);
 
