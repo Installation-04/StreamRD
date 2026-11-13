@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { createManager } = require("../../infra/single-container/media-manager.cjs") as { createManager: (config: Record<string, unknown>) => { server: http.Server } };
+const { createManager, SERVERS } = require("../../infra/single-container/media-manager.cjs") as { createManager: (config: Record<string, unknown>) => { server: http.Server }; SERVERS: Record<string, unknown> };
+const NAMES = Object.keys(SERVERS);
 
 const TOKEN = "t".repeat(40), HOST = "/srv/streamrd";
 interface Fake { logLines: string[]; calls: string[]; created: Record<string, Record<string, unknown>>; running: Set<string>; images: Set<string>; failPull: boolean; close: () => Promise<void>; socketPath: string }
@@ -56,7 +57,7 @@ it("answers only requests that carry the shared secret", async () => {
   expect((await call("GET", "/status", undefined, null)).status).toBe(401);
   expect((await call("GET", "/status", undefined, "x".repeat(40))).status).toBe(401);
   expect((await call("GET", "/status", undefined, "")).status).toBe(401);
-  const ok = await call("GET", "/status"); expect(ok.status).toBe(200); expect((await body(ok)).servers).toEqual({ jellyfin: { state: "absent" }, plex: { state: "absent" }, prowlarr: { state: "absent" } });
+  const ok = await call("GET", "/status"); expect(ok.status).toBe(200); expect((await body(ok)).servers).toEqual(Object.fromEntries(NAMES.map(name => [name, { state: "absent" }])));
 });
 
 it("launches Jellyfin from a fixed specification: its image, folders, user and network are not the caller's to choose", async () => {
@@ -130,7 +131,7 @@ it("adds the Real-Debrid mount only when Zurg is on, and stops and removes only 
   expect((await call("POST", "/servers/plex/stop")).status).toBe(200); expect((await body(await call("GET", "/status"))).servers.plex.state).toBe("stopped");
   expect((await call("DELETE", "/servers/plex")).status).toBe(200); expect((await body(await call("GET", "/status"))).servers.plex.state).toBe("absent");
   expect((await call("DELETE", "/servers/plex")).status).toBe(200); // already gone is fine
-  expect(docker.calls.filter(line => /\/containers\/(?!create)/.test(line)).every(line => /streamrd-(plex|jellyfin|prowlarr)/.test(line))).toBe(true);
+  expect(docker.calls.filter(line => /\/containers\/(?!create)/.test(line)).every(line => new RegExp(`streamrd-(${NAMES.join("|")})`).test(line))).toBe(true);
 });
 
 it("reports a failed download or an unreachable Docker plainly, without internals", async () => {

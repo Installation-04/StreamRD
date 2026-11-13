@@ -93,6 +93,19 @@ real("probes real files and chooses the cheapest conversion that plays", async (
   process.env.TRANSCODE = "false"; expect((await planPlayback(`${base}/ac3.mkv`, "ac3.mkv")).mode).toBe("direct"); process.env.TRANSCODE = "true";
 });
 
+it("writes the player's own account of why it stopped to the log, for a stream that exists, and nothing that identifies a file", async () => {
+  await resetDb();
+  const person = await db.user.create({ data: { email: "player-report@example.invalid", displayName: "Viewer", hashedPassword: "fixture" } });
+  const id = registerStream("https://provider.invalid/secret-file-name.mkv", "audio", person.id);
+  const sent = await request(app).post(`/api/stream/${id}/problem`).send({ kind: "memory", detail: "The browser has no room for more of this video.", browser: "Firefox", at: 12.7, code: null });
+  expect(sent.status).toBe(204);
+  await vi.waitFor(async () => expect(await db.logEvent.count({ where: { type: "playback", userId: person.id, message: { contains: "Firefox player stopped a converted video (audio) at 12s: memory" } } })).toBe(1), { timeout: 5000, interval: 20 });
+  const row = await db.logEvent.findFirstOrThrow({ where: { type: "playback", userId: person.id } });
+  expect(JSON.stringify(row)).not.toMatch(/provider\.invalid|secret-file-name/);
+  expect((await request(app).post(`/api/stream/${"a".repeat(30)}/problem`).send({ kind: "memory" })).status).toBe(404);   // a stream that is not there
+  for (const body of [{ kind: "nonsense" }, { kind: "memory", detail: "x".repeat(500) }, { kind: "memory", extra: 1 }, { kind: "memory", browser: "Netscape" }]) expect((await request(app).post(`/api/stream/${id}/problem`).send(body)).status, JSON.stringify(body)).toBe(400);
+});
+
 real("streams a converted MP4 that a browser can play, with AAC audio and untouched H.264 video", async () => {
   const id = registerStream(`${base}/ac3.mkv`, "audio", "someone");
   const response = await request(app).get(`/api/stream/${id}`).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on("data", chunk => chunks.push(chunk)); res.on("end", () => done(null, Buffer.concat(chunks))); });

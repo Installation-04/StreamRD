@@ -1,7 +1,7 @@
 # One container for the complete application
 
 The root Dockerfile bundles StreamRD, Phosphor and qBittorrent in one image and
-runs them in one container. Both web interfaces, their APIs, background workers,
+runs them in one container (Phosphor only when it is turned on). The web interfaces, their APIs, background workers,
 SQLite databases and the local download client are included. There is nothing else to start: the pages start Plex and Jellyfin, update StreamRD and
 restart it. For that, the installer gives the container Docker's socket and runs one small helper inside it; read
 [Docker control](plex-jellyfin.md#docker-control) for what that means, and decline it with `--no-media-manager` if you would rather not.
@@ -24,8 +24,9 @@ On a bare Linux machine this one command is enough: it first installs what is mi
 and qBittorrent on or off, Jellyfin and/or Plex, Zilean, Zurg, the reserved administrator email) and shows a summary to confirm.
 Options you pass skip their question; `--yes`, or running without a terminal, skips all of them.
 
-Open StreamRD at `http://YOUR_SERVER:8080` and Phosphor at `http://YOUR_SERVER:8081` (use
-`--port` and `--phosphor-port` to change them, `--no-phosphor` / `--no-qbittorrent` to leave a part out).
+Open StreamRD at `http://YOUR_SERVER:8080` (use `--port` to change it, `--no-qbittorrent` to leave the download client out).
+Phosphor is off unless you ask for it: add `--phosphor` (and `--phosphor-port` to change its port, default 8081) to the install, or run the
+installer again with `--phosphor` later; `--no-phosphor` turns it off again, and its data is kept.
 Each interface sends API calls to its own browser origin, so ports 47821 and 61337 are never exposed.
 The products keep separate accounts, sessions and databases. Plex, Jellyfin, debrid subscriptions, metadata
 providers and indexers are integrations, not software inside this image.
@@ -146,7 +147,7 @@ unattended major changes. The image is built from the tagged source by GitHub Ac
 3. Install with the import (the same web port as before keeps your bookmarks working):
    ```bash
    curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- \
-     --port 3000 --no-phosphor --no-qbittorrent --import-db ~/streamrd-import.db --jwt-secret 'YOUR_OLD_JWT_SECRET'
+     --port 3000 --no-qbittorrent --import-db ~/streamrd-import.db --jwt-secret 'YOUR_OLD_JWT_SECRET'
    ```
    Stop the old stack first (`docker compose down`, without `-v`) so the port is free. Your accounts, provider
    keys, libraries and metadata come across, and existing logins stay valid because the signing key is the same.
@@ -210,7 +211,7 @@ folder. Source preservation and mounted-library rules remain unchanged.
 
 | Variable | Default / effect |
 |---|---|
-| `ENABLE_PHOSPHOR` | `true`; set `false` to omit the companion processes and port listener |
+| `ENABLE_PHOSPHOR` | Off unless set to `true`. A new install written by `install.sh` has `false` in `.env`. Left empty, a configuration folder that already holds Phosphor's data keeps it running |
 | `ENABLE_QBITTORRENT` | `true`; set `false` for cloud-only use |
 | `ADMIN_EMAIL` | Optional administrator email for both products |
 | `STREAMRD_ADMIN_EMAIL`, `PHOSPHOR_ADMIN_EMAIL` | Product-specific administrator overrides |

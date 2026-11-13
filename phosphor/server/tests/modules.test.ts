@@ -34,6 +34,8 @@ async function helper(script: Script) {
   return asked;
 }
 const THREE = { prowlarr: { state: "running" }, jellyfin: { state: "absent" }, plex: { state: "stopped" } };
+// The add-ons the helper knows beyond those three: none of them is started in these tests.
+const OTHERS = ["sonarr", "radarr", "lidarr", "bazarr", "seerr", "tautulli", "flaresolverr", "maintainerr"];
 
 beforeEach(async () => { for (const name of ENV) { kept[name] = process.env[name]; delete process.env[name]; } await resetDb(); ({ admin, user: member } = await adminAndUser()); });
 afterEach(async () => {
@@ -50,7 +52,8 @@ it("lists the modules that are there with the version they run, asks about the o
   expect(listed.body.control).toEqual({ mode: "embedded", reason: null });
   expect(listed.body.window).toEqual({ from: 3, to: 5, timezone: expect.any(String) });
   expect(listed.body.modules.map((one: { name: string; state: string; version: string | null; auto: boolean; updateAvailable: boolean }) => [one.name, one.state, one.version, one.auto, one.updateAvailable])).toEqual([
-    ["prowlarr", "running", "1.30.0", false, false], ["jellyfin", "absent", null, false, false], ["plex", "stopped", "1.41.0", false, false]]);
+    ["prowlarr", "running", "1.30.0", false, false], ["jellyfin", "absent", null, false, false], ["plex", "stopped", "1.41.0", false, false],
+    ...OTHERS.map(name => [name, "absent", null, false, false])]);
   expect(asked).not.toContain("GET /servers/jellyfin/update");   // nothing to ask about a module that was never started
   expect(JSON.stringify(listed.body)).not.toMatch(/mmmmmmmm|Bearer/);
 });
@@ -94,7 +97,7 @@ it("turns a module's automatic update on and off, refuses what it does not know,
   expect((await request(app).put("/api/admin/modules/nothing/auto").set(auth(admin.token)).send({ enabled: true })).status).toBe(404);
   expect((await request(app).post("/api/admin/modules/nothing/update").set(auth(admin.token))).status).toBe(404);
   const on = await request(app).put("/api/admin/modules/prowlarr/auto").set(auth(admin.token)).send({ enabled: true });
-  expect(on.status).toBe(200); expect(on.body.modules.map((one: { name: string; auto: boolean }) => [one.name, one.auto])).toEqual([["prowlarr", true], ["jellyfin", false], ["plex", false]]);
+  expect(on.status).toBe(200); expect(on.body.modules.map((one: { name: string; auto: boolean }) => [one.name, one.auto])).toEqual([["prowlarr", true], ["jellyfin", false], ["plex", false], ...OTHERS.map(name => [name, false])]);
   await sees("Prowlarr updates itself at night", 1);
   expect((await request(app).put("/api/admin/modules/prowlarr/auto").set(auth(admin.token)).send({ enabled: false })).body.modules[0].auto).toBe(false);
 
