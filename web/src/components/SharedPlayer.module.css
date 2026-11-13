@@ -27,6 +27,10 @@
 .files { display:flex;flex-direction:column;gap:8px;margin-bottom:16px; }
 .files button { display:flex;justify-content:space-between;align-items:center;gap:18px;text-align:left;padding:13px 15px;background:#0a0a0a;color:#f4f2ef;border:1px solid #ffffff22;border-radius:10px;font-size:13px;line-height:1.5; }
 .files button:hover { border-color:var(--accent); }
+.seasonTabs { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px; }
+.seasonTabs button { padding:8px 14px;border-radius:999px;border:1px solid #ffffff30;background:#0a0a0a;color:#f4f2ef;cursor:pointer;font:inherit;font-size:13px; }
+.seasonTabs button small { margin-left:8px;color:#b9b2a9; }
+.seasonTabs button.seasonOn { border-color:var(--accent);color:var(--accent); }
 .files button>span:first-child { overflow-wrap:anywhere;min-width:0; }
 .files button>span:last-child { flex-shrink:0;color:#b9b2a9;font-size:12px; }
 .upnext { position:absolute;right:30px;bottom:90px;max-width:380px;padding:22px 24px; }

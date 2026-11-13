@@ -188,6 +188,10 @@ async function main() {
       await owner.open("TV Shows", "Example Show"); await owner.page.getByRole("button", { name: /play from server/i }).click();
       await until("the episode list", async () => /S01E03/.test(await owner.text()), 20_000);
       assert.doesNotMatch(await owner.text(), /\/Example\.Show/, "file names are shown without the provider's leading slash");
+      assert.match(await owner.text(), /Choose an episode\./, "a season pack is laid out by season and episode, not as a list of file names");
+      assert.equal(await owner.page.getByRole("tab", { name: /Season 1/ }).getAttribute("aria-selected"), "true");
+      assert.match(await owner.page.getByRole("tabpanel", { name: "Season 1" }).innerText(), /Episode 1[\s\S]*Episode 2[\s\S]*Episode 3/, "the episodes are in order");
+      await owner.shot("episodes");
       await owner.page.getByRole("button", { name: /S01E01/ }).click();
       await until("episode 1", async () => { const now = await owner.video(); return now && now.at > 2 && /S01E01/.test(await owner.text()); }, 45_000, 500);
       await owner.seek(0.93);
@@ -240,9 +244,15 @@ async function main() {
       await until("the viewer's setup page", async () => /Server-managed playback/.test(await friend.text()), 20_000, 300);
       assert.doesNotMatch(await friend.text(), /private debrid library/i, "a viewer is not sent to import from a debrid account");
       await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
-      await friend.page.getByRole("searchbox").first().or(friend.page.getByRole("textbox").first()).fill("Cosmos Laundromat"); await friend.page.keyboard.press("Enter");
-      await friend.page.getByRole("link", { name: /cosmos laundromat/i }).first().click(); await friend.page.waitForLoadState("networkidle");
-      await friend.page.getByRole("button", { name: /request movie/i }).click();
+      // One search covers movies and shows, and a title is requested with one click on its card, as on a request page.
+      await friend.page.getByLabel("Search movies or shows", { exact: true }).fill("Cosmos Laundromat");
+      assert.equal(await friend.page.getByRole("combobox", { name: /^Media type/ }).inputValue(), "all", "the search covers movies and shows unless told otherwise");
+      const ask = friend.page.getByRole("button", { name: "Request Cosmos Laundromat" }).first();
+      await until("a result with a Request button", async () => ask.isVisible(), 20_000, 300);
+      await ask.click();
+      await until("the card to say the title is requested", async () => /Requested|On its way/.test(await friend.page.getByRole("region", { name: "Discovery results" }).innerText()), 20_000, 300);
+      await friend.shot?.("discover-request");
+      await friend.page.goto(`${base}/requests`, { waitUntil: "networkidle" });
       await until("the request to be received", async () => /Awaiting approval/.test(await friend.text()), 20_000);
     });
 

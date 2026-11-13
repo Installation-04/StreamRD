@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { AccountMedia, AccountPlayResult, accountMediaName, safeMediaUrl } from "@/lib/account-library";
 import { sourceType } from "@/lib/playback";
 import PlaybackHelp from "@/components/PlaybackHelp";
+import { episodeOf, groupEpisodes } from "@/lib/episodes";
 import { Icon } from "@/components/Icon";
 import styles from "./SharedPlayer.module.css";
 
@@ -34,7 +35,7 @@ function reportProblem(streamUrl: string | undefined, kind: "network" | "decode"
 export default function SharedPlayer() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [item, setItem] = useState<AccountMedia | null>(null), [loadError, setLoadError] = useState(""), [busy, setBusy] = useState(true), [playError, setPlayError] = useState(""), [pending, setPending] = useState<number | null>(null);
-  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50);
+  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seasonTab, setSeasonTab] = useState<number | null>(null);
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
@@ -212,6 +213,10 @@ export default function SharedPlayer() {
 
   const name = item ? accountMediaName(item) : "", backdrop = safeMediaUrl(item?.metadata?.backdropUrl) ?? safeMediaUrl(item?.metadata?.posterUrl);
   const shown = files.filter(file => file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  // A season pack is laid out by season and episode: one season at a time, the one being watched first.
+  const grouped = groupEpisodes(shown), watching = current ? files.find(file => file.token === current) : undefined, watchingSeason = watching ? episodeOf(watching.name)?.season : undefined;
+  const activeSeason = grouped ? (seasonTab !== null && (seasonTab === -1 ? grouped.others.length > 0 : grouped.seasons.some(group => group.season === seasonTab)) ? seasonTab : watchingSeason !== undefined && grouped.seasons.some(group => group.season === watchingSeason) ? watchingSeason : grouped.seasons[0].season) : 0;
+  const sizeOf = (size: number | undefined) => typeof size === "number" && size > 0 ? `${(size / 1024 ** 3).toFixed(2)} GB` : "Video";
   const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[forceVideo ? "video" : converted.mode] : null].filter(Boolean).join(" · ");
   const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownTotal = converted ? converted.durationSeconds : position.total, shownAt = Math.min(scrub ?? (converted ? base + position.at : position.at), shownTotal > 0 ? shownTotal : Infinity);
   const playKey = useMse && converted ? `mse:${converted.url}:${forceVideo}` : source;
@@ -254,10 +259,22 @@ export default function SharedPlayer() {
       {playError && <div className={styles.card} role="alert"><h2>We couldn’t start this video.</h2><p>{playError}</p><div className={styles.actions}><button type="button" className="btn" disabled={busy} onClick={() => void play(current ?? undefined)}>Try again</button><button type="button" className="btn btn-secondary" onClick={leave}>Back</button></div></div>}
       {pending !== null && <div className={styles.card} role="status"><h2>The server’s provider is still preparing this video.</h2><p>Reported progress: {pending}%. Try again when the transfer is complete. No new torrent was added.</p><div className={styles.actions}><button type="button" className="btn" disabled={busy} onClick={() => void play(current ?? undefined)}>Check again</button><button type="button" className="btn btn-secondary" onClick={leave}>Back</button></div></div>}
       {choosing && files.length > 0 && <div className={`${styles.card} ${styles.wide}`}>
-        <h2>This torrent has more than one video.</h2><p>Choose the movie or episode you want to play.</p>
+        <h2>{grouped ? "Choose an episode." : "This torrent has more than one video."}</h2><p>{grouped ? "Seasons and episodes, in order." : "Choose the movie or episode you want to play."}</p>
         <label className={styles.search}>Find a video<input type="search" aria-label="Search torrent video files" value={search} maxLength={160} onChange={event => { setSearch(event.target.value); setLimit(50); }} /></label>
-        <div className={styles.files}>{shown.slice(0, limit).map(file => <button type="button" key={file.token} disabled={busy} onClick={() => void play(file.token)}><span>{fileLabel(file.name)}</span><span>{typeof file.size === "number" && file.size > 0 ? `${(file.size / 1024 ** 3).toFixed(2)} GB` : "Video"}</span></button>)}</div>
-        {shown.length > limit && <button type="button" className="btn btn-secondary" onClick={() => setLimit(value => value + 50)}>Show more videos</button>}
+        {grouped ? <>
+          <div role="tablist" aria-label="Seasons" className={styles.seasonTabs}>
+            {grouped.seasons.map(group => <button type="button" role="tab" key={group.season} aria-selected={activeSeason === group.season} className={activeSeason === group.season ? styles.seasonOn : undefined} onClick={() => setSeasonTab(group.season)}>Season {group.season}<small>{group.items.length}</small></button>)}
+            {grouped.others.length > 0 && <button type="button" role="tab" aria-selected={activeSeason === -1} className={activeSeason === -1 ? styles.seasonOn : undefined} onClick={() => setSeasonTab(-1)}>Other<small>{grouped.others.length}</small></button>}
+          </div>
+          <div className={styles.files} role="tabpanel" aria-label={activeSeason === -1 ? "Other videos" : `Season ${activeSeason}`}>
+            {activeSeason === -1
+              ? grouped.others.map(file => <button type="button" key={file.token} disabled={busy} onClick={() => void play(file.token)}><span>{fileLabel(file.name)}</span><span>{sizeOf(file.size)}</span></button>)
+              : grouped.seasons.find(group => group.season === activeSeason)!.items.map(({ file, episode }) => <button type="button" key={file.token} disabled={busy} aria-current={file.token === current ? "true" : undefined} onClick={() => void play(file.token)}><span><strong>Episode {episode}</strong> · {fileLabel(file.name)}</span><span>{file.token === current ? "Playing" : sizeOf(file.size)}</span></button>)}
+          </div>
+        </> : <>
+          <div className={styles.files}>{shown.slice(0, limit).map(file => <button type="button" key={file.token} disabled={busy} onClick={() => void play(file.token)}><span>{fileLabel(file.name)}</span><span>{sizeOf(file.size)}</span></button>)}</div>
+          {shown.length > limit && <button type="button" className="btn btn-secondary" onClick={() => setLimit(value => value + 50)}>Show more videos</button>}
+        </>}
         {stream && <button type="button" className="btn btn-secondary" onClick={() => { setChoosing(false); void video.current?.play(); }}>Keep watching</button>}
       </div>}
       {ended && next && countdown !== null && <div className={`${styles.card} ${styles.upnext}`} role="status"><p className={styles.kicker}>UP NEXT</p><h2>{fileLabel(next.name)}</h2><p>Starting in {Math.max(0, countdown)} seconds</p><div className={styles.actions}><button type="button" className="btn" onClick={() => void play(next.token)}>Play now</button><button type="button" className="btn btn-secondary" onClick={() => setCountdown(null)}>Cancel</button></div></div>}
