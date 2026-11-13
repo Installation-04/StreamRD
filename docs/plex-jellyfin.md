@@ -38,6 +38,8 @@ It adds `docker-compose.jellyfin.yml` and/or `docker-compose.plex.yml` to your i
 | `/data` | your downloads (`data/`) | the exported links point at `/data/downloads/...`, so the same path must exist |
 | `/mnt/zurg` | your Real-Debrid mount, when Zurg is on | same reason |
 
+The two folders are there from the first start (empty until something is exported), so they show in the media server's folder browser.
+
 In the media server's own setup add **Movies** with folder `/library/streamrd/Movies` and **TV Shows** with `/library/streamrd/TV Shows` (and the
 same under `/library/phosphor` if you export from Phosphor), then scan. Jellyfin is at `http://YOUR_SERVER:8096`, Plex at `http://YOUR_SERVER:32400/web`.
 Their settings and caches live in `config/jellyfin` and `config/plex`, so backing up `config/` keeps them. Plex discovery on your LAN (DLNA, GDM)

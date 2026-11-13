@@ -4,7 +4,8 @@ import { app, auth, resetDb } from "./helpers";
 import { db } from "../src/db";
 import { signSession } from "../src/auth/jwt";
 import { getProvider } from "../src/providers/registry";
-import { cloudContext, resumeRequestPolling, runRequestJob } from "../src/requests/worker";
+import { cloudContext, refusalOf, resumeRequestPolling, runRequestJob } from "../src/requests/worker";
+import { ProviderError } from "../src/providers/types";
 import { qbitContext } from "../src/requests/config";
 import { QbitClient, normalizeQbitUrl, validateMagnet } from "../src/requests/clients";
 vi.mock("../src/providers/registry", () => ({ getProvider: vi.fn() }));
@@ -45,6 +46,22 @@ it("never resubmits an interrupted submitting record even with a very recent sta
 it("retains an interrupted known reference and resumes polling without adding",async()=>{
  const {job}=await approved();await db.mediaRequest.update({where:{id:job.id},data:{status:"submitting",providerRef:"known-ref",startedAt:new Date(),leaseUntil:new Date(0)}});
  await runRequestJob();await due(job.id);await runRequestJob();expect(add).not.toHaveBeenCalled();expect(poll).toHaveBeenCalledTimes(1);
+});
+it("says why the provider refused a submission, in plain words, and lets the administrator approve it again",async()=>{
+ for(const [error,words] of [[new ProviderError("realdebrid","infringing_file",503),/refused this torrent/],[new ProviderError("realdebrid","permission_denied",403),/premium subscription|refused this server's address/],[new ProviderError("realdebrid","too_many_requests",429),/limiting requests/],[new ProviderError("realdebrid","bad_token",401),/did not accept the saved key/]] as const){
+  await resetDb();vi.clearAllMocks();vi.mocked(getProvider).mockReturnValue({addTorrent:add,getTorrentStatus:poll} as unknown as ReturnType<typeof getProvider>);
+  const {job}=await approved();add.mockRejectedValue(error);await runRequestJob();
+  const saved=await db.mediaRequest.findUniqueOrThrow({where:{id:job.id}});
+  expect(saved).toMatchObject({status:"attention",downloadState:"approval_blocked",startedAt:null,providerRef:null});   // approvable again: nothing is known to have been started
+  expect(saved.error).toMatch(words);expect(saved.error).toMatch(/approve this request again/);expect(saved.error).not.toMatch(/infringing_file|permission_denied|too_many_requests|bad_token/);
+  await vi.waitFor(async()=>expect(await db.logEvent.count({where:{type:"provider_error",message:{contains:"failed"}}})).toBe(1),{timeout:5000,interval:20});   // the provider's own answer is in the log
+ }
+});
+it("names a refusal by what the provider said, not by a status alone; no answer at all stays unknown",()=>{
+ expect(refusalOf(new ProviderError("realdebrid","HTTP 500",500))).toBeNull();           // a server error: nobody knows whether it was created
+ expect(refusalOf(new Error("fetch failed"))).toBeNull();
+ expect(refusalOf(new ProviderError("realdebrid","something_new",400))).toMatch(/refused the request \(something_new\)/);
+ expect(refusalOf(new ProviderError("realdebrid","too_many_active_downloads",503))).toMatch(/too many downloads are already active/);
 });
 it("leaves ambiguous submission in attention and requires an existing reference for recovery",async()=>{
  const {admin,job}=await approved();add.mockRejectedValue(new Error("private URL and token should not escape"));await runRequestJob();

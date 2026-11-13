@@ -20,6 +20,8 @@
 .name { font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere; }
 .meta { display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-dim,var(--fg-dim));margin-top:4px; }
 .tag { border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:10px;letter-spacing:.6px;text-transform:uppercase; }
+.stack { grid-template-columns:1fr; }
+.stack .rowActions { justify-content:flex-start; }
 .rowActions { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end; }
 .confirm { grid-column:1 / -1;border-top:1px dashed var(--border);padding-top:12px;display:grid;gap:8px; }
 .confirm label { font-size:12px;display:grid;gap:6px; }

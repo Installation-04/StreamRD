@@ -44,6 +44,9 @@ jobs:
         run: bash infra/smoke-single-container.sh
       - name: Docker control against a real Docker daemon (launch, restart, update, rollback)
         run: bash infra/smoke-docker-control.sh streamrd-all-in-one:local
+      - name: Every add-on from the marketplace against a real Docker daemon (install, answer, stop, start, remove)
+        timeout-minutes: 40
+        run: bash infra/smoke-addons.sh streamrd-all-in-one:local
       - uses: actions/upload-artifact@v6
         if: always()
         with:

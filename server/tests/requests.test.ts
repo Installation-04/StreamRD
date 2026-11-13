@@ -40,6 +40,29 @@ it("requires active authentication for discovery and does not expose metadata cr
  expect(response.status).toBe(200); expect(response.headers["cache-control"]).toContain("no-store"); expect(response.body.results[0].name).toBe("The Example");
  expect((await request(app).get("/api/discovery/search?q=Example&type=wrong").set(auth(member.token))).status).toBe(400);
 });
+it("searches movies and shows together, best of each kind first, and says where each result stands for this person", async () => {
+ const member = await actor(), other = await actor();
+ vi.mocked(searchMetadata).mockImplementation(async input => input.type === "movie" ? [details("1", "movie"), details("2", "movie")] : [details("3", "series"), details("4", "series")]);
+ const plain = await request(app).get("/api/discovery/search?q=Example").set(auth(member.token));   // no type: both kinds
+ expect(plain.status).toBe(200);
+ expect(plain.body.results.map((found: { id: string; type: string }) => `${found.type}:${found.id}`)).toEqual(["movie:1", "series:3", "movie:2", "series:4"]);
+ expect(plain.body.results.every((found: { status: string | null }) => found.status === null)).toBe(true);
+ expect(vi.mocked(searchMetadata).mock.calls.map(call => call[0].type).sort()).toEqual(["movie", "series"]);
+ // Each request's state is one word; another person's request for the same title shows too (they would join it), a library title is "available".
+ await requested(other.id, "1", "downloading"); await requested(other.id, "2", "rejected");
+ await db.mediaRequest.create({ data: { canonicalKey: "tmdb:series:3", provider: "tmdb", externalId: "3", mediaType: "series", name: "The Example", year: 2020, metadata: "{}", status: "requested" } });
+ const owner = await actor("admin"); await imported(owner.id, details("4", "series"));
+ const shown = await request(app).get("/api/discovery/search?q=Example").set(auth(owner.token));
+ const by = Object.fromEntries(shown.body.results.map((found: { type: string; id: string; status: string | null }) => [`${found.type}:${found.id}`, found.status]));
+ expect(by).toEqual({ "movie:1": "processing", "movie:2": "declined", "series:3": "requested", "series:4": "available" });
+ // A type still narrows the search, and one kind failing does not hide the other.
+ expect((await request(app).get("/api/discovery/search?q=Example&type=series").set(auth(member.token))).body.results.map((found: { type: string }) => found.type)).toEqual(["series", "series"]);
+ vi.mocked(searchMetadata).mockImplementation(async input => { if (input.type === "series") throw new Error("shows are down"); return [details("1", "movie")]; });
+ const partial = await request(app).get("/api/discovery/search?q=Example").set(auth(member.token));
+ expect(partial.status).toBe(200); expect(partial.body.results).toHaveLength(1);
+ vi.mocked(searchMetadata).mockRejectedValue(new Error("everything is down"));
+ expect((await request(app).get("/api/discovery/search?q=Example").set(auth(member.token))).status).toBeGreaterThanOrEqual(500);
+});
 it("fetches request identity server-side, ignores no forged media fields and deduplicates followers", async () => {
  const member = await actor();
  expect((await request(app).post("/api/requests").set(auth(member.token)).send({ ...selection, name: "Forged name" })).status).toBe(400);

@@ -7,13 +7,13 @@ lockfiles in each server/web directory.
 
 ## Quick install
 
-With Docker and the Compose plugin, one command installs the all-in-one container (StreamRD on port 8080,
-Phosphor on 8081, plus qBittorrent), laid out as:
+With Docker and the Compose plugin, one command installs the all-in-one container (StreamRD on port 8080
+and qBittorrent; add `--phosphor` to run Phosphor on 8081 too), laid out as:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash
 # choose ports, the first administrator, or leave parts out:
-curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- --port 3000 --admin-email you@example.com --no-phosphor --no-qbittorrent
+curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- --port 3000 --admin-email you@example.com --no-qbittorrent
 ```
 
 Run from a terminal, it first asks how you want it: Default, or Advanced (folder, ports, Phosphor and qBittorrent on or off, Jellyfin and/or Plex

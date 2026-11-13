@@ -93,10 +93,10 @@ export default function MediaServersPanel() {
     </div>}
     {error && <div className={styles.error} role="alert"><p>{error}</p></div>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
-    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", marginTop: 12 }}>
+    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", alignItems: "start", marginTop: 12 }}>
       {(["jellyfin", "plex"] as Name[]).map(name => {
         const server = view.servers[name], copy = COPY[name], live = server.state === "pulling" || server.state === "starting";
-        return <article key={name} aria-label={`${copy.label} media server`} style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, padding: 16, display: "grid", gap: 10 }}>
+        return <article key={name} aria-label={`${copy.label} media server`} style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, padding: 16, display: "grid", alignContent: "start", gap: 10, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}><h3 style={{ margin: 0 }}>{copy.label}</h3><span role="status" aria-label={`${copy.label} status`}>{WORDS[server.state]}</span></div>
           {server.state === "failed" && server.error && <p role="alert" style={{ margin: 0 }}>{server.error}</p>}
           <label style={{ display: "grid", gap: 4 }}>{copy.label} port<input type="number" inputMode="numeric" min={1024} max={65535} value={ports[name]} onChange={event => setPorts(current => ({ ...current, [name]: event.target.value }))} /></label>

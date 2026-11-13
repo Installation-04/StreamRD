@@ -63,7 +63,9 @@ row has its own **Copy** and **Details** (its extra data), and **Download all
 matching…** saves every matching entry (up to 50,000) as a text log, JSON lines or
 CSV with the same filters. Turn on **Live** to refresh every 10 seconds. Spreadsheet
 exports neutralize cells that start with `=`, `+`, `-` or `@`. Downloading is itself
-recorded as an administrator action. Logs can contain user ids and provider names;
+recorded as an administrator action. When a converted video stops in someone's browser, the player reports it: a *playback* warning says which
+browser, what kind of problem and how far it got (never a link or a file name), and a request the provider refuses is logged with the provider's own
+answer, so "it stopped after a few seconds" can be answered from here and from the diagnostic bundle. Logs can contain user ids and provider names;
 share exports carefully.
 
 ## Updates, backups and restore (System page)
@@ -89,7 +91,7 @@ environment, never from the admin page. If the hook refuses, the backup is kept 
 nothing changes. After the update the new image starts, applies database upgrades
 (with another verified snapshot when needed) and the page shows the new version.
 
-**Add-ons (Prowlarr, Jellyfin, Plex).** With Docker control on, each of these that is running is listed with its version. *Check for updates*
+**Add-ons.** *Admin → Add-ons* installs Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, Prowlarr, FlareSolverr and Maintainerr with one button each, with a log box that follows the download and the start; see [Add-ons](add-ons.md). **Updates.** With Docker control on, each add-on or media server that is running is listed with its version. *Check for updates*
 looks for a newer version of that program without changing anything, *Update now* restarts it on the newer one (its settings are kept, and the
 previous version is put back if the new one does not start), and *Update by itself at night* does both between 03:00 and 05:00, once a night. The
 night option is off until you turn it on, because an update stops what a media server is playing. Details, and what an update cannot undo, are in

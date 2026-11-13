@@ -9,10 +9,14 @@ import { seasonOf } from "./media-tags";
  */
 type Client = Pick<Prisma.TransactionClient, "$executeRawUnsafe">;
 const normalize = (value: string) => value.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
-/** Names the title from its cleaned name, year and type; null when the name says nothing. */
+/**
+ * Names the title from its cleaned name, year and type; null when the name says nothing. A show is named without its year: its seasons come
+ * out in different years, and one season's release name often carries a year where another's does not, which used to leave "Show S01 (2022)"
+ * and "Show S02" as two shows. Matching the show with its details later names it by its provider id anyway.
+ */
 export function titleKey(name: string | null | undefined, year: number | null | undefined, type: string | null | undefined): string | null {
   const words = normalize(name ?? ""); if (!words) return null;
-  return `${type === "series" ? "series" : "movie"}|${words}|${year ?? ""}`;
+  return type === "series" ? `series|${words}|` : `movie|${words}|${year ?? ""}`;
 }
 /** A matched title is named by its provider id, which joins different spellings and release names of the same film. */
 export function idKey(details: { imdbId?: string | null; tmdbId?: string | null } | null | undefined): string | null {
@@ -45,6 +49,28 @@ export async function refreshPrimaries(client: Client, userId: string, keys: Arr
       `UPDATE "AccountMedia" SET "isPrimary" = CASE WHEN "id" = (SELECT b."id" FROM "AccountMedia" b WHERE b."userId" = "AccountMedia"."userId" AND b."groupKey" = "AccountMedia"."groupKey" ORDER BY (b."health" <> 'broken') DESC, (b."phase" = 'finished') DESC, b."createdAt" DESC, b."id" DESC LIMIT 1) THEN 1 ELSE 0 END WHERE "userId" = ? AND "groupKey" IN (${batch.map(() => "?").join(",")})`,
       userId, ...batch);
   }
+}
+
+/**
+ * Puts the seasons of a show that were named with a year (before shows were named without one) together with the show's other seasons.
+ * Only the name that groups them changes; no item is touched otherwise. Idempotent; run at start.
+ */
+export async function regroupSeries(batch = 2000, rounds = 50): Promise<number> {
+  let changed = 0;
+  for (let round = 0; round < rounds; round++) {
+    const rows = await db.accountMedia.findMany({ where: { type: "series", groupKey: { startsWith: "series|" }, NOT: { groupKey: { endsWith: "|" } } }, select: { id: true, userId: true, groupKey: true }, orderBy: { id: "asc" }, take: batch });
+    if (!rows.length) break;
+    const touched = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const before = row.groupKey!, after = `${before.split("|").slice(0, 2).join("|")}|`;
+      await db.accountMedia.update({ where: { id: row.id }, data: { groupKey: after } });
+      if (!touched.has(row.userId)) touched.set(row.userId, new Set());
+      touched.get(row.userId)!.add(before).add(after); changed++;
+    }
+    for (const [userId, keys] of touched) await refreshPrimaries(db, userId, [...keys]);
+    if (rows.length < batch) break;
+  }
+  return changed;
 }
 
 /** Names titles that existed before grouping did, using stored metadata where there is one. Idempotent; run at start. */

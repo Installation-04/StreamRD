@@ -40,7 +40,7 @@ check "$d/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.jellyfin.yml:do
 check "$d/.env" '^JELLYFIN_PORT=8097$'; check "$d/.env" '^PLEX_PORT=32401$'
 check "$d/docker-compose.jellyfin.yml" '/library/streamrd:ro'; check "$d/docker-compose.plex.yml" '/data:ro'
 absent "$d/docker-compose.jellyfin.yml" '/mnt/zurg'
-for dir in streamrd/library phosphor/library jellyfin/config plex/config; do [ -d "$d/config/$dir" ] || { echo "FAIL: config/$dir missing" >&2; exit 1; }; done
+for dir in streamrd/library phosphor/library jellyfin/config plex/config streamrd/library/Movies "streamrd/library/TV Shows" phosphor/library/Movies "phosphor/library/TV Shows"; do [ -d "$d/config/$dir" ] || { echo "FAIL: config/$dir missing" >&2; exit 1; }; done   # Movies and TV Shows are there before anything is exported
 
 run --dir "$d"                       # a plain re-run keeps what was chosen
 check "$d/.env" 'jellyfin.yml:docker-compose.plex.yml'
@@ -66,6 +66,28 @@ DOCKER_HOST=unix:///run/user/1000/docker.sock PATH="$work/rootless:$PATH" bash "
 check "$work/r/.env" '^DOCKER_SOCKET_PATH=/run/user/1000/docker.sock$'
 if PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/b" --media-server nonsense >/dev/null 2>&1; then echo "FAIL: bad --media-server accepted" >&2; exit 1; fi
 if PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/b" --plex-port 99999 >/dev/null 2>&1; then echo "FAIL: bad port accepted" >&2; exit 1; fi
+
+# Phosphor is off for a new install unless it is asked for. An installation that was already running it keeps it, including when its
+# container definition is written again, and Phosphor can be turned on and off by re-running.
+dp="$work/phosphor-default"; run --dir "$dp"
+check "$dp/.env" '^ENABLE_PHOSPHOR=false$'; check "$dp/docker-compose.yml" 'ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}'
+run --dir "$dp"; check "$dp/.env" '^ENABLE_PHOSPHOR=false$'            # a plain re-run keeps it off
+run --dir "$dp" --phosphor; check "$dp/.env" '^ENABLE_PHOSPHOR=true$'  # and --phosphor turns it on
+run --dir "$dp"; check "$dp/.env" '^ENABLE_PHOSPHOR=true$'             # which a plain re-run keeps
+run --dir "$dp" --no-phosphor; check "$dp/.env" '^ENABLE_PHOSPHOR=false$'
+dq="$work/phosphor-asked"; run --dir "$dq" --phosphor --phosphor-port 8091
+check "$dq/.env" '^ENABLE_PHOSPHOR=true$'; check "$dq/.env" '^PHOSPHOR_PORT=8091$'
+# An installation from before this changed (Phosphor on by default, nothing about it in .env) is recorded as running it, so writing its
+# container definition again does not switch it off.
+dr="$work/phosphor-before"; run --dir "$dr"
+sed -i '/^ENABLE_PHOSPHOR=/d' "$dr/.env"; sed -i 's/ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}/ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-true}/' "$dr/docker-compose.yml"
+absent "$dr/.env" ENABLE_PHOSPHOR; run --dir "$dr" --refresh-compose
+check "$dr/.env" '^ENABLE_PHOSPHOR=true$'; check "$dr/docker-compose.yml" 'ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}'
+# Zilean is added to Phosphor, so asking for it with Phosphor off says so.
+zilean_note="$(PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/phosphor-zilean" --zilean 2>&1)"
+printf '%s' "$zilean_note" | grep -q 'Zilean is added to Phosphor, which is not running' || { echo "FAIL: Zilean without Phosphor was not explained" >&2; exit 1; }
+zilean_on="$(PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/phosphor-zilean-on" --zilean --phosphor 2>&1)"
+! printf '%s' "$zilean_on" | grep -q 'which is not running' || { echo "FAIL: Zilean with Phosphor on was told Phosphor is off" >&2; exit 1; }
 
 # ---- The host: what is missing is installed (Docker, the Compose plugin, curl, tar), unless told not to. ----------------------------------
 # Each case runs the real installer in a sandbox that has the system's tools but no Docker, package manager, sudo or init system of its own,
