@@ -112,4 +112,28 @@ for entry in "${ADDONS[@]}"; do
   docker exec "$name" sh -c "ls /config/$addon" >/dev/null 2>&1 || [ "$addon" = flaresolverr ] || fail "removing $addon took its settings with it"
   docker images --format '{{.Repository}} {{.ID}}' | awk -v a="/$addon" 'index($1, a) {print $2}' | xargs -r docker rmi >/dev/null 2>&1 || true   # keep the runner's disk free for the next one
 done
+say "Prowlarr, Sonarr: signed in and linked by StreamRD, against the real programs"
+for addon in prowlarr sonarr; do
+  tries=0; waited=0; body='{}'
+  [ "$addon" = prowlarr ] || body="{\"port\":18989}"
+  retry 6 docker pull "$(image_of "$addon")" >/dev/null || fail "could not download $addon"
+  call POST "/api/admin/addons/$addon/launch" "$body" | jq -e '.addons' >/dev/null || fail "the launch of $addon was refused"
+  until [ "$(state_of "$addon")" = running ]; do sleep 3; waited=$((waited + 3)); [ "$waited" -lt 600 ] || fail "$addon never started"; done
+done
+linked=""
+for attempt in $(seq 1 40); do
+  report="$(call POST /api/admin/addons/link)"
+  if echo "$report" | jq -e '(.errors | length) == 0 and (.waiting | length) == 0 and (.linked | index("sonarr")) != null' >/dev/null 2>&1; then linked=yes; break; fi
+  if echo "$report" | jq -e '(.errors | length) == 0 and (.waiting | length) == 0' >/dev/null 2>&1 && [ -n "$(call GET /api/admin/addons/sonarr/login | jq -r '.password // empty')" ]; then linked=yes; break; fi
+  sleep 6
+done
+[ "$linked" = yes ] || fail "the add-ons were not linked: $report"
+login="$(call GET /api/admin/addons/sonarr/login)"; pass="$(echo "$login" | jq -r .password)"; [ "${#pass}" -ge 20 ] || fail "no login was made for Sonarr"
+skey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/sonarr/config/config.xml | sed 's/<[^>]*>//g')"
+pkey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/prowlarr/config/config.xml | sed 's/<[^>]*>//g')"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18989/api/v3/system/status")" = 401 ] || fail "Sonarr answers without a key or a login"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $skey" "http://127.0.0.1:18989/api/v3/system/status")" = 200 ] || fail "Sonarr does not accept its own key after the login was set"
+curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e 'map(select(.implementation == "Sonarr")) | length == 1' >/dev/null || fail "Prowlarr does not know Sonarr"
+report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
+echo 'Sonarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
 echo 'Every add-on installed, answered, stopped, started again and was removed with its settings kept.'

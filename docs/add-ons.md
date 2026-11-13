@@ -40,6 +40,8 @@ Decided in one place (`SERVERS` in `infra/single-container/media-manager.cjs`), 
   if the new one does not start. A new version of a program can change its own database in a way an older one cannot read: copy its folder under
   `config/` first if what it holds matters.
 
+## Sign-in and links
+A minute or two after Sonarr, Radarr, Lidarr or Prowlarr runs, StreamRD gives it a login it made up (kept encrypted; **Show login** on the card) and tells Prowlarr about every Sonarr, Radarr and Lidarr that runs. An add-on whose login someone already chose is left alone.
+
 ## Not done yet
-Installing an add-on does not yet sign it in or link it to the others: open it and finish its own first-run screen. Linking them
-automatically (logins and API keys, Prowlarr to Sonarr and Radarr, a download client, Bazarr and Seerr to their sources) is the next step.
+A download client, root folders, FlareSolverr in Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr still use their own first-run screens.

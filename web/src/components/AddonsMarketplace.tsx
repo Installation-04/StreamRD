@@ -19,7 +19,7 @@ const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/Installati
  */
 export default function AddonsMarketplace() {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState("");
-  const [ports, setPorts] = useState<Record<string, string>>({}), [open, setOpen] = useState<Record<string, boolean>>({}), [logs, setLogs] = useState<Record<string, Logs | null>>({});
+  const [logins, setLogins] = useState<Record<string, string>>({}), [ports, setPorts] = useState<Record<string, string>>({}), [open, setOpen] = useState<Record<string, boolean>>({}), [logs, setLogs] = useState<Record<string, Logs | null>>({});
   const mounted = useRef(true), seeded = useRef(false);
   const load = useCallback(async () => {
     try {
@@ -59,6 +59,10 @@ export default function AddonsMarketplace() {
     if (!window.confirm(`Remove ${one.label}? Its settings are kept, so installing it again picks up where it was.`)) return;
     void run(`remove:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}`, { method: "DELETE" }); return `${one.label} removed. Its settings were kept.`; });
   };
+  const showLogin = (one: Addon) => run(`login:${one.name}`, async () => {
+    const found = await api<{ username: string; password: string }>(`/api/admin/addons/${one.name}/login`);
+    setLogins(current => ({ ...current, [one.name]: `Sign in as ${found.username} with ${found.password}` }));
+  });
   const autostart = (one: Addon, enabled: boolean) => run(`auto:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}/autostart`, { method: "PUT", body: JSON.stringify({ enabled }) }); });
 
   if (!view) return <div className={styles.page}>{error ? <p className={styles.error} role="alert">{error}</p> : <p className={styles.small} role="status">Loading the add-ons…</p>}</div>;
@@ -94,6 +98,10 @@ export default function AddonsMarketplace() {
                 {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void stop(one)}>Stop</button>}
                 {(installed || one.state === "failed") && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => remove(one)}>Remove</button>}
               </div>
+              {one.state === "running" && ["sonarr", "radarr", "lidarr", "prowlarr"].includes(one.name) && <div>
+                <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void showLogin(one)}>Show login</button>
+                {logins[one.name] && <p className={styles.small} role="status"><code>{logins[one.name]}</code></p>}
+              </div>}
               {installed && <label className={styles.check}><input type="checkbox" checked={one.autostart} disabled={Boolean(busy)} onChange={event => void autostart(one, event.target.checked)} />
                 <span>Start {one.label} again when this machine restarts</span></label>}
               {installed && <ModuleUpdates only={[one.name]} compact />}
