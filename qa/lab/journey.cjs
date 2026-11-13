@@ -369,7 +369,7 @@ async function main() {
       const log = () => card.getByRole("log").innerText().catch(() => "");
       await until("the download to show in the log", async () => /Downloading image lscr\.io\/linuxserver\/sonarr/.test(await log()), 20_000, 300);
       await until("Sonarr to be running", async () => (await status()) === "Running", 60_000, 500);
-      assert.match(await log(), /Started\. It listens on port 8989/);
+      await until("the start in the log", async () => /Started\. It listens on port 8989/.test(await log()), 20_000, 500);   // the log is read a moment after the status
       assert.equal(await card.getByRole("link", { name: "Open Sonarr" }).getAttribute("href"), `http://${new URL(base).hostname}:8989`);
       await owner.shot("addons-marketplace");
       await card.getByRole("button", { name: "Stop", exact: true }).click();
