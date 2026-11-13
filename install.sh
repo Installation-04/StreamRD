@@ -525,7 +525,7 @@ own_folders() {
 # instead (as root) the apps could not write to them.
 ensure_dirs() {
   local image="$1" dir missing=""; shift
-  for dir in "$@"; do mkdir -p "$DIR/config/$dir" 2>/dev/null || missing="$missing /config/$dir"; done
+  for dir in "$@"; do mkdir -p "$DIR/config/$dir" 2>/dev/null || missing="$missing '/config/$dir'"; done
   [ -z "$missing" ] || docker run --rm --user root --entrypoint sh -v "$DIR/config:/config" "$image" -c "mkdir -p $missing && chown -R 1000:1000 /config" >/dev/null 2>&1 \
     || log "Could not create$missing; run: sudo mkdir -p $DIR/config/... && sudo chown -R 1000:1000 $DIR/config"
 }
@@ -847,7 +847,8 @@ main() {
   fi
   local image="$(env_value STREAMRD_IMAGE):$(env_value STREAMRD_TAG)"
   own_folders "$image"
-  ensure_dirs "$image" streamrd/library phosphor/library
+  # Movies and TV Shows are made empty, so a media server's folder browser lists them before anything has been exported.
+  ensure_dirs "$image" streamrd/library streamrd/library/Movies "streamrd/library/TV Shows" phosphor/library phosphor/library/Movies "phosphor/library/TV Shows"
   [ "$use_jellyfin" = false ] || ensure_dirs "$image" jellyfin/config jellyfin/cache
   [ "$use_plex" = false ] || ensure_dirs "$image" plex/config plex/transcode
   [ "$use_manager" = false ] || ensure_dirs "$image" jellyfin/config jellyfin/cache plex/config plex/transcode

@@ -125,11 +125,17 @@ export class RealDebridProvider implements DebridProvider {
       method: "POST",
       body,
     });
-    // Select all files so the torrent actually starts downloading.
-    await this.request<void>(creds, `/torrents/selectFiles/${added.id}`, {
-      method: "POST",
-      body: new URLSearchParams({ files: "all" }),
-    });
+    // Select all files so the torrent actually starts downloading. If that is refused, the torrent just added is removed again, so a refused
+    // request leaves nothing behind in the account and can be tried again without a duplicate.
+    try {
+      await this.request<void>(creds, `/torrents/selectFiles/${added.id}`, {
+        method: "POST",
+        body: new URLSearchParams({ files: "all" }),
+      });
+    } catch (error) {
+      await this.request<void>(creds, `/torrents/delete/${encodeURIComponent(added.id)}`, { method: "DELETE" }).catch(() => undefined);
+      throw error;
+    }
     return this.getTorrentStatus(creds, added.id);
   }
 

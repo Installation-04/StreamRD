@@ -97,7 +97,9 @@ function ownLayout(mounts, dirs) {
 // mounts them: Docker would otherwise make them as root and the servers could not write.
 // The settings folder is written by StreamRD's user and this runs as root, so a folder that is a link (which StreamRD's user could point
 // anywhere) is refused rather than followed, and ownership is only ever given to a folder that is really one, never to what a link names.
-const LIBRARY_FOLDERS = ['streamrd/library', 'phosphor/library'];
+// The library folders a media server is shown. Movies and TV Shows are made here, empty, so a media server's folder browser lists them from the
+// first start: they used to appear only once something had been exported, and a new Plex or Jellyfin showed nothing to choose.
+const LIBRARY_FOLDERS = ['streamrd/library', 'streamrd/library/Movies', 'streamrd/library/TV Shows', 'phosphor/library', 'phosphor/library/Movies', 'phosphor/library/TV Shows'];
 /** The folders a server needs under the settings folder, before Docker mounts them. */
 const foldersOf = name => [...SERVERS[name].folders.map(folder => folder[0]), ...(SERVERS[name].kind === 'media' ? LIBRARY_FOLDERS : [])];
 function ownFolder(base, relative, uid, gid) {
