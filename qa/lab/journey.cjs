@@ -418,6 +418,36 @@ async function main() {
       }
     });
 
+    await step("the download-client owner explicitly opts into add-on sharing and can withdraw that permission", async () => {
+      await owner.page.goto(`${base}/admin/request-settings`, { waitUntil: "networkidle" });
+      const share = owner.page.getByRole("checkbox", { name: "Allow installed add-ons to use this connection", exact: true });
+      const saved = () => owner.page.evaluate(async () => (await (await fetch("/api/admin/request-settings", { credentials: "include" })).json()).settings.qbit);
+      await share.waitFor();
+      assert.equal(await share.isChecked(), false, "sharing is off by default");
+      await owner.page.getByRole("checkbox", { name: "Enable local qBittorrent downloads", exact: true }).check();
+      await owner.page.getByLabel("qBittorrent Web UI URL", { exact: true }).fill("http://qbit.fixture.invalid:8080");
+      await owner.page.getByLabel("qBittorrent username", { exact: true }).fill("fixture-owner");
+      await owner.page.getByLabel("qBittorrent password", { exact: true }).fill("synthetic-sharing-password");
+      try {
+        await share.check();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("the owner's sharing choice to be saved", async () => (await saved()).shareWithAddons === true, 15_000, 300);
+        assert.match(await owner.text(), /Other administrators can use those apps/);
+        await share.scrollIntoViewIfNeeded(); await owner.shot("download-client-sharing");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        await share.scrollIntoViewIfNeeded();
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "the sharing choice fits on a phone");
+        await owner.shot("download-client-sharing-mobile");
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await share.uncheck();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("sharing permission to be withdrawn", async () => (await saved()).shareWithAddons === false, 15_000, 300);
+      } finally {
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await owner.api("POST", "/api/admin/request-settings/reset", {});
+      }
+    });
+
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {
       await owner.page.goto(`${base}/admin/server`, { waitUntil: "networkidle" });
       const picture = owner.page.getByRole("checkbox", { name: /Also convert the picture/ });

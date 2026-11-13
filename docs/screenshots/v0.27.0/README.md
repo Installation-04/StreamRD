@@ -3,6 +3,8 @@
 Captured from the production web build in the disposable local lab using
 Google Chrome. `addon-connections.png` shows desktop controls;
 `addon-connections-mobile.png` shows the same page at 390 pixels wide.
+`download-client-sharing.png` and `download-client-sharing-mobile.png` show the
+owner's explicit sharing choice after saving synthetic connection settings.
 
 The connection-success message uses a synthetic response fixture to verify UI
 feedback. It is not evidence that the pictured uninstalled apps were connected.

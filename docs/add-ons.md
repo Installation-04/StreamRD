@@ -47,13 +47,22 @@ A minute or two after Sonarr, Radarr, Lidarr or Prowlarr runs, StreamRD gives it
 apps that are still starting. **Download client settings** opens the qBittorrent
 connection configured under Admin → Request settings.
 
-When that connection is enabled and its owning administrator is still active,
-StreamRD adds it to Sonarr, Radarr and Lidarr if they have no download clients.
+The connection's owner must check **Allow installed add-ons to use this
+connection** in Download settings and save. This is off by default, including
+for existing connections. Other administrators cannot enable it for the owner.
+When the connection is enabled, opted in and its owning administrator is still
+active, StreamRD adds it to Sonarr, Radarr and Lidarr if they have no download clients.
 Existing clients, including disabled ones, are left alone. Each app gets its own
 `streamrd-sonarr`, `streamrd-radarr` or `streamrd-lidarr` category; automatic removal
 of completed and failed downloads is disabled. Host, port, HTTPS and a reverse-proxy
 URL base come from the saved connection. Credentials stay out of linking reports
 and logs, and are rechecked before being sent to the add-on.
+
+Opting in sends credentials to those apps, which other server administrators
+can access. Turning sharing off stops new configurations; it preserves existing
+add-on connections and does not revoke credentials already copied to them.
+Resetting the saved connection clears its sharing permission. Sharing choices
+do not change the fingerprints used to track existing request transfers.
 
 Use a qBittorrent URL reachable from the add-on containers. `localhost`, loopback
 and wildcard addresses cannot identify StreamRD from another container, so those

@@ -198,6 +198,7 @@ type RequestSettings = {
         baseUrl: string;
         username: string;
         passwordConfigured: boolean;
+        shareWithAddons?: boolean;
         ownedByYou: boolean;
         canReset: boolean;
     };
@@ -205,10 +206,11 @@ type RequestSettings = {
 export function RequestSettings() {
     const resource = useResource<{
         settings: RequestSettings;
-    }>("/api/admin/request-settings"), [enabled, setEnabled] = useState(false), [baseUrl, setBaseUrl] = useState(""), [username, setUsername] = useState(""), [password, setPassword] = useState(""), [clearPassword, setClearPassword] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+    }>("/api/admin/request-settings"), [enabled, setEnabled] = useState(false), [baseUrl, setBaseUrl] = useState(""), [username, setUsername] = useState(""), [password, setPassword] = useState(""), [clearPassword, setClearPassword] = useState(false), [shareWithAddons, setShareWithAddons] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
     const saved = resource.data?.settings.qbit;
     useEffect(() => { if (saved) {
         setEnabled(saved.enabled);
+        setShareWithAddons(Boolean(saved.shareWithAddons));
         setBaseUrl(saved.baseUrl);
         setUsername(saved.username);
         setPassword("");
@@ -216,7 +218,7 @@ export function RequestSettings() {
     } }, [saved]);
     const save = async (event: React.FormEvent) => { event.preventDefault(); if (busy)
         return; setBusy(true); setError(""); setNotice(""); try {
-        await api("/api/admin/request-settings", { method: "PUT", body: JSON.stringify({ qbit: { enabled, baseUrl, username, password, clearPassword } }) });
+        await api("/api/admin/request-settings", { method: "PUT", body: JSON.stringify({ qbit: { enabled, baseUrl, username, password, clearPassword, ...(typeof saved?.shareWithAddons === "boolean" ? { shareWithAddons } : {}) } }) });
         setPassword("");
         setClearPassword(false);
         await resource.refresh();
@@ -252,5 +254,5 @@ export function RequestSettings() {
     } };
     const otherOwner = Boolean(saved && !saved.ownedByYou && (saved.passwordConfigured || saved.enabled));
     return <div className={styles.admin}><header className={styles.header}><div><p className={styles.eyebrow}>ONE CLEAR DESTINATION FOR EVERY REQUEST</p><h2>Download settings.</h2><p>Cloud requests use your debrid connection. Local requests use the qBittorrent Web UI you configure here.</p></div><Link className="btn btn-secondary" href="/admin/requests">Review requests →</Link></header><ErrorMessage message={error || resource.error}/>{notice && <p className={styles.success} role="status">{notice}</p>}{resource.loading && !saved && <p role="status">Loading download settings…</p>}{otherOwner ? <Notice>Another administrator owns this qBittorrent connection. Its credentials are private; ask that administrator to manage local downloads.</Notice> : <form className={styles.panel} onSubmit={event => void save(event)}><h3>qBittorrent · local downloads</h3><p className={styles.small}>Use the Web UI address reachable from this server, such as a hostname on your local network. Credentials remain on the server and are never shown to viewers.</p><label className={styles.checkbox}><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)}/>Enable local qBittorrent downloads</label><div className={styles.formGrid}><label className={styles.wide}>qBittorrent Web UI URL<input type="url" maxLength={2048} placeholder="http://qbittorrent:8080" value={baseUrl} onChange={event => setBaseUrl(event.target.value)}/></label><label>qBittorrent username<input autoComplete="off" maxLength={200} value={username} onChange={event => setUsername(event.target.value)}/></label><label>qBittorrent password<input type="password" autoComplete="new-password" maxLength={500} placeholder={saved?.passwordConfigured ? "Saved password · leave blank to keep" : "Enter the Web UI password"} value={password} onChange={event => { setPassword(event.target.value); setClearPassword(false); }}/></label></div><p className={styles.small}>{saved?.passwordConfigured ? "A password is saved. Leaving the field blank preserves it." : "No qBittorrent password is saved."}</p><label className={styles.checkbox}><input type="checkbox" checked={clearPassword} onChange={event => { setClearPassword(event.target.checked); if (event.target.checked)
-        setPassword(""); }}/>Clear the saved password</label><div className={styles.toolbar}><button className="btn" type="submit" disabled={busy || resource.loading}>{busy ? "Working…" : "Save download settings"}</button><button className="btn btn-secondary" type="button" disabled={busy || !saved?.ownedByYou || !saved.enabled} onClick={() => void test()}>Test saved qBittorrent connection</button><Link href="/account/debrid">Manage my cloud connection →</Link></div></form>}{saved?.canReset && <section className={styles.panel}><h3>Reset saved connection</h3><p className={styles.small}>Clears credentials and disables local downloads. Transfers already in qBittorrent are preserved.</p><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void reset()}>Reset saved connection</button></section>}<Notice>Requests always require administrator approval. A download completed in qBittorrent still needs to be imported into a library; completion alone does not make it playable in this web app.</Notice></div>;
+        setPassword(""); }}/>Clear the saved password</label>{typeof saved?.shareWithAddons === "boolean" && <><label className={styles.checkbox}><input type="checkbox" checked={shareWithAddons} onChange={event => setShareWithAddons(event.target.checked)}/>Allow installed add-ons to use this connection</label><p className={styles.small}>Sends your saved connection credentials to Sonarr, Radarr and Lidarr. Other administrators can use those apps. Turning this off prevents new connections and keeps existing add-on settings. After saving, <Link href="/admin/addons">connect add-ons</Link>.</p></>}<div className={styles.toolbar}><button className="btn" type="submit" disabled={busy || resource.loading}>{busy ? "Working…" : "Save download settings"}</button><button className="btn btn-secondary" type="button" disabled={busy || !saved?.ownedByYou || !saved.enabled} onClick={() => void test()}>Test saved qBittorrent connection</button><Link href="/account/debrid">Manage my cloud connection →</Link></div></form>}{saved?.canReset && <section className={styles.panel}><h3>Reset saved connection</h3><p className={styles.small}>Clears credentials and disables local downloads. Transfers already in qBittorrent are preserved.</p><button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void reset()}>Reset saved connection</button></section>}<Notice>Requests always require administrator approval. A download completed in qBittorrent still needs to be imported into a library; completion alone does not make it playable in this web app.</Notice></div>;
 }

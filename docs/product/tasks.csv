@@ -2,7 +2,7 @@ Name,Status,Priority,Milestone,Owner,Acceptance
 Real Radarr and Lidarr link acceptance,Verified locally,P1,v0.27.0,Continuation,All ten CI checks pass on 43146a9 including exactly one authenticated Prowlarr link per application and an unchanged second pass
 Generated add-on logins and Prowlarr application links,Implementation complete,P0,v0.27.0,Claude and continuation,Encrypted logins and repeatable links with owner replacements preserved and overlapping passes coalesced
 Concurrent signup lock recovery,Verified locally,P0,v0.27.0,Continuation,Full backend suites pass with bounded retries preserving policy invitation and bootstrap administrator checks in both products
-Configured qBittorrent add-on connections,In validation,P1,v0.27.0,Continuation,Real connection tests for all three apps with owner checks existing clients preserved and automatic download removal disabled
+Configured qBittorrent add-on connections,In validation,P1,v0.27.0,Continuation,Real connection tests for all three apps with owner-only opt-in default privacy existing clients preserved and automatic download removal disabled
 Root folders and bundled download-client reachability,Backlog,P1,v0.27.x,Community,Reviewed reachable paths and explicit access without exposing the bundled client by default
 Remaining add-on integrations,Backlog,P1,v0.27.x,Community,FlareSolverr Bazarr Seerr Tautulli and Maintainerr configured and checked against real programs
 StreamRD responsive discovery,Done,P0,v0.3.0,Lead integration,Desktop and mobile journeys preserve favorites and profile progress

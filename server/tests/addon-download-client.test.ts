@@ -14,7 +14,7 @@ const schema = { implementation: "QBittorrent", configContract: "QBittorrentSett
   { name: "recentTvPriority", value: 2 },
 ] };
 async function settings(patch: Record<string, unknown> = {}) {
-  const value = JSON.stringify({ enabled: true, baseUrl: "https://qbit.fixture.invalid:9443/downloader", username: "fixture-admin", password: encryptSecret(PASSWORD), ownerId, ...patch });
+  const value = JSON.stringify({ enabled: true, baseUrl: "https://qbit.fixture.invalid:9443/downloader", username: "fixture-admin", password: encryptSecret(PASSWORD), ownerId, shareWithAddons: true, ...patch });
   await db.setting.upsert({ where: { key: "requests.qbit" }, create: { key: "requests.qbit", value }, update: { value } });
 }
 async function addon(version = "v3", onSchema?: () => Promise<void>, categoryField = "tvCategory") {
@@ -74,6 +74,18 @@ it("makes no add-on requests when the download client is not configured or is di
   await settings({ enabled: false });
   expect(await ensureDownloadClient("sonarr", base, KEY)).toBe("unconfigured");
   expect(calls).toEqual([]);
+});
+
+it("does not transfer the owner's credentials without explicit sharing permission", async () => {
+  await settings({ shareWithAddons: false }); const base = await addon();
+  expect(await ensureDownloadClient("sonarr", base, KEY)).toBe("unconfigured");
+  expect(calls).toEqual([]);
+});
+
+it("honors withdrawn sharing permission even though the transfer fingerprint remains unchanged", async () => {
+  await settings(); const base = await addon("v3", async () => { await settings({ shareWithAddons: false }); });
+  await expect(ensureDownloadClient("sonarr", base, KEY)).rejects.toThrow("changed while linking");
+  expect(clients).toEqual([]); expect(calls.some(call => call.startsWith("POST"))).toBe(false);
 });
 
 it.each([{ active: false }, { role: "user" }])("does not transfer credentials when the owning administrator is no longer active: %j", async patch => {

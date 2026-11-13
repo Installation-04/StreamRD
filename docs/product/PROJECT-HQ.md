@@ -18,13 +18,14 @@ pull request, then promote through `beta` to `main` after checks pass.
 Generated encrypted logins and Prowlarr application links are implemented.
 Current validation also covers preserving an owner's replacement login,
 coalescing overlapping link passes, and bounded signup retries in both products.
-Follow-up integration connects an enabled administrator-owned qBittorrent client
+Follow-up integration connects an enabled, explicitly owner-approved qBittorrent client
 to empty add-on client lists, preserving existing choices and reporting local-only
 addresses as waiting. Bundled-client network reachability remains separate.
-Local backend acceptance passes: 621 StreamRD tests and 492 Phosphor tests,
+Sharing defaults to off, and changing the option preserves existing transfer
+fingerprints. Local backend acceptance passes: 627 StreamRD tests and 496 Phosphor tests,
 with five StreamRD cases skipped; both backend typechecks and all four server/web
 production builds pass. Shared-source consistency also passes.
-The documented Google Chrome local-lab journey passes all 25 steps with no page
+The documented Google Chrome local-lab journey passes all 26 steps with no page
 errors, using synthetic providers and media. All ten CI checks pass on `43146a9`,
 including real Prowlarr links to Sonarr, Radarr and Lidarr and an unchanged second
 pass. The current qBittorrent integration adds a separate real connection-test

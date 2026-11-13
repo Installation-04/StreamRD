@@ -97,6 +97,7 @@
         "metadata-providers.test.ts",
         "modules.test.ts",
         "provider-transport.test.ts",
+        "request-addon-sharing.test.ts",
         "request-approval.test.ts",
         "request-finder.test.ts",
         "request-worker.test.ts",

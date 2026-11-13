@@ -80,7 +80,7 @@ function localOnly(host: string): boolean {
 /** Adds the configured client only to a new add-on with no existing download-client choices. */
 export async function ensureDownloadClient(name: DownloadApp, base: string, key: string): Promise<"set" | "kept" | "unconfigured" | "local-only"> {
   const { qbit } = await getRequestSettings();
-  if (!qbit.enabled) return "unconfigured";
+  if (!qbit.enabled || !qbit.shareWithAddons) return "unconfigured";
   const context = await qbitContext(qbit.ownerId);
   const url = new URL(normalizeQbitUrl(context.settings.baseUrl));
   if (localOnly(url.hostname)) return "local-only";
@@ -98,7 +98,8 @@ export async function ensureDownloadClient(name: DownloadApp, base: string, key:
   const names = new Set(schema.fields.map(field => field.name));
   if (["host", "port", "useSsl", "username", "password", categoryField, ...(values.urlBase ? ["urlBase"] : [])].some(field => !names.has(field))) throw new Error(`${SERVARR[name].implementation} returned an incomplete qBittorrent client type`);
   // Configuration may change while the add-on answers. Never send retired credentials.
-  if ((await qbitContext(qbit.ownerId)).fingerprint !== context.fingerprint) throw new Error("The download-client connection changed while linking. Retry with its current settings.");
+  const fresh = await qbitContext(qbit.ownerId);
+  if (!fresh.settings.shareWithAddons || fresh.fingerprint !== context.fingerprint) throw new Error("The download-client connection changed while linking. Retry with its current settings.");
   await call(base, name, key, "POST", "/downloadclient", {
     name: "StreamRD qBittorrent", implementation: schema.implementation, configContract: schema.configContract,
     enable: true, protocol: "torrent", priority: 1, removeCompletedDownloads: false, removeFailedDownloads: false, tags: [],

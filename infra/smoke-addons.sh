@@ -164,7 +164,7 @@ const fs = require('node:fs'), os = require('node:os');
   if (!changed.ok) throw Error('Could not configure the disposable qBittorrent interface');
   const address = Object.values(os.networkInterfaces()).flat().find(one => one && !one.internal && one.family === 'IPv4')?.address;
   if (!address) throw Error('No bridge address for the disposable download client');
-  const saved = await fetch('http://127.0.0.1:47821/api/admin/request-settings', { method: 'PUT', headers: { Authorization: `Bearer ${process.env.SMOKE_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ qbit: { enabled: true, baseUrl: `http://${address}:8082`, username, password } }) });
+  const saved = await fetch('http://127.0.0.1:47821/api/admin/request-settings', { method: 'PUT', headers: { Authorization: `Bearer ${process.env.SMOKE_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ qbit: { enabled: true, baseUrl: `http://${address}:8082`, username, password, shareWithAddons: true } }) });
   if (!saved.ok) throw Error(`Could not save the disposable download client: HTTP ${saved.status}`);
   console.log('Disposable bridge-accessible qBittorrent connection configured.');
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
@@ -176,16 +176,21 @@ for attempt in $(seq 1 20); do
   sleep 3
 done
 [ "$connected" = yes ] || fail "download-client linking failed: $report"
-docker exec --interactive "$name" node <<'NODE'
+addon_addresses="{}"
+for addon in sonarr radarr lidarr; do
+  address="$(inspect '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "streamrd-$addon")"
+  addon_addresses="$(jq -cn --argjson addresses "$addon_addresses" --arg name "$addon" --arg address "$address" '$addresses + {($name): $address}')"
+done
+# Docker exec does not inherit the API child's private helper environment. Pass
+# only the disposable peer addresses; the verifier needs no helper credentials.
+docker exec --interactive --env "SMOKE_ADDON_ADDRESSES=$addon_addresses" "$name" node <<'NODE'
 const fs = require('node:fs');
 (async () => {
-  const status = await fetch(process.env.MEDIA_MANAGER_URL + '/status', { headers: { Authorization: `Bearer ${process.env.MEDIA_MANAGER_TOKEN}` } });
-  if (!status.ok) throw Error('The Docker helper did not return add-on addresses');
-  const { servers } = await status.json();
+  const addresses = JSON.parse(process.env.SMOKE_ADDON_ADDRESSES);
   const password = fs.readFileSync('/config/secrets/qbittorrent-password', 'utf8').trim();
   for (const [name, port, api, category] of [['sonarr', 8989, 'v3', 'tvCategory'], ['radarr', 7878, 'v3', 'movieCategory'], ['lidarr', 8686, 'v1', 'musicCategory']]) {
     const key = /<ApiKey>([^<]+)<\/ApiKey>/.exec(fs.readFileSync(`/config/${name}/config/config.xml`, 'utf8'))?.[1];
-    const base = `http://${servers[name].address}:${port}/api/${api}/downloadclient`, headers = { 'X-Api-Key': key, 'Content-Type': 'application/json' };
+    const base = `http://${addresses[name]}:${port}/api/${api}/downloadclient`, headers = { 'X-Api-Key': key, 'Content-Type': 'application/json' };
     const response = await fetch(base, { headers });
     if (!response.ok) throw Error(`${name}: download-client list HTTP ${response.status}`);
     const clients = await response.json(), client = clients[0];

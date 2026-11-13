@@ -11,8 +11,8 @@ import { rateLimit } from "../util/rateLimit";
 import { normalizeQbitUrl, QbitClient, QbitSettings, RequestClientError } from "./clients";
 
 const KEY = "requests.qbit";
-const empty = (): QbitSettings => ({ enabled: false, baseUrl: "", username: "", password: "", ownerId: "" });
-const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(1500), ownerId: z.string() });
+const empty = (): QbitSettings => ({ enabled: false, baseUrl: "", username: "", password: "", ownerId: "", shareWithAddons: false });
+const storedSchema = z.object({ enabled: z.boolean(), baseUrl: z.string().max(2048), username: z.string().max(200), password: z.string().max(1500), ownerId: z.string(), shareWithAddons: z.boolean().default(false) });
 /** The password is stored encrypted (see crypto.ts); callers always see it in clear. */
 const readStored = (value: string | undefined): QbitSettings => { const stored = storedSchema.parse(JSON.parse(value ?? "null")); return { ...stored, password: decryptSecret(stored.password) ?? "" }; };
 const serialize = (value: QbitSettings): string => JSON.stringify({ ...value, password: encryptSecret(value.password) });
@@ -25,11 +25,14 @@ export async function qbitContext(userId: string, client: SettingsDb = db) {
   const [{ qbit }, user] = await Promise.all([getRequestSettings(client), client.user.findFirst({ where: { id: userId, active: true, role: "admin" }, select: { id: true } })]);
   if (!user || qbit.ownerId !== userId || !qbit.enabled || !qbit.baseUrl || !qbit.username || !qbit.password) throw new RequestClientError("Configure and enable your qBittorrent connection before approving local downloads.");
   normalizeQbitUrl(qbit.baseUrl);
-  return { settings: qbit, fingerprint: createHash("sha256").update(JSON.stringify(qbit)).digest("hex") };
+  // Sharing is not part of a request's credentials. Preserve the historical
+  // fingerprint so this defaulted setting cannot orphan existing transfers.
+  const { shareWithAddons: _sharing, ...requestSettings } = qbit;
+  return { settings: qbit, fingerprint: createHash("sha256").update(JSON.stringify(requestSettings)).digest("hex") };
 }
 function publicSettings(qbit: QbitSettings, viewerId: string, canReset = qbit.ownerId === viewerId) {
   const ownedByYou = qbit.ownerId === viewerId;
-  return { qbit: { enabled: qbit.enabled, baseUrl: ownedByYou ? qbit.baseUrl : "", username: ownedByYou ? qbit.username : "", passwordConfigured: Boolean(qbit.password), ownedByYou, canReset } };
+  return { qbit: { enabled: qbit.enabled, baseUrl: ownedByYou ? qbit.baseUrl : "", username: ownedByYou ? qbit.username : "", passwordConfigured: Boolean(qbit.password), shareWithAddons: ownedByYou && Boolean(qbit.shareWithAddons), ownedByYou, canReset } };
 }
 export const requestSettingsRouter = Router();
 requestSettingsRouter.use(requireAuth, requireAdmin, (_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
@@ -40,7 +43,7 @@ requestSettingsRouter.get("/", asyncHandler(async (req, res) => {
   res.json({ settings: publicSettings(qbit, req.session!.sub, Boolean(qbit.ownerId && (!liveOwner || qbit.ownerId === req.session!.sub))) });
 }));
 requestSettingsRouter.put("/", limit, asyncHandler(async (req, res) => {
-  const body = parseBody(z.object({ qbit: z.object({ enabled: z.boolean().optional(), baseUrl: z.string().trim().max(2048).optional(), username: z.string().trim().max(200).optional(), password: z.string().max(500).optional(), clearPassword: z.boolean().optional() }).strict() }).strict(), req.body, res);
+  const body = parseBody(z.object({ qbit: z.object({ enabled: z.boolean().optional(), baseUrl: z.string().trim().max(2048).optional(), username: z.string().trim().max(200).optional(), password: z.string().max(500).optional(), clearPassword: z.boolean().optional(), shareWithAddons: z.boolean().optional() }).strict() }).strict(), req.body, res);
   if (!body) return;
   try {
     const saved = await db.$transaction(async tx => {
@@ -52,7 +55,7 @@ requestSettingsRouter.put("/", limit, asyncHandler(async (req, res) => {
       try { current = readStored(row?.value); } catch { /* malformed configuration stays disabled */ }
       if (current.ownerId && current.ownerId !== actor.id) throw new RequestClientError("This qBittorrent connection belongs to another administrator.");
       const input = body.qbit;
-      const value: QbitSettings = { ...current, enabled: input.enabled ?? current.enabled, baseUrl: input.baseUrl === undefined ? current.baseUrl : input.baseUrl ? normalizeQbitUrl(input.baseUrl) : "", username: input.username ?? current.username, password: input.clearPassword ? "" : input.password || current.password, ownerId: actor.id };
+      const value: QbitSettings = { ...current, enabled: input.enabled ?? current.enabled, baseUrl: input.baseUrl === undefined ? current.baseUrl : input.baseUrl ? normalizeQbitUrl(input.baseUrl) : "", username: input.username ?? current.username, password: input.clearPassword ? "" : input.password || current.password, ownerId: actor.id, shareWithAddons: input.shareWithAddons ?? current.shareWithAddons ?? false };
       if (input.clearPassword) value.enabled = false;
       if (value.enabled && (!value.baseUrl || !value.username || !value.password)) throw new RequestClientError("A URL, username and password are required to enable qBittorrent.", 400);
       if (!value.password || !value.baseUrl) value.enabled = false;
