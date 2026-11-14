@@ -3,7 +3,7 @@
 This repository contains two self-hosted apps with private and explicitly shared
 debrid media libraries. Administrators connect their server account; invited web
 viewers can watch granted libraries without their own provider keys. The apps have
-separate servers, databases, accounts and deployments. Neither transcodes video.
+separate servers, databases, accounts and deployments. The bundled FFmpeg converts audio and, when required, video for browser playback.
 
 | Choose | Purpose | API / web ports |
 |---|---|---|
@@ -21,7 +21,7 @@ For upgrades, read [System and upgrades](https://github.com/Installation-04/Stre
 
 The version-controlled source of this wiki is
 [docs/wiki](https://github.com/Installation-04/StreamRD/tree/main/docs/wiki).
-The documented release is **v0.10.1**. The repository contains the two server/web products; the former native client apps were removed.
+The documented release is **v0.27.0**. The repository contains the two server/web products; the former native client apps were removed.
 
 - [Discover and request media](https://github.com/Installation-04/StreamRD/wiki/Media-requests): search TMDB/OMDb, request titles and track them.
 - [Plex and Jellyfin](https://github.com/Installation-04/StreamRD/wiki/Plex-and-Jellyfin): optional mounted-media symlink libraries.
@@ -32,3 +32,5 @@ The documented release is **v0.10.1**. The repository contains the two server/we
 - [Metadata and matching](https://github.com/Installation-04/StreamRD/wiki/Metadata-and-matching): artwork, details, IMDb references and reviewed corrections.
 
 - [Users and server sharing](https://github.com/Installation-04/StreamRD/wiki/Users-and-sharing): invitations, named-library grants and playback without viewer keys.
+
+- [Add-ons](https://github.com/Installation-04/StreamRD/wiki/Add-ons): generated logins, Prowlarr links and owner-approved qBittorrent connections.

@@ -1,8 +1,10 @@
 # Releases and version policy
 
 The four StreamRD/Phosphor server and web packages share a SemVer tag,
-`vMAJOR.MINOR.PATCH`. **v0.20.0** follows v0.19.0, v0.18.0, v0.17.0, v0.16.0, v0.15.0, v0.14.0, v0.13.0, v0.12.0, v0.11.0, v0.10.3, v0.10.2, v0.10.1, v0.10.0, v0.9.1, v0.9.0, v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
-Native-client versions remain independent.
+`vMAJOR.MINOR.PATCH`. **v0.27.0** adds generated add-on logins, Prowlarr links and owner-approved external or bundled qBittorrent connections. [Release notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.27.0.md) · [Release assets](https://github.com/Installation-04/StreamRD/releases/tag/v0.27.0).
+
+**v0.20.0** follows v0.19.0, v0.18.0, v0.17.0, v0.16.0, v0.15.0, v0.14.0, v0.13.0, v0.12.0, v0.11.0, v0.10.3, v0.10.2, v0.10.1, v0.10.0, v0.9.1, v0.9.0, v0.8.1 and v0.8.0 Requests and One Container, v0.7.0 Shared Watch Progress and v0.6.0 Server Sharing.
+The release covers both server/web products; native installers are not published.
 
 - [v0.20.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.20.0.md) (My List, and Plex and Jellyfin launched from the Setup page) ·
   [v0.19.0 notes](https://github.com/Installation-04/StreamRD/blob/main/docs/releases/v0.19.0.md) (links are checked in the background and replaced when they die) ·
@@ -65,7 +67,7 @@ Release downloads include GitHub source archives plus screenshots, wiki and
 Project HQ/Notion-importable tracker bundles with SHA-256 checksums. Dockerfiles
 build runtime images from source. A tag also publishes the all-in-one
 image to the repository's container registry (amd64); native installers are not
-published. A live Notion workspace is not connected.
+published. A private Notion tracker records current delivery progress; its workspace links are kept out of public release assets.
 
 Follow [RELEASING.md](https://github.com/Installation-04/StreamRD/blob/main/RELEASING.md):
 update package/lock versions and upgrade notes, validate, pass both CI pipelines,

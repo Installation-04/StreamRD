@@ -1,6 +1,6 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.27.0 Add-on integration — in progress
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.27.0 Add-on integration — verified for promotion
 
 This is the public repository record for the project tracker. A private Notion
 progress home and delivery database were created for v0.27.0, including a status
@@ -10,30 +10,28 @@ synchronized; preserve verification evidence in both.
 
 ## Current work: v0.27.0 Add-on integration
 
-As of 2026-11-13, the continuation point is Claude's `bf593bb` on
-`claude/streamrd-phosphor-audit-etur2v`. Stable, beta and dev currently contain
-v0.26.1. Follow [the branch workflow](../branches.md): changes enter `dev` by
-pull request, then promote through `beta` to `main` after checks pass.
+The v0.27.0 implementation is verified on `dd3e194`, with all ten CI checks
+passing. Promotion follows [the branch workflow](../branches.md): pull requests
+into `dev`, then `beta`, then `main`; release workflows publish the version tag,
+documentation assets and container image after acceptance.
 
-Generated encrypted logins and Prowlarr application links are implemented.
-Current validation also covers preserving an owner's replacement login,
-coalescing overlapping link passes, and bounded signup retries in both products.
-Follow-up integration connects an enabled, explicitly owner-approved qBittorrent client
-to empty add-on client lists, preserving existing choices and reporting local-only
-addresses as waiting. Bundled-client network reachability remains separate.
-Sharing defaults to off, and changing the option preserves existing transfer
-fingerprints. Local backend acceptance passes: 627 StreamRD tests and 496 Phosphor tests,
-with five StreamRD cases skipped; both backend typechecks and all four server/web
-production builds pass. Shared-source consistency also passes.
-The documented Google Chrome local-lab journey passes all 26 steps with no page
-errors, using synthetic providers and media. All ten CI checks pass on `43146a9`,
-including real Prowlarr links to Sonarr, Radarr and Lidarr and an unchanged second
-pass. The current qBittorrent integration adds a separate real connection-test
-gate; subsequent commits require their own passing checks. No release or branch
-promotion has been performed.
+Generated logins preserve owner replacements; Prowlarr links Sonarr, Radarr and
+Lidarr using reachable addresses; overlapping passes are coalesced. Enabled
+qBittorrent connections require their active administrator owner's explicit
+sharing approval. Existing clients and request-transfer fingerprints are kept.
+Bundled access requires separate owner approval, one named Docker bridge and a
+restart; withdrawal closes peer access after restart. Authentication stays on
+and port 8082 stays unpublished. Other add-on setup remains separate work.
+
+Local acceptance: 669 StreamRD tests and 529 Phosphor tests pass, with five
+StreamRD cases skipped. Both typechecks, four production builds and 137 shared
+files pass. The 27-step Google Chrome journey has no page errors. Real-container
+CI verifies all nine marketplace lifecycles, authenticated Prowlarr links, real
+Sonarr/Radarr/Lidarr qBittorrent connection tests, and the bundled approval,
+restart and withdrawal lifecycle. [Accepted CI](https://github.com/Installation-04/StreamRD/actions/runs/43530214201/job/132245748633).
 See [the v0.27.0 notes](../releases/v0.27.0.md) for behavior and verification limits.
 
-Remaining add-on integration: bundled download-client reachability, root folders, FlareSolverr in
+Remaining add-on integration: root folders, FlareSolverr in
 Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr setup. These remain open;
 installation alone does not establish working integration. Use
 [the roadmap](../roadmap.md) for current priorities and [the add-on guide](../add-ons.md)
@@ -84,7 +82,7 @@ stays optional and uses real mounted files.
 | Guided setup | Setup / lead integration | Delivered | Private account-aware checklist, actionable admin/member paths, honest configuration status |
 | Community contribution workflow | Lead | Delivered | Setup instructions, feature/bug templates, reproducible checks, clear project ownership |
 | Regression and visual QA | Lead | Delivered | Backend checks, four production builds, disposable browser journeys and mobile screenshots |
-| Notion workspace publication | CEO provides workspace access | Blocked | An accessible parent page/connection, real page created and verified |
+| Private Notion progress tracker | Continuation | Delivered | Live progress home and delivery database maintained; private links excluded from public assets |
 | v0.3.0 release | Lead | Delivered with the version tag | CI green on tagged commit, checked notes/assets, updated wiki/tracker |
 
 ## Delivery log
