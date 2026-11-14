@@ -82,9 +82,19 @@ refers to that container rather than the host or another service.
 
 Credentials stay on the server. A blank password field preserves the saved value;
 explicit clearing disables the connection. Other administrators cannot reuse the
-saved connection's credentials. An active administrator can reset an abandoned
+saved connection's credentials by default. In StreamRD, its owner can explicitly
+enable **Allow installed add-ons to use this connection** to copy it to Sonarr,
+Radarr and Lidarr. This `shareWithAddons` setting defaults to false and only the
+owner can change it. Other administrators can use those apps once configured;
+turning sharing off stops new configurations but does not revoke copies already
+saved in them. Existing request-transfer fingerprints are unchanged by this
+setting. An active administrator can reset an abandoned
 configuration after its former owner is inactive, demoted or removed; reset erases
 its credentials and requires a new connection. It does not delete any torrents.
+
+For the bundled client, optional [add-on access](add-ons.md#bundled-qbittorrent)
+requires separate owner permission and a server restart on a named Docker bridge.
+The running state and restart notice appear in Download settings.
 
 qBittorrent uses its configured save locations and category rules. Mount the
 resulting video directory into the relevant media servers when you want Plex or

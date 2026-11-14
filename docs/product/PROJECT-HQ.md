@@ -1,12 +1,43 @@
 # StreamRD Community — Product HQ
 
-> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.6.0 Server Sharing
+> CEO: repository owner · Product/engineering lead: Codex · Current milestone: v0.27.0 Add-on integration — verified for promotion
 
-This is the source of truth for the project tracker. Import the Markdown and CSV
-bundle into Notion when a workspace connection is available. **No live Notion page
-has been created yet:** this chat has no Notion connector or parent-page access.
+This is the public repository record for the project tracker. A private Notion
+progress home and delivery database were created for v0.27.0, including a status
+board, evidence links and a needs-attention view. Its private link is available in
+the project chat. Repository and Notion updates are explicit, not automatically
+synchronized; preserve verification evidence in both.
 
-## Server-managed sharing — completed implementation
+## Current work: v0.27.0 Add-on integration
+
+The v0.27.0 implementation is verified on `dd3e194`, with all ten CI checks
+passing. Promotion follows [the branch workflow](../branches.md): pull requests
+into `dev`, then `beta`, then `main`; release workflows publish the version tag,
+documentation assets and container image after acceptance.
+
+Generated logins preserve owner replacements; Prowlarr links Sonarr, Radarr and
+Lidarr using reachable addresses; overlapping passes are coalesced. Enabled
+qBittorrent connections require their active administrator owner's explicit
+sharing approval. Existing clients and request-transfer fingerprints are kept.
+Bundled access requires separate owner approval, one named Docker bridge and a
+restart; withdrawal closes peer access after restart. Authentication stays on
+and port 8082 stays unpublished. Other add-on setup remains separate work.
+
+Local acceptance: 669 StreamRD tests and 529 Phosphor tests pass, with five
+StreamRD cases skipped. Both typechecks, four production builds and 137 shared
+files pass. The 27-step Google Chrome journey has no page errors. Real-container
+CI verifies all nine marketplace lifecycles, authenticated Prowlarr links, real
+Sonarr/Radarr/Lidarr qBittorrent connection tests, and the bundled approval,
+restart and withdrawal lifecycle. [Accepted CI](https://github.com/Installation-04/StreamRD/actions/runs/43530214201/job/132245748633).
+See [the v0.27.0 notes](../releases/v0.27.0.md) for behavior and verification limits.
+
+Remaining add-on integration: root folders, FlareSolverr in
+Prowlarr, and Bazarr, Seerr, Tautulli and Maintainerr setup. These remain open;
+installation alone does not establish working integration. Use
+[the roadmap](../roadmap.md) for current priorities and [the add-on guide](../add-ons.md)
+for supported behavior. The delivery records below describe earlier milestones.
+
+## v0.6.0 Server-managed sharing — historical delivery record
 
 The owner chose shared server libraries and playback instead of requiring invited
 users to bring their own debrid accounts. The v0.6.0 work implements
@@ -30,7 +61,7 @@ is a curated personal cinema; Phosphor is its distinct search-and-queue companio
 Both use the community's own accounts and infrastructure. Plex/Jellyfin export
 stays optional and uses real mounted files.
 
-## Active milestone: v0.5.0 Automatic Libraries
+## v0.5.0 Automatic Libraries — historical delivery record
 
 | Workstream | Owner | State | Acceptance |
 |---|---|---|---|
@@ -51,7 +82,7 @@ stays optional and uses real mounted files.
 | Guided setup | Setup / lead integration | Delivered | Private account-aware checklist, actionable admin/member paths, honest configuration status |
 | Community contribution workflow | Lead | Delivered | Setup instructions, feature/bug templates, reproducible checks, clear project ownership |
 | Regression and visual QA | Lead | Delivered | Backend checks, four production builds, disposable browser journeys and mobile screenshots |
-| Notion workspace publication | CEO provides workspace access | Blocked | An accessible parent page/connection, real page created and verified |
+| Private Notion progress tracker | Continuation | Delivered | Live progress home and delivery database maintained; private links excluded from public assets |
 | v0.3.0 release | Lead | Delivered with the version tag | CI green on tagged commit, checked notes/assets, updated wiki/tracker |
 
 ## Delivery log
@@ -99,7 +130,11 @@ stays optional and uses real mounted files.
 5. Accessibility is part of design: readable contrast, labels, visible focus,
    reduced motion, small-screen layouts, and touch-friendly controls.
 
-## Next milestones
+## Earlier backlog
+
+This list predates the current add-on work; consult [the roadmap](../roadmap.md)
+before choosing the next milestone. In particular, native clients were removed
+from the repository and are not the current priority.
 
 | Priority | Opportunity | Acceptance evidence |
 |---|---|---|

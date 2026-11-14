@@ -40,6 +40,57 @@ Decided in one place (`SERVERS` in `infra/single-container/media-manager.cjs`), 
   if the new one does not start. A new version of a program can change its own database in a way an older one cannot read: copy its folder under
   `config/` first if what it holds matters.
 
+## Sign-in and links
+A minute or two after Sonarr, Radarr, Lidarr or Prowlarr runs, StreamRD gives it a login it made up (kept encrypted; **Show login** on the card) and tells Prowlarr about every Sonarr, Radarr and Lidarr that runs. An add-on whose login someone already chose is left alone.
+
+**Connect add-ons** runs that check immediately and reports connection errors or
+apps that are still starting. **Download client settings** opens the qBittorrent
+connection configured under Admin → Request settings.
+
+The connection's owner must check **Allow installed add-ons to use this
+connection** in Download settings and save. This is off by default, including
+for existing connections. Other administrators cannot enable it for the owner.
+When the connection is enabled, opted in and its owning administrator is still
+active, StreamRD adds it to Sonarr, Radarr and Lidarr if they have no download clients.
+Existing clients, including disabled ones, are left alone. Each app gets its own
+`streamrd-sonarr`, `streamrd-radarr` or `streamrd-lidarr` category; automatic removal
+of completed and failed downloads is disabled. Host, port, HTTPS and a reverse-proxy
+URL base come from the saved connection. Credentials stay out of linking reports
+and logs, and are rechecked before being sent to the add-on.
+
+Opting in sends credentials to those apps, which other server administrators
+can access. Turning sharing off stops new configurations; it preserves existing
+add-on connections and does not revoke credentials already copied to them.
+Resetting the saved connection clears its sharing permission. Sharing choices
+do not change the fingerprints used to track existing request transfers.
+
+Use a qBittorrent URL reachable from the add-on containers. Loopback and wildcard
+addresses are reported as waiting unless the bundled-client option below applies.
+
+### Bundled qBittorrent
+
+The bundled client stays local by default. On a single-container installation
+with Docker control and **one named Docker bridge network**, its connection owner can:
+
+1. Configure and enable `http://127.0.0.1:8082` using the bundled credentials.
+2. Approve **Allow installed add-ons to use this connection**.
+3. Check **Allow add-ons to reach the bundled client after restart** and save.
+4. Restart from **Admin → System**, then connect the add-ons.
+
+Saving permission alone does not change the running listener. Download settings
+shows current access and whether a restart is required. After restart, the client
+accepts authenticated connections from its Docker network; port 8082 is not
+published on the host. Add-ons use StreamRD's stable container name, while local
+requests continue using the saved loopback address. The container name must stay
+the same across updates. Authentication and host validation remain enabled.
+
+To close access, withdraw bundled permission (or sharing approval), save, and
+restart. Resetting the connection also withdraws permission. Existing add-on
+settings and torrents are preserved. Credential copies already sent to add-ons
+are not revoked. Default bridge, host, multiple networks and other network modes leave this option
+unavailable; use a reachable external client or change the installation's network.
+
 ## Not done yet
-Installing an add-on does not yet sign it in or link it to the others: open it and finish its own first-run screen. Linking them
-automatically (logins and API keys, Prowlarr to Sonarr and Radarr, a download client, Bazarr and Seerr to their sources) is the next step.
+Root folders, FlareSolverr in Prowlarr, and Bazarr,
+Seerr, Tautulli and Maintainerr setup remain open. A successful connection test
+does not establish successful downloading or importing of media.

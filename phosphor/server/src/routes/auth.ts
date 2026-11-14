@@ -1,4 +1,4 @@
-import { AccessError, applyInvitationAccess, checkSignupAccess, inspectInvitation, invitationPreview, lockRegistration, registrationMode } from "../auth/access";
+import { AccessError, applyInvitationAccess, checkSignupAccess, inspectInvitation, invitationPreview, lockRegistration, registrationMode, registrationTransaction } from "../auth/access";
 import { Prisma } from "@prisma/client";
 import { asyncHandler } from "../http";
 import { Router } from "express";
@@ -57,7 +57,7 @@ authRouter.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
     // recheck under the signup lock to defeat revocation/policy/acceptance races.
     await checkSignupAccess(email, body.inviteToken);
     const hashedPassword = await hashPassword(body.password);
-    user = await db.$transaction(async tx => {
+    user = await registrationTransaction(async tx => {
       await lockRegistration(tx);
       const consumed = await checkSignupAccess(email, body.inviteToken, tx, true);
       const count = await tx.user.count();
@@ -65,7 +65,7 @@ authRouter.post("/signup", authRateLimit, asyncHandler(async (req, res) => {
       const created = await tx.user.create({ data: { email, displayName: body.displayName, hashedPassword, role, debridConfig: { create: {} } } });
       await applyInvitationAccess(tx, created.id, consumed);
       return tx.user.findUniqueOrThrow({ where: { id: created.id } });
-    }, { maxWait: 10000, timeout: 10000 });
+    });
   } catch (error) {
     if (error instanceof AccessError) { res.status(error.status).json({ error: error.message }); return; }
     throw error;

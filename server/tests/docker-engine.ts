@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 export const HELPER = path.resolve(__dirname, "../../infra/single-container/media-manager.cjs");
 export const SELF_ID = "5f2c".repeat(16), REF = "ghcr.io/installation-04/streamrd:latest";
 export interface Box { id: string; name: string; image: string; running: boolean; alive: boolean; status: string; exitCode: number; finishedAt: string; spec: any; output: string[] }
-export interface EngineOptions { unchanged?: boolean; failStart?: boolean; failPull?: boolean; mounts?: Array<Record<string, unknown>>; networks?: Record<string, unknown>; name?: string; securityOpt?: string[] }
+export interface EngineOptions { unchanged?: boolean; failStart?: boolean; failPull?: boolean; mounts?: Array<Record<string, unknown>>; networks?: Record<string, unknown>; networkDriver?: string; name?: string; securityOpt?: string[] }
 const IMAGE_DEFAULTS = { Env: ["PATH=/usr/bin", "NODE_VERSION=24"], Labels: { "org.opencontainers.image.version": "0.24.0" }, Cmd: ["node", "/opt/single-container/init.cjs"], Entrypoint: ["/usr/bin/tini", "--"], User: "node", Healthcheck: { Test: ["CMD", "node", "/opt/single-container/health.cjs"] } };
 
 export async function dockerEngine(opts: EngineOptions = {}) {
@@ -78,6 +78,7 @@ export async function dockerEngine(opts: EngineOptions = {}) {
         boxes.push({ id: `${(++serial).toString(16).padStart(4, "0")}${"ab".repeat(30)}`, name: wanted, image, running: false, alive: true, status: "created", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec, output: [] });
         return reply(201, { Id: boxes.at(-1)!.id });
       }
+      if (request.method === "GET" && /^\/networks\/[^/]+$/.test(url.pathname)) return reply(200, { Driver: opts.networkDriver ?? "bridge" });
       if (request.method === "POST" && /^\/networks\/[^/]+\/connect$/.test(url.pathname)) return reply(200, {});
       const named = /^\/containers\/([^/]+)(?:\/(\w+))?$/.exec(url.pathname);
       if (!named) return reply(500, { message: `unexpected ${key}` });

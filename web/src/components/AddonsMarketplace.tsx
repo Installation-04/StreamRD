@@ -9,6 +9,7 @@ type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "startin
 interface Addon { name: string; label: string; group: string; blurb: string; home: string; licence: string; ui: boolean; needs: string | null; state: State; port: number; autostart: boolean; error: string | null }
 interface View { control: { mode: "embedded" | "external" | "off"; reason: string | null }; groups: string[]; addons: Addon[] }
 interface Logs { deploy: Array<{ time: string; message: string }>; container: string[] }
+interface LinkReport { logins: string[]; linked: string[]; waiting: string[]; downloadClients?: string[]; downloadClientWaiting?: string[]; errors: string[] }
 const WORDS: Record<State, string> = { unknown: "Docker control is off", absent: "Not installed", stopped: "Stopped", running: "Running", pulling: "Downloading…", starting: "Starting…", failed: "Needs attention" };
 const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/Installation-04/StreamRD/main/install.sh | bash -s -- --media-manager";
 
@@ -19,7 +20,7 @@ const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/Installati
  */
 export default function AddonsMarketplace() {
   const [view, setView] = useState<View | null>(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState("");
-  const [ports, setPorts] = useState<Record<string, string>>({}), [open, setOpen] = useState<Record<string, boolean>>({}), [logs, setLogs] = useState<Record<string, Logs | null>>({});
+  const [logins, setLogins] = useState<Record<string, string>>({}), [ports, setPorts] = useState<Record<string, string>>({}), [open, setOpen] = useState<Record<string, boolean>>({}), [logs, setLogs] = useState<Record<string, Logs | null>>({});
   const mounted = useRef(true), seeded = useRef(false);
   const load = useCallback(async () => {
     try {
@@ -59,13 +60,30 @@ export default function AddonsMarketplace() {
     if (!window.confirm(`Remove ${one.label}? Its settings are kept, so installing it again picks up where it was.`)) return;
     void run(`remove:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}`, { method: "DELETE" }); return `${one.label} removed. Its settings were kept.`; });
   };
+  const showLogin = (one: Addon) => run(`login:${one.name}`, async () => {
+    const found = await api<{ username: string; password: string }>(`/api/admin/addons/${one.name}/login`);
+    setLogins(current => ({ ...current, [one.name]: `Sign in as ${found.username} with ${found.password}` }));
+  });
+  const connect = () => run("link", async () => {
+    const result = await api<LinkReport>("/api/admin/addons/link", { method: "POST" });
+    if (result.errors.length) throw new Error(result.errors.join("; "));
+    if (result.downloadClientWaiting?.length) throw new Error("To connect the download client, use a qBittorrent URL the add-ons can reach in Download client settings.");
+    if (result.waiting.length) throw new Error("Some add-ons are still starting. Try connecting again once they are running.");
+    return result.logins.length + result.linked.length + (result.downloadClients?.length ?? 0)
+      ? "Add-on connections updated. Existing choices were kept."
+      : "Checked the running add-ons. Existing connections were kept.";
+  });
   const autostart = (one: Addon, enabled: boolean) => run(`auto:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}/autostart`, { method: "PUT", body: JSON.stringify({ enabled }) }); });
 
   if (!view) return <div className={styles.page}>{error ? <p className={styles.error} role="alert">{error}</p> : <p className={styles.small} role="status">Loading the add-ons…</p>}</div>;
   const host = typeof window === "undefined" ? "localhost" : window.location.hostname;
   return <div className={styles.page}>
     <h2 className={styles.title}>Add-ons</h2>
-    <p className={styles.intro}>Add-ons are programs people usually run next to a media server. Install one with a button; it starts beside StreamRD with its own settings folder, and you can update, stop or remove it here. They are separate programs made by other people, each with its own licence; StreamRD only downloads and starts them.</p>
+    <p className={styles.intro}>Add-ons are programs people usually run next to a media server. Install one with a button; it starts beside StreamRD with its own settings folder, and you can update, stop or remove it here. They are separate programs made by other people, each with its own licence. Supported connections can also be set up here.</p>
+    {control && <div className={styles.row}>
+      <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void connect()}>{busy === "link" ? "Connecting…" : "Connect add-ons"}</button>
+      <a className="btn btn-sm btn-secondary" href="/admin/request-settings">Download client settings</a>
+    </div>}
     {view.control.mode === "off" && <div className={styles.notice} role="note">
       <strong>One quick step, once.</strong> Installing from here needs Docker control, which is off on this server. New installs include it. On the computer that runs StreamRD, run the installer again:
       <p><code>{INSTALL_COMMAND}</code></p>
@@ -94,6 +112,10 @@ export default function AddonsMarketplace() {
                 {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void stop(one)}>Stop</button>}
                 {(installed || one.state === "failed") && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => remove(one)}>Remove</button>}
               </div>
+              {one.state === "running" && ["sonarr", "radarr", "lidarr", "prowlarr"].includes(one.name) && <div>
+                <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void showLogin(one)}>Show login</button>
+                {logins[one.name] && <p className={styles.small} role="status"><code>{logins[one.name]}</code></p>}
+              </div>}
               {installed && <label className={styles.check}><input type="checkbox" checked={one.autostart} disabled={Boolean(busy)} onChange={event => void autostart(one, event.target.checked)} />
                 <span>Start {one.label} again when this machine restarts</span></label>}
               {installed && <ModuleUpdates only={[one.name]} compact />}

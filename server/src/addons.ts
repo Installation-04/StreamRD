@@ -9,6 +9,7 @@ import { dockerControl } from "./maintenance";
 import { manager, ManagerError } from "./media-servers";
 import { removeProwlarr, requestProwlarr } from "./prowlarr";
 import { rateLimit } from "./util/rateLimit";
+import { linkAddons, loginFor, SERVARR_NAMES, ServarrName } from "./addon-links";
 
 /**
  * The add-on marketplace: programs people usually run next to a media server, each started from a fixed specification by the Docker
@@ -109,3 +110,12 @@ addonsRouter.get("/:addon/logs", rateLimit({ windowMs: 60_000, max: 120 }), guar
   const query = parseBody(z.object({ tail: z.coerce.number().int().min(1).max(200).default(100) }).strict(), req.query, res); if (!query) return;
   res.json(await manager<{ deploy: unknown[]; container: string[] }>("GET", `/servers/${req.params.addon}/logs?tail=${query.tail}`));
 }));
+/** The login StreamRD made for an add-on (Sonarr, Radarr, Lidarr, Prowlarr), for an administrator to read. Never logged or cached. */
+addonsRouter.get("/:addon/login", limit, guard(async (req, res) => {
+  const name = req.params.addon as string;
+  const found = (SERVARR_NAMES as string[]).includes(name) ? await loginFor(name as ServarrName) : null;
+  if (!found) { res.status(404).json({ error: "StreamRD has not made a login for this add-on (yet). It does that a minute or two after the add-on starts." }); return; }
+  res.json(found);
+}));
+/** Signs in and links the add-ons now, instead of at the next pass. */
+addonsRouter.post("/link", limit, guard(async (_req, res) => { res.json(await linkAddons()); }));

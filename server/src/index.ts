@@ -2,6 +2,7 @@ import { startRequestWorker } from "./requests/worker";
 import { startAutomaticApprovals } from "./requests/approval";
 import { startModuleUpdates } from "./modules";
 import { startProwlarr } from "./prowlarr";
+import { startAddonLinks } from "./addon-links";
 import { queueImportedMetadata } from "./metadata/account";
 import { setAccountImportHook, startAccountLibraryWorker } from "./account-library";
 import { startMetadataWorker } from "./metadata/automation";
@@ -38,6 +39,7 @@ async function main() {
     void backfillGroups().then(() => regroupSeries()).catch(() => undefined); // names titles imported before versions existed, and puts a show's seasons together
     startRequestWorker();
     startAutomaticApprovals();
+    startAddonLinks(); // signs the add-ons in and tells Prowlarr about them
     startProwlarr(); // Prowlarr, which finds releases for requests, is started by the Docker helper unless it was removed
     startModuleUpdates(); // notes how the modules' updates went, and runs the night's updates for the modules set to update themselves
     void settleRegistrationDefault().then(notice => { if (notice) void logEvent("warn", "system", notice); }).catch(() => undefined);
