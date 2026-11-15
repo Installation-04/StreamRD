@@ -94,3 +94,6 @@ unavailable; use a reachable external client or change the installation's networ
 Root folders, FlareSolverr in Prowlarr, and Bazarr,
 Seerr, Tautulli and Maintainerr setup remain open. A successful connection test
 does not establish successful downloading or importing of media.
+
+## Folders and FlareSolverr
+Sonarr, Radarr and Lidarr with no root folder are given `data/media/tv`, `data/media/movies` and `data/media/music` (made first; a folder someone added is left alone). When FlareSolverr runs, Prowlarr is told about it as a proxy under the tag `flaresolverr`; give that tag to an indexer that sits behind a browser check.

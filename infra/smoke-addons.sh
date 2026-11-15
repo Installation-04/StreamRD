@@ -143,6 +143,7 @@ for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18
   key="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' "/config/$addon/config/config.xml" | sed 's/<[^>]*>//g')"
   [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$shown/api/$api/system/status")" = 401 ] || fail "$label answers without a key or a login"
   [ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/system/status")" = 200 ] || fail "$label does not accept its own key after the login was set"
+  curl -fsS -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/rootfolder" | jq -e 'length == 1 and (.[0].path | startswith("/data/media/"))' >/dev/null || fail "$label was not given a root folder under the data folder"
 done
 report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
 curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '

@@ -126,7 +126,43 @@ export async function linkToProwlarr(prowlarr: { base: string; key: string }, ap
   return true;
 }
 
-export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; errors: string[] }
+const MEDIA_FOLDERS = { sonarr: "tv", radarr: "movies", lidarr: "music" } as const;
+/**
+ * Gives Sonarr, Radarr and Lidarr a place to put what they import, under StreamRD's data folder (the one they share with the downloads), when
+ * they have no root folder yet. A root folder someone added is left alone. The folder is made here first: the add-ons refuse one that is not there.
+ */
+export async function ensureRootFolder(name: keyof typeof MEDIA_FOLDERS, base: string, key: string, dataRoot = process.env.DATA_DIR || "/data"): Promise<boolean> {
+  const existing = await call<unknown[]>(base, name, key, "GET", "/rootfolder");
+  if (Array.isArray(existing) && existing.length) return false;
+  const folder = path.join(dataRoot, "media", MEDIA_FOLDERS[name]); fs.mkdirSync(folder, { recursive: true });
+  const body: Record<string, unknown> = { path: folder };
+  if (name === "lidarr") {   // Lidarr's root folder carries the defaults for what is added under it
+    const [quality, metadata] = await Promise.all([call<Array<{ id: number }>>(base, name, key, "GET", "/qualityprofile"), call<Array<{ id: number }>>(base, name, key, "GET", "/metadataprofile")]);
+    if (!quality[0] || !metadata[0]) throw new Error("lidarr has no quality or metadata profile to give its root folder");
+    Object.assign(body, { name: "Music", defaultQualityProfileId: quality[0].id, defaultMetadataProfileId: metadata[0].id, defaultMonitorOption: "all", defaultNewItemMonitorOption: "all", defaultTags: [] });
+  }
+  await call(base, name, key, "POST", "/rootfolder", body);
+  void logEvent("info", "system", `${SERVARR[name].implementation} was given ${folder} to keep what it imports`).catch(() => undefined);
+  return true;
+}
+/** Tells Prowlarr about FlareSolverr as a proxy, under a tag of the same name: an indexer behind a browser check is given that tag. */
+export async function ensureFlareSolverr(prowlarr: { base: string; key: string }, host: string): Promise<boolean> {
+  const proxies = await call<Array<{ implementation?: string }>>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/indexerProxy");
+  if (proxies.some(entry => entry.implementation === "FlareSolverr")) return false;
+  const schemas = await call<Schema[]>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/indexerProxy/schema");
+  const schema = schemas.find(entry => entry.implementation === "FlareSolverr"); if (!schema) throw new Error("Prowlarr has no FlareSolverr proxy type");
+  const tags = await call<Array<{ id: number; label: string }>>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/tag");
+  const tag = tags.find(entry => entry.label === "flaresolverr") ?? await call<{ id: number }>(prowlarr.base, "prowlarr", prowlarr.key, "POST", "/tag", { label: "flaresolverr" });
+  const values: Record<string, unknown> = { host, requestTimeout: 60 };
+  await call(prowlarr.base, "prowlarr", prowlarr.key, "POST", "/indexerProxy", {
+    name: "FlareSolverr", implementation: schema.implementation, configContract: schema.configContract, tags: [tag.id],
+    fields: schema.fields.map(field => field.name in values ? { ...field, value: values[field.name] } : field),
+  });
+  void logEvent("info", "system", "Prowlarr can reach indexers behind a browser check through FlareSolverr (give such an indexer the flaresolverr tag)").catch(() => undefined);
+  return true;
+}
+
+export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; rootFolders: string[]; flaresolverr: boolean; errors: string[] }
 let linking: Promise<LinkReport> | undefined;
 /** Manual requests and the background timer share one pass so credentials and links cannot race. */
 export function linkAddons(): Promise<LinkReport> {
@@ -135,7 +171,7 @@ export function linkAddons(): Promise<LinkReport> {
 }
 /** One pass over every Servarr add-on that is running: a login for each, and Prowlarr told about the others. */
 async function linkAddonsPass(): Promise<LinkReport> {
-  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], errors: [] };
+  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], rootFolders: [], flaresolverr: false, errors: [] };
   if (dockerControl().mode === "off") return report;
   let status: Record<string, { state: string; address?: string }> = {};
   try { status = (await manager<{ servers: typeof status }>("GET", "/status")).servers; } catch { return report; }
@@ -165,6 +201,14 @@ async function linkAddonsPass(): Promise<LinkReport> {
       if (result === "set") report.downloadClients.push(name);
       if (result === "local-only") report.downloadClientWaiting.push(name);
     } catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  for (const name of ["sonarr", "radarr", "lidarr"] as const) {
+    const one = up[name]; if (!one) continue;
+    try { if (await ensureRootFolder(name, one.base, one.key)) report.rootFolders.push(name); } catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  if (prowlarr && status.flaresolverr?.state === "running") {
+    try { report.flaresolverr = await ensureFlareSolverr(prowlarr, `http://${status.flaresolverr.address ?? "streamrd-flaresolverr"}:8191`); }
+    catch (error) { report.errors.push(`flaresolverr: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
   }
   return report;
 }
