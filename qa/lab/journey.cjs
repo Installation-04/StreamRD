@@ -254,6 +254,25 @@ async function main() {
       await ask.click();
       await until("the card to say the title is requested", async () => /Requested|On its way/.test(await friend.page.getByRole("region", { name: "Discovery results" }).innerText()), 20_000, 300);
       await friend.shot?.("discover-request");
+      // Music is searched through Lidarr, which the lab does not run: only its three answers are played here (the server side is tested
+      // against a stand-in Lidarr, and the real Lidarr in smoke-addons.sh). This checks the page: the option, the results, one click.
+      const album = { id: "11111111-2222-3333-4444-555555555555", title: "OK Computer", artist: "Radiohead", year: 1997, kind: "Album", coverUrl: null, status: null };
+      let requested = false;
+      const answer = (route, body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+      await friend.page.route("**/api/music/status", route => answer(route, { available: true }));
+      await friend.page.route("**/api/music/search**", route => answer(route, { results: [{ ...album, status: requested ? "requested" : null }] }));
+      await friend.page.route("**/api/music/request", route => { requested = true; return answer(route, { status: "requested" }, 202); });
+      await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
+      await friend.page.getByRole("combobox", { name: /^Media type/ }).selectOption("music");
+      await friend.page.getByLabel("Search movies or shows", { exact: true }).fill("radiohead ok computer");
+      const getAlbum = friend.page.getByRole("button", { name: "Request OK Computer by Radiohead" });
+      await until("the album result with its Request button", async () => getAlbum.isVisible(), 20_000, 300);
+      assert.match(await friend.page.getByRole("region", { name: "Music results" }).innerText(), /Radiohead · 1997 · Album/);
+      assert.equal(await friend.page.getByLabel("Metadata source").count(), 0, "the movie metadata choice is not shown for music");
+      await getAlbum.click();
+      await until("the album to say it is requested", async () => /Requested/.test(await friend.page.getByRole("region", { name: "Music results" }).innerText()), 20_000, 300);
+      await friend.shot?.("discover-music");
+      await friend.page.unroute("**/api/music/status"); await friend.page.unroute("**/api/music/search**"); await friend.page.unroute("**/api/music/request");
       await friend.page.goto(`${base}/requests`, { waitUntil: "networkidle" });
       await until("the request to be received", async () => /Awaiting approval/.test(await friend.text()), 20_000);
     });
