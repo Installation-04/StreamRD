@@ -401,6 +401,7 @@ async function main() {
       assert.doesNotMatch(shown, /\*\*/, "markdown is shown as plain text");
       assert.ok(shown.indexOf("v0.99.0") < shown.indexOf("v0.98.0"), "newest first");
       await owner.shot("update-notes");
+    });
 
     await step("the Monitor page shows the output of the programs StreamRD runs in one place: pick one, filter it, copy or download it", async () => {
       await owner.page.goto(`${base}/admin/monitor`, { waitUntil: "networkidle" });
