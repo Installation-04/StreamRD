@@ -31,6 +31,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.28.1 | The episode list marks what you have watched: a check on each finished episode, a thin bar on one you began, and how many of a season are done | S | none |
 | v0.28.3 | A waiting request is approved or declined in one click from its card; choosing the release stays one step away | S | none |
 | v0.29.0 | Admin → Monitor: the logs of every program in one place; what's new and fixed shown in the Updates panel; an Apps tab; titles with a broken link hidden from viewers; Firefox streaming accepts more H.264 streams | M | none |
+| v0.30.0 | Zilean on by default and Zurg turned on by a Real-Debrid token in a new install; Zilean and Zurg cards on the Add-ons page with start/stop/restart and their logs | M | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |

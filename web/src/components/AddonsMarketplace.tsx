@@ -7,7 +7,8 @@ import styles from "./AddonsMarketplace.module.css";
 
 type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "starting" | "failed";
 interface Addon { name: string; label: string; group: string; blurb: string; home: string; licence: string; ui: boolean; needs: string | null; state: State; port: number; autostart: boolean; error: string | null }
-interface View { control: { mode: "embedded" | "external" | "off"; reason: string | null }; groups: string[]; addons: Addon[] }
+interface Service { name: string; label: string; blurb: string; command: string; home: string; licence: string; state: string; parts: Array<{ name: string; state: string }> }
+interface View { control: { mode: "embedded" | "external" | "off"; reason: string | null }; groups: string[]; addons: Addon[]; services?: Service[] }
 interface Logs { deploy: Array<{ time: string; message: string }>; container: string[] }
 interface LinkReport { logins: string[]; linked: string[]; waiting: string[]; downloadClients?: string[]; downloadClientWaiting?: string[]; errors: string[] }
 const WORDS: Record<State, string> = { unknown: "Docker control is off", absent: "Not installed", stopped: "Stopped", running: "Running", pulling: "Downloading…", starting: "Starting…", failed: "Needs attention" };
@@ -73,6 +74,11 @@ export default function AddonsMarketplace() {
       ? "Add-on connections updated. Existing choices were kept."
       : "Checked the running add-ons. Existing connections were kept.";
   });
+  const service = (one: Service, action: "start" | "stop" | "restart") => run(`service:${one.name}:${action}`, async () => {
+    await api(`/api/admin/addons/services/${one.name}/${action}`, { method: "POST" });
+    return `${one.label} ${action === "start" ? "started" : action === "stop" ? "stopped" : "restarted"}.`;
+  });
+  const copy = (text: string) => { void navigator.clipboard?.writeText(text).then(() => setNotice("Copied. Run it on the computer that runs StreamRD.")); };
   const autostart = (one: Addon, enabled: boolean) => run(`auto:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}/autostart`, { method: "PUT", body: JSON.stringify({ enabled }) }); });
 
   if (!view) return <div className={styles.page}>{error ? <p className={styles.error} role="alert">{error}</p> : <p className={styles.small} role="status">Loading the add-ons…</p>}</div>;
@@ -91,6 +97,31 @@ export default function AddonsMarketplace() {
     </div>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.success} role="status">{notice}</p>}
+    {view.services && view.services.length > 0 && <section aria-label="Zilean and Zurg">
+      <h2 className={styles.groupTitle}>Search and library files</h2>
+      <div className={styles.grid}>
+        {view.services.map(one => {
+          const installed = one.state === "running" || one.state === "stopped";
+          return <article key={one.name} className={styles.card} data-service={one.name} aria-label={one.label}>
+            <div className={styles.top}><h3>{one.label}</h3><span className={`${styles.status} ${one.state === "running" ? styles.running : ""}`} role="status" aria-label={`${one.label} status`}>{one.state === "running" ? "Running" : one.state === "stopped" ? "Stopped" : one.state === "unknown" ? "Docker control is off" : "Not installed"}</span></div>
+            <p className={styles.blurb}>{one.blurb}</p>
+            <p className={styles.small}>{one.licence} · <a href={one.home} target="_blank" rel="noreferrer">Website</a></p>
+            {installed && <p className={styles.small}>{one.parts.map(part => `${part.name}: ${part.state}`).join(" · ")}</p>}
+            {installed && control && <div className={styles.row}>
+              {one.state === "stopped" && <button type="button" className="btn btn-sm" disabled={Boolean(busy)} onClick={() => void service(one, "start")}>Start</button>}
+              {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "restart")}>Restart</button>}
+              {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "stop")}>Stop</button>}
+            </div>}
+            {one.state === "absent" && <div>
+              <p className={styles.small}>The installer adds it, because it needs more than one container{one.name === "zurg" ? " and a mount on this machine" : ""}. On the computer that runs StreamRD, run:</p>
+              <p className={styles.small}><code>{one.command}</code></p>
+              <button type="button" className="btn btn-sm btn-secondary" onClick={() => copy(one.command)}>Copy the command</button>
+            </div>}
+            {installed && <a className="btn btn-sm btn-secondary" href={`/admin/monitor?source=svc:${one.name}`}>See its log</a>}
+          </article>;
+        })}
+      </div>
+    </section>}
     {view.groups.map(group => {
       const list = view.addons.filter(one => one.group === group); if (!list.length) return null;
       return <section key={group} aria-label={group}>

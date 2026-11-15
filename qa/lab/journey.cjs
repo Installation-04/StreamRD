@@ -454,6 +454,14 @@ async function main() {
       assert.equal(await nav.getByRole("link", { name: "Admin", exact: true }).getAttribute("aria-current"), null, "Admin is not lit on the add-ons page");
       await owner.shot("apps-tab");
       await owner.page.goto(`${base}/admin/addons`, { waitUntil: "networkidle" });
+      // Zilean and Zurg come from the installer: their cards say what state they are in and, when missing, the exact command that adds them.
+      for (const [name, command] of [["Zilean", "install.sh --zilean"], ["Zurg", "install.sh --zurg --rd-token"]]) {
+        const service = owner.page.getByRole("article", { name, exact: true });
+        await service.waitFor({ timeout: 20_000 });
+        assert.equal(await service.getByRole("status", { name: `${name} status` }).innerText(), "Not installed");
+        assert.match(await service.innerText(), new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      }
+      await owner.shot("addons-services");
       const card = owner.page.getByRole("article", { name: "Sonarr", exact: true }), status = () => card.getByRole("status", { name: "Sonarr status" }).innerText().catch(() => "");
       await until("the marketplace to list Sonarr", async () => (await status()) === "Not installed", 20_000, 300);
       for (const other of ["Radarr", "Lidarr", "Bazarr", "Seerr", "Tautulli", "Prowlarr", "FlareSolverr", "Maintainerr"]) assert.ok(await owner.page.getByRole("article", { name: other, exact: true }).isVisible(), `${other} is in the marketplace`);

@@ -28,6 +28,8 @@ export default function LogMonitor() {
   const [tail, setTail] = useState(300), [filter, setFilter] = useState(""), [follow, setFollow] = useState(true), [wrap, setWrap] = useState(true), [error, setError] = useState(""), [loading, setLoading] = useState(true), [copied, setCopied] = useState(false);
   const pane = useRef<HTMLDivElement>(null), pinned = useRef(true), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // A link from another page (for example an add-on card's "See its log") opens on that source.
+  useEffect(() => { try { const wanted = new URLSearchParams(window.location.search).get("source"); if (wanted && /^(all|events|(core|app|svc):[a-z0-9-]{1,30})$/.test(wanted)) setPicked(wanted); } catch { /* the default stays */ } }, []);
   const loadSources = useCallback(async () => {
     try { const found = await api<{ sources: Source[]; note: string | null }>("/api/admin/monitor/sources"); if (mounted.current) { setSources(found.sources); setNote(found.note); } } catch { /* the list keeps what it had */ }
   }, []);
