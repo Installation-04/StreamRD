@@ -136,6 +136,11 @@ for attempt in $(seq 1 40); do
   fi
   sleep 6
 done
+if [ "$linked" != yes ]; then
+  echo "-- bazarr settings folder (keys redacted)" >&2
+  docker exec "$name" sh -c 'ls -la /config/bazarr /config/bazarr/config 2>&1; for f in /config/bazarr/config/config.yaml /config/bazarr/config/config.ini; do [ -f "$f" ] && { echo "$f"; grep -n -i -B1 "apikey" "$f" | sed -E "s/(apikey[:= ]+).*/\1<redacted>/I"; }; done' >&2 || true
+  curl -s -o /dev/null -w 'bazarr ping: %{http_code}\n' "http://127.0.0.1:16767/api/system/ping" >&2 || true
+fi
 [ "$linked" = yes ] || fail "the add-ons were not linked: $report"
 for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18686 v1"; do
   read -r addon label shown api <<< "$entry"

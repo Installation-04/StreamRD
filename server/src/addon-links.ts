@@ -174,7 +174,7 @@ async function reachBazarr(address?: string): Promise<string | null> {
   const list = [process.env.BAZARR_URL, "http://streamrd-bazarr:6767", address ? `http://${address.includes(":") ? `[${address}]` : address}:6767` : undefined]
     .filter((value): value is string => Boolean(value)).map(value => value.replace(/\/+$/, ""));
   for (const base of list) {
-    try { const response = await fetch(`${base}/api/system/ping`, { signal: AbortSignal.timeout(3000), redirect: "error" }); await response.body?.cancel(); if (response.ok) return base; } catch { /* next */ }
+    try { const response = await fetch(`${base}/api/system/ping`, { signal: AbortSignal.timeout(3000), redirect: "manual" }); await response.body?.cancel(); if (response.status < 500) return base;   // any answer means it is up } catch { /* next */ }
   }
   return null;
 }
