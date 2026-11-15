@@ -11,6 +11,7 @@ import {
   MaintenanceError, backupPath, cancelRestore, checkForUpdates, createBackup, deleteBackup, listBackups, pendingRestore,
   requestUpdate, requestRestart, restartSupported, stageRestore, validBackupName, verifyBackup, dockerControl,
 } from "../maintenance";
+import { releaseNotes } from "../release-notes";
 export const systemRouter = Router();
 systemRouter.use(requireAuth, requireAdmin);
 systemRouter.use((_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
@@ -78,6 +79,8 @@ systemRouter.post("/restart", heavy(), guarded(async (req, res) => {
   res.status(202).json({ restarting: true });
 }));
 systemRouter.get("/update", heavy(), guarded(async (req, res) => { res.json(await checkForUpdates(req.query.refresh === "1")); }));
+/** What changed in the installed version and in every later release, as plain sections, for the Updates panel. */
+systemRouter.get("/update/notes", heavy(), guarded(async (req, res) => { res.json(await releaseNotes(req.query.refresh === "1")); }));
 systemRouter.post("/update", heavy(), guarded(async (req, res) => {
   const parsed = z.object({ version: z.string().regex(/^\d{1,6}\.\d{1,6}\.\d{1,6}$/) }).strict().safeParse(req.body);
   if (!parsed.success) throw new MaintenanceError("Choose the available version to update to.");

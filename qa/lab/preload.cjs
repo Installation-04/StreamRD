@@ -104,6 +104,13 @@ globalThis.fetch = async function labFetch(input, init) {
   if (url.hostname === "api.real-debrid.com") return realDebrid(url, init, method);
   if (url.hostname === "api.themoviedb.org") return tmdb(url, init);
   if (/(?:^|\.)strem\.io$|(?:^|\.)wikidata\.org$|(?:^|\.)omdbapi\.com$|(?:^|\.)youtube\.com$/.test(url.hostname)) return json({ error: "lab: offline" }, 503);
+  if (url.hostname === "api.github.com" && /\/releases$/.test(url.pathname)) {   // the notes of each release, for the Updates panel
+    const tag = process.env.LAB_LATEST_RELEASE || "v0.99.0", at = "2026-11-01T00:00:00Z", page = "https://github.com/Installation-04/StreamRD/releases/tag/";
+    return json([
+      { tag_name: tag, name: "Lab release", draft: false, prerelease: false, published_at: at, html_url: page + tag, body: `# StreamRD ${tag} — The lab release\n\n## What changes for the owner\n- A lab feature that is new\n- A lab correction that was **made**\n\n## Upgrading\nNothing to do.\n` },
+      { tag_name: "v0.98.0", name: "Earlier", draft: false, prerelease: false, published_at: at, html_url: page + "v0.98.0", body: "# StreamRD v0.98.0 — The earlier release\n\n## What changes\n- An earlier lab feature\n" },
+    ]);
+  }
   if (url.hostname === "api.github.com") return json({ tag_name: process.env.LAB_LATEST_RELEASE || "v0.99.0", published_at: "2026-11-01T00:00:00Z", html_url: "https://github.com/Installation-04/StreamRD/releases/tag/v0.99.0" });
   if (["127.0.0.1", "localhost"].includes(url.hostname)) return realFetch(input, init);
   return json({ error: `lab: no network (${url.hostname})` }, 503);
