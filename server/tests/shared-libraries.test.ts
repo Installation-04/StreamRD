@@ -123,6 +123,21 @@ it("marks the episodes a viewer has finished or begun in the file list, for that
   const theirs = await request(app).post(playUrl(shared.id, film.id)).set(auth(other.token)).send({});
   expect(theirs.body.files.every((file: { watched?: boolean; percent?: number }) => file.watched === undefined && file.percent === undefined)).toBe(true);
 });
+it("lists a title's episodes for its page with the viewer's marks, asking only for the list and starting nothing", async () => {
+  const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member);
+  const files = [1, 2].map(n => ({ token: `t${n}`, name: `Show.S01E0${n}.mkv`, size: 100 + n, mediaKey: `key-${n}` }));
+  await db.sharedLibraryProgress.create({ data: { userId: member.id, itemId: film.id, mediaKey: "key-1", activeSessionId: "s", positionSeconds: 98, durationSeconds: 100, completed: true } });
+  play.mockResolvedValue({ selectionRequired: true, files });
+  const listed = await request(app).get(`${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes`).set(auth(member.token));
+  expect(listed.status).toBe(200);
+  expect(listed.body.files).toEqual([{ token: "t1", name: "Show.S01E01.mkv", size: 101, watched: true }, { token: "t2", name: "Show.S01E02.mkv", size: 102 }]);
+  expect(play.mock.calls.at(-1)?.[4]).toBe(true);
+  expect(JSON.stringify(listed.body)).not.toContain("key-");
+  expect((await db.sharedLibraryProgress.findMany({ where: { userId: member.id } })).length).toBe(1);
+  play.mockResolvedValue({ pending: true, progress: 40 });
+  expect((await request(app).get(`${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes`).set(auth(member.token))).body).toEqual({ files: [], pending: true, progress: 40 });
+});
 it("hides a title whose link is broken from viewers, and shows it again once the link works", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);

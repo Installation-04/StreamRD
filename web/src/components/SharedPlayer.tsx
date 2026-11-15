@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mseSupported, startMse } from "@/lib/mse-playback";
 import { api, API_BASE } from "@/lib/api";
@@ -34,7 +34,7 @@ function reportProblem(streamUrl: string | undefined, kind: "network" | "decode"
   try { void fetch(`${API_BASE}${streamUrl}/problem`, { method: "POST", credentials: "include", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, detail: detail.slice(0, 160), browser, at: Math.max(0, Math.round(at)), code }) }).catch(() => undefined); } catch { /* a report is a courtesy */ }
 }
 export default function SharedPlayer() {
-  const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
+  const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter(), wanted = useSearchParams().get("file") ?? "";
   const [item, setItem] = useState<AccountMedia | null>(null), [loadError, setLoadError] = useState(""), [busy, setBusy] = useState(true), [playError, setPlayError] = useState(""), [pending, setPending] = useState<number | null>(null);
   const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seen, setSeen] = useState<Set<string>>(() => new Set()), [versions, setVersions] = useState<TitleVersion[]>([]), [seasonTab, setSeasonTab] = useState<number | null>(null);
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
@@ -145,10 +145,10 @@ export default function SharedPlayer() {
     if (!user) return;
     const controller = new AbortController();
     api<{ item: AccountMedia; versions?: TitleVersion[] }>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, { signal: controller.signal })
-      .then(response => { if (!controller.signal.aborted) { setItem(response.item); setVersions(response.versions ?? []); void play(); } })
+      .then(response => { if (!controller.signal.aborted) { setItem(response.item); setVersions(response.versions ?? []); void play(/^[a-f0-9]{64}$/.test(wanted) ? wanted : undefined); } })
       .catch(reason => { if (!controller.signal.aborted) { setLoadError(reason instanceof Error ? reason.message : "This title could not be opened."); setBusy(false); } });
     return () => { controller.abort(); saveLatest.current(true); };
-  }, [user, authLoading, router, id, itemId, play]);
+  }, [user, authLoading, router, id, itemId, play, wanted]);
 
   // The title bar fades while you watch and returns when you move, pause or press a key.
   const wake = useCallback(() => { setVisible(true); clearTimeout(idle.current); idle.current = setTimeout(() => { if (video.current && !video.current.paused) setVisible(false); }, HIDE_MS); }, []);

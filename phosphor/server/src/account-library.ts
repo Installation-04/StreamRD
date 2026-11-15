@@ -188,7 +188,7 @@ export function startAccountLibraryWorker() {
   return () => { stopped = true; clearTimeout(timer); };
 }
 /** A signed URL is resolved only for an owner-authenticated, explicitly played import. */
-export async function playImportedMedia(userId: string, id: string, fileToken?: string, authorize?: () => Promise<void>) {
+export async function playImportedMedia(userId: string, id: string, fileToken?: string, authorize?: () => Promise<void>, listOnly = false) {
   if (authorize) await authorize();
   const item = await db.accountMedia.findFirst({ where: { id, userId } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
@@ -197,7 +197,7 @@ export async function playImportedMedia(userId: string, id: string, fileToken?: 
   if (!ctx.active || !ctx.enabled || !ctx.configured || item.credentialFingerprint !== ctx.fingerprint) throw new AccountLibraryError("The saved provider account changed. Rescan the current account before playing this import.", 409);
   if (authorize) await authorize();
   let result: Awaited<ReturnType<typeof playAccountItem>>;
-  try { result = await playAccountItem(provider, ctx.creds, item.providerRef, fileToken); }
+  try { result = await playAccountItem(provider, ctx.creds, item.providerRef, fileToken, listOnly); }
   catch (error) {
     const status = error instanceof ProviderError ? error.statusCode : undefined;
     if (status === 404 || status === 410 || status === 422) await recordLinkResult(item.id, { state: "gone", message: "The provider no longer serves this item" }).catch(() => undefined);

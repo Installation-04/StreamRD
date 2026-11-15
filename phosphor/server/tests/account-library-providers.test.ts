@@ -111,6 +111,11 @@ describe("read-only account scanning", () => {
 });
 
 describe("play existing account references", () => {
+  it("lists the videos for a title page, even when there is only one, without resolving any link", async () => {
+    const calls = mock((url) => { expect(url.pathname).toContain("/torrents/info/"); return videoStatus("torrent-a", { files: [{ id: 1, path: "/Film.2020.mkv", bytes: 400, selected: 1 }], links: ["https://hoster.invalid/one"] }); });
+    const listed = await playAccountItem("realdebrid", creds, "torrent-a", undefined, true);
+    expect(listed.selectionRequired).toBe(true); expect(listed.files).toHaveLength(1); expect(listed.stream).toBeUndefined(); expect(calls).toHaveBeenCalledTimes(1);
+  });
   it("returns opaque RD video choices, rematches selected-only links and tolerates signed-link rotation", async () => {
     let info = 0; const calls = mock((url, init) => {
       if (url.pathname.includes("/torrents/info/")) { const suffix = info++ ? "-new" : ""; return videoStatus("torrent-a", { files: [{ id: 1, path: "/Show.S01E01.mkv", bytes: 400, selected: 1 }, { id: 2, path: "/readme.nfo", selected: 1 }, { id: 3, path: "/Show.S01E02.mp4", bytes: 500, selected: 1 }, { id: 4, path: "/unselected.mkv", selected: 0 }], links: [`https://hoster.invalid/one${suffix}`, "https://hoster.invalid/readme", `https://hoster.invalid/two${suffix}`] }); }
