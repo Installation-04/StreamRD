@@ -13,10 +13,12 @@ export interface AccountPlayResult {
   /** Stable file identity (no credentials or links) used to resume playback. */
   mediaKey?: string;
   selectionRequired?: boolean;
-  files?: Array<{ token: string; name: string; size?: number }>;
+  files?: Array<{ token: string; name: string; size?: number; mediaKey?: string }>;
   pending?: boolean;
   progress?: number;
 }
+/** The stable identity of one file of an account item, the key its watch progress is kept under. */
+const fileKey = (provider: ProviderId, reference: string, file: { id: string; name: string; size?: number }) => createHash("sha256").update(JSON.stringify(["account", provider, reference, file.id, file.name, file.size ?? null])).digest("hex");
 interface File { id: string; name: string; size?: number; link?: string; direct?: boolean }
 interface Context { provider: ProviderId; creds: ProviderCredentials; deadline: number; requests: number }
 interface FolderFrame { id: string; offset: number }
@@ -202,7 +204,7 @@ function choices(provider: ProviderId, creds: ProviderCredentials, reference: st
   }
   const main = candidates.filter(file => !/(?:^|[\/ ._-])(?:sample|trailer)(?:$|[\/ ._-])/i.test(file.name));
   if (candidates.length === 1 || main.length === 1) return { file: main.length === 1 ? main[0] : candidates[0] };
-  return { result: { selectionRequired: true, files: candidates.map(file => ({ token: sign(file), name: file.name, ...(file.size === undefined ? {} : { size: file.size }) })) } };
+  return { result: { selectionRequired: true, files: candidates.map(file => ({ token: sign(file), name: file.name, ...(file.size === undefined ? {} : { size: file.size }), mediaKey: fileKey(provider, reference, file) })) } };
 }
 /** Resolve signed links only on an owner's explicit play action; never persists them. */
 export async function playAccountItem(provider: ProviderId, creds: ProviderCredentials, providerRef: string, fileToken?: string): Promise<AccountPlayResult> {
@@ -265,6 +267,6 @@ export async function playAccountItem(provider: ProviderId, creds: ProviderCrede
     const data = await read(ctx, "/api/torrents/requestdl", { token: creds.apiKey, torrent_id: reference, file_id: file.id, redirect: "false" });
     stream = { url: data };
   }
-  const mediaKey = createHash("sha256").update(JSON.stringify(["account", provider, reference, file.id, file.name, file.size ?? null])).digest("hex");
+  const mediaKey = fileKey(provider, reference, file);
   return { mediaKey, stream: { provider, url: url(provider, stream.url), filename: name(stream.filename) || file.name.split(/[\/\\]/).pop() || "Video", ...(size(stream.filesize) === undefined && file.size === undefined ? {} : { filesize: size(stream.filesize) ?? file.size }), ...(typeof stream.mimeType === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(stream.mimeType) ? { mimeType: stream.mimeType } : {}) } };
 }

@@ -47,3 +47,7 @@
 .clock { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 3.2em; text-align: center; }
 .scrubber { flex: 1; accent-color: #ff8a1f; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .controls { transition: none; } }
+.files button { position:relative;overflow:hidden; }
+.files button[data-watched="true"]>span:first-child { color:#b9b2a9; }
+.begun { position:absolute;left:0;bottom:0;height:3px;background:var(--accent);pointer-events:none; }
+.sr { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap; }

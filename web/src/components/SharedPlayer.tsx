@@ -35,7 +35,7 @@ function reportProblem(streamUrl: string | undefined, kind: "network" | "decode"
 export default function SharedPlayer() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [item, setItem] = useState<AccountMedia | null>(null), [loadError, setLoadError] = useState(""), [busy, setBusy] = useState(true), [playError, setPlayError] = useState(""), [pending, setPending] = useState<number | null>(null);
-  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seasonTab, setSeasonTab] = useState<number | null>(null);
+  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seen, setSeen] = useState<Set<string>>(() => new Set()), [seasonTab, setSeasonTab] = useState<number | null>(null);
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
@@ -215,7 +215,7 @@ export default function SharedPlayer() {
   const shown = files.filter(file => file.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   // A season pack is laid out by season and episode: one season at a time, the one being watched first.
   const grouped = groupEpisodes(shown), watching = current ? files.find(file => file.token === current) : undefined, watchingSeason = watching ? episodeOf(watching.name)?.season : undefined;
-  const activeSeason = grouped ? (seasonTab !== null && (seasonTab === -1 ? grouped.others.length > 0 : grouped.seasons.some(group => group.season === seasonTab)) ? seasonTab : watchingSeason !== undefined && grouped.seasons.some(group => group.season === watchingSeason) ? watchingSeason : grouped.seasons[0].season) : 0;
+  const activeSeason = grouped ? (seasonTab !== null && (seasonTab === -1 ? grouped.others.length > 0 : grouped.seasons.some(group => group.season === seasonTab)) ? seasonTab : watchingSeason !== undefined && grouped.seasons.some(group => group.season === watchingSeason) ? watchingSeason : (grouped.seasons.find(group => group.items.some(({ file }) => !file.watched && !seen.has(file.token))) ?? grouped.seasons[0]).season) : 0;
   const sizeOf = (size: number | undefined) => typeof size === "number" && size > 0 ? `${(size / 1024 ** 3).toFixed(2)} GB` : "Video";
   const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[forceVideo ? "video" : converted.mode] : null].filter(Boolean).join(" · ");
   const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownTotal = converted ? converted.durationSeconds : position.total, shownAt = Math.min(scrub ?? (converted ? base + position.at : position.at), shownTotal > 0 ? shownTotal : Infinity);
@@ -240,7 +240,7 @@ export default function SharedPlayer() {
       onWaiting={() => setBuffering(true)} onPlaying={() => setBuffering(false)} onSeeked={() => setBuffering(false)}
       onLoadedMetadata={event => { if (converted) return; const resume = session.current?.resume ?? 0, element = event.currentTarget; if (resume > 5 && resume < element.duration - 5) element.currentTime = resume; }}
       onTimeUpdate={event => { saveProgress(); setPosition({ at: event.currentTarget.currentTime, total: converted ? 0 : event.currentTarget.duration || 0 }); }}
-      onEnded={() => { saveProgress(true); setEnded(true); if (next) setCountdown(NEXT_SECONDS); }}>
+      onEnded={() => { saveProgress(true); if (current) setSeen(known => new Set(known).add(current)); setEnded(true); if (next) setCountdown(NEXT_SECONDS); }}>
       {!useMse && <source src={source} type={converted ? "video/mp4" : sourceType(stream.mimeType)} onError={() => setVideoError(true)} />}Your browser cannot play this video.</video>}
     {stream && converted && !choosing && <div className={`${styles.controls} ${visible || paused ? "" : styles.controlsIdle}`} role="group" aria-label="Playback controls">
       <button type="button" className={styles.bar_button} aria-label={paused ? "Play" : "Pause"} onClick={() => { const element = video.current; if (element) element.paused ? void element.play() : element.pause(); }}>{paused ? "▶" : "❚❚"}</button>
@@ -263,13 +263,13 @@ export default function SharedPlayer() {
         <label className={styles.search}>Find a video<input type="search" aria-label="Search torrent video files" value={search} maxLength={160} onChange={event => { setSearch(event.target.value); setLimit(50); }} /></label>
         {grouped ? <>
           <div role="tablist" aria-label="Seasons" className={styles.seasonTabs}>
-            {grouped.seasons.map(group => <button type="button" role="tab" key={group.season} aria-selected={activeSeason === group.season} className={activeSeason === group.season ? styles.seasonOn : undefined} onClick={() => setSeasonTab(group.season)}>Season {group.season}<small>{group.items.length}</small></button>)}
+            {grouped.seasons.map(group => <button type="button" role="tab" key={group.season} aria-selected={activeSeason === group.season} className={activeSeason === group.season ? styles.seasonOn : undefined} onClick={() => setSeasonTab(group.season)}>Season {group.season}<small>{group.items.some(({ file }) => file.watched || seen.has(file.token)) ? `${group.items.filter(({ file }) => file.watched || seen.has(file.token)).length}/${group.items.length}` : group.items.length}</small></button>)}
             {grouped.others.length > 0 && <button type="button" role="tab" aria-selected={activeSeason === -1} className={activeSeason === -1 ? styles.seasonOn : undefined} onClick={() => setSeasonTab(-1)}>Other<small>{grouped.others.length}</small></button>}
           </div>
           <div className={styles.files} role="tabpanel" aria-label={activeSeason === -1 ? "Other videos" : `Season ${activeSeason}`}>
             {activeSeason === -1
               ? grouped.others.map(file => <button type="button" key={file.token} disabled={busy} onClick={() => void play(file.token)}><span>{fileLabel(file.name)}</span><span>{sizeOf(file.size)}</span></button>)
-              : grouped.seasons.find(group => group.season === activeSeason)!.items.map(({ file, episode }) => <button type="button" key={file.token} disabled={busy} aria-current={file.token === current ? "true" : undefined} onClick={() => void play(file.token)}><span><strong>Episode {episode}</strong> · {fileLabel(file.name)}</span><span>{file.token === current ? "Playing" : sizeOf(file.size)}</span></button>)}
+              : grouped.seasons.find(group => group.season === activeSeason)!.items.map(({ file, episode }) => <button type="button" key={file.token} disabled={busy} aria-current={file.token === current ? "true" : undefined} data-watched={file.watched || seen.has(file.token) ? "true" : undefined} onClick={() => void play(file.token)}><span><strong>Episode {episode}</strong> · {fileLabel(file.name)}</span><span>{file.watched || seen.has(file.token) ? <><span aria-hidden="true">✓ </span><span className={styles.sr}>Watched. </span></> : null}{file.token === current ? "Playing" : sizeOf(file.size)}</span>{!file.watched && !seen.has(file.token) && file.percent ? <i className={styles.begun} role="img" aria-label={`${file.percent}% watched`} style={{ width: `${file.percent}%` }} /> : null}</button>)}
           </div>
         </> : <>
           <div className={styles.files}>{shown.slice(0, limit).map(file => <button type="button" key={file.token} disabled={busy} onClick={() => void play(file.token)}><span>{fileLabel(file.name)}</span><span>{sizeOf(file.size)}</span></button>)}</div>

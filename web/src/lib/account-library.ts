@@ -20,7 +20,7 @@ export interface AccountScans { automatic: boolean; providers: AccountProviderSc
 export interface AccountLibraryPage { items: AccountMedia[]; nextCursor: string | null; total: number }
 export interface AccountPlayResult {
   stream?: { provider: AccountProvider; url: string; filename: string; filesize?: number; mimeType?: string };
-  selectionRequired?: boolean; files?: Array<{ token: string; name: string; size?: number }>;
+  selectionRequired?: boolean; files?: Array<{ token: string; name: string; size?: number; watched?: boolean; percent?: number }>;
   pending?: boolean; progress?: number;
   /** Shared-library plays only: resume support for the signed-in viewer. */
   progressSessionId?: string; resumeSeconds?: number; durationSeconds?: number;
