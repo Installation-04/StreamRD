@@ -159,7 +159,9 @@ async function main() {
 
     await step("seeking in it continues playback: the browser refuses the copied picture there, and the picture is converted instead", async () => {
       await owner.seek(0.5);
-      const state = await until("playback after the seek", async () => { const now = await owner.video(); return now && now.at > 2 && /start=6[01]\b/.test(now.src) ? now : null; }, 45_000, 500);   // the second that was asked for, not where the copied picture began
+      let seen;
+      const state = await until("playback after the seek", async () => { seen = await owner.video(); return seen && seen.at > 2 && /start=6[01]\b/.test(seen.src) ? seen : null; }, 45_000, 500)   // the second that was asked for, not where the copied picture began
+        .catch(async error => { await owner.shot("failed-seek"); throw Error(`${error.message} | video: ${JSON.stringify(seen)} | page: ${(await owner.text()).slice(0, 400)}`); });
       assert.equal(state.error, null);
       assert.match(state.src, /&video=1$/, "this file's copied picture cannot be decoded part-way in, so the player should have asked for it to be converted");
       assert.match(await owner.text(), /Converted for your browser/);
@@ -379,6 +381,100 @@ async function main() {
       owner.page.once("dialog", dialog => void dialog.accept());
       await card.getByRole("button", { name: "Remove", exact: true }).click();
       await until("Sonarr to be removed", async () => (await status()) === "Not installed", 30_000, 300);
+    });
+
+    await step("add-on connection feedback distinguishes success, local-only download clients, starting apps and errors", async () => {
+      // UI response fixtures exercise feedback only; real connection compatibility
+      // is checked separately against the programs in smoke-addons.sh.
+      const empty = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], errors: [] };
+      let reply = { ...empty, downloadClients: ["sonarr"] };
+      const intercept = route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(reply) });
+      await owner.page.route("**/api/admin/addons/link", intercept);
+      try {
+        const connect = owner.page.getByRole("button", { name: "Connect add-ons", exact: true });
+        await connect.click();
+        await owner.page.getByText("Add-on connections updated. Existing choices were kept.", { exact: true }).waitFor();
+        assert.equal(await owner.page.getByRole("link", { name: "Download client settings", exact: true }).getAttribute("href"), "/admin/request-settings");
+        await owner.shot("addon-connections");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "the connection controls fit on a phone");
+        await owner.shot("addon-connections-mobile");
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        reply = { ...empty, downloadClientWaiting: ["sonarr"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "use a qBittorrent URL the add-ons can reach" }).waitFor();
+        reply = { ...empty, waiting: ["radarr"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "Some add-ons are still starting" }).waitFor();
+        reply = { ...empty, errors: ["lidarr: fixture connection failure"] };
+        await connect.click();
+        await owner.page.getByRole("alert").filter({ hasText: "lidarr: fixture connection failure" }).waitFor();
+        reply = empty;
+        await connect.click();
+        await owner.page.getByText("Checked the running add-ons. Existing connections were kept.", { exact: true }).waitFor();
+      } finally {
+        await owner.page.unroute("**/api/admin/addons/link", intercept);
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+      }
+    });
+
+    await step("the download-client owner explicitly opts into add-on sharing and can withdraw that permission", async () => {
+      await owner.page.goto(`${base}/admin/request-settings`, { waitUntil: "networkidle" });
+      const share = owner.page.getByRole("checkbox", { name: "Allow installed add-ons to use this connection", exact: true });
+      const saved = () => owner.page.evaluate(async () => (await (await fetch("/api/admin/request-settings", { credentials: "include" })).json()).settings.qbit);
+      await share.waitFor();
+      assert.equal(await share.isChecked(), false, "sharing is off by default");
+      await owner.page.getByRole("checkbox", { name: "Enable local qBittorrent downloads", exact: true }).check();
+      await owner.page.getByLabel("qBittorrent Web UI URL", { exact: true }).fill("http://qbit.fixture.invalid:8080");
+      await owner.page.getByLabel("qBittorrent username", { exact: true }).fill("fixture-owner");
+      await owner.page.getByLabel("qBittorrent password", { exact: true }).fill("synthetic-sharing-password");
+      try {
+        await share.check();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("the owner's sharing choice to be saved", async () => (await saved()).shareWithAddons === true, 15_000, 300);
+        assert.match(await owner.text(), /Other administrators can use those apps/);
+        await share.scrollIntoViewIfNeeded(); await owner.shot("download-client-sharing");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        await share.scrollIntoViewIfNeeded();
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "the sharing choice fits on a phone");
+        await owner.shot("download-client-sharing-mobile");
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await share.uncheck();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("sharing permission to be withdrawn", async () => (await saved()).shareWithAddons === false, 15_000, 300);
+      } finally {
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await owner.api("POST", "/api/admin/request-settings/reset", {});
+      }
+    });
+
+    await step("bundled access is owner-controlled and explains the required restart", async () => {
+      await owner.page.goto(`${base}/admin/request-settings`, { waitUntil: "networkidle" });
+      const bundled = owner.page.getByRole("checkbox", { name: "Allow add-ons to reach the bundled client after restart", exact: true });
+      assert.equal(await bundled.isChecked(), false);
+      assert.equal(await bundled.isDisabled(), true);
+      await owner.page.getByRole("checkbox", { name: "Enable local qBittorrent downloads", exact: true }).check();
+      await owner.page.getByLabel("qBittorrent Web UI URL", { exact: true }).fill("http://127.0.0.1:8082");
+      await owner.page.getByLabel("qBittorrent username", { exact: true }).fill("fixture-owner");
+      await owner.page.getByLabel("qBittorrent password", { exact: true }).fill("synthetic-bundled-password");
+      await owner.page.getByRole("checkbox", { name: "Allow installed add-ons to use this connection", exact: true }).check();
+      try {
+        await bundled.check();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await owner.page.getByText("Restart required to apply bundled client access.", { exact: false }).waitFor();
+        assert.match(await owner.text(), /Running access: local to this container/);
+        await bundled.scrollIntoViewIfNeeded(); await owner.shot("bundled-client-access");
+        await owner.page.setViewportSize({ width: 390, height: 844 });
+        await bundled.scrollIntoViewIfNeeded();
+        assert.ok(await owner.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "bundled controls fit on a phone");
+        await owner.shot("bundled-client-access-mobile");
+        await bundled.uncheck();
+        await owner.page.getByRole("button", { name: "Save download settings", exact: true }).click();
+        await until("bundled approval withdrawn", async () => !await owner.page.getByText("Restart required to apply bundled client access.", { exact: false }).count(), 15_000, 300);
+      } finally {
+        await owner.page.setViewportSize({ width: 1366, height: 850 });
+        await owner.api("POST", "/api/admin/request-settings/reset", {});
+      }
     });
 
     await step("server settings are changed from the page with no file to edit, and the server is restarted from the page", async () => {

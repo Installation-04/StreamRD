@@ -20,3 +20,5 @@
 
 - [Discover and request media](https://github.com/Installation-04/StreamRD/wiki/Media-requests)
 - [Users and server sharing](https://github.com/Installation-04/StreamRD/wiki/Users-and-sharing)
+
+- [Add-ons](https://github.com/Installation-04/StreamRD/wiki/Add-ons)
