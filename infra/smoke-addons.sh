@@ -112,8 +112,8 @@ for entry in "${ADDONS[@]}"; do
   docker exec "$name" sh -c "ls /config/$addon" >/dev/null 2>&1 || [ "$addon" = flaresolverr ] || fail "removing $addon took its settings with it"
   docker images --format '{{.Repository}} {{.ID}}' | awk -v a="/$addon" 'index($1, a) {print $2}' | xargs -r docker rmi >/dev/null 2>&1 || true   # keep the runner's disk free for the next one
 done
-say "Prowlarr, Sonarr, Radarr and Lidarr: signed in and linked by StreamRD, against the real programs"
-for addon in prowlarr sonarr radarr lidarr; do
+say "Prowlarr, Sonarr, Radarr, Lidarr and Bazarr: signed in and linked by StreamRD, against the real programs"
+for addon in prowlarr sonarr radarr lidarr bazarr; do
   tries=0; waited=0; body='{}'
   if [ "$addon" != prowlarr ]; then
     port="$(node -e 'console.log(require("./infra/single-container/media-manager.cjs").SERVERS[process.argv[1]].port)' "$addon")"
@@ -145,7 +145,7 @@ for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18
   [ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/system/status")" = 200 ] || fail "$label does not accept its own key after the login was set"
   curl -fsS -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/rootfolder" | jq -e 'length == 1 and (.[0].path | startswith("/data/media/"))' >/dev/null || fail "$label was not given a root folder under the data folder"
 done
-report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
+report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.bazarr | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
 curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
   length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
 ' >/dev/null || fail "the second pass changed the application list"
