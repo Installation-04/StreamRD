@@ -121,3 +121,7 @@ other accounts out everywhere. Admin → Libraries creates named libraries (for 
 TV Shows) from your imported media, visible to everyone or to chosen people, and gives them playback through your server
 account. See the [users and sharing guide](server-sharing.md) for setup, API contracts,
 revocation behavior and differences from Plex Home.
+
+## Monitor: the output of every program, in one place
+**Admin → Monitor** shows what each program StreamRD runs has written, so a problem can be followed without opening a terminal. Pick **All apps** (everything merged in time order), **StreamRD events**, one of the processes inside the StreamRD container (server, web, qBittorrent, gateway), an add-on or media server (Sonarr, Prowlarr, Plex, Jellyfin and the rest), or the optional services Zilean, its database, Zurg and its mount. A green dot means it is running. **Follow** keeps the page up to date every few seconds and stays at the newest line unless you scroll up to read; **Filter** keeps only lines containing a word; errors are red and warnings amber. **Copy** and **Download** take what is shown. Passwords and tokens are hidden before a line leaves the server. Reading other programs needs Docker control (the installer's default); without it only the event log is shown, with a note saying why. Only programs StreamRD runs can be read, never an arbitrary container.
+

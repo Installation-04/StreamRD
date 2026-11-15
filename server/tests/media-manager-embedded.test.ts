@@ -374,3 +374,30 @@ it.each([
   await start(options); const { json } = await helper();
   expect(await json("GET", "/peer")).toEqual({ host: null });
 });
+
+it("lists and reads the output of what StreamRD runs, split by process, with secrets blanked, and refuses any other container", async () => {
+  await start(); const { json, call } = await helper();
+  const own = docker.find(docker.name)!;
+  own.output.push("2026-11-15T10:00:00.000000000Z [streamrd-api] {\"level\":\"info\",\"message\":\"listening\"}", "2026-11-15T10:00:02.000000000Z [qbittorrent] WebUI started token=abcdefghijk123", "2026-11-15T10:00:03.000000000Z [streamrd-api] second api line");
+  docker.boxes.push({ id: "ee".repeat(32), name: "zurg", image: "sha256:z", running: true, alive: true, status: "running", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec: { Image: "zurg", Labels: {} }, output: ["2026-11-15T10:00:01.000000000Z mounted /mnt/zurg", "2026-11-15T10:00:04.000000000Z authorization: Bearer supersecretvalue"] });
+  docker.boxes.push({ id: "dd".repeat(32), name: "not-ours", image: "sha256:n", running: true, alive: true, status: "running", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec: { Image: "other", Labels: {} }, output: ["private line"] });
+
+  const sources = (await json("GET", "/logs/sources")).sources as Array<{ id: string; state: string; lines?: number }>;
+  expect(sources.find(source => source.id === "core:streamrd-api")).toMatchObject({ state: "running", lines: 2 });
+  expect(sources.find(source => source.id === "core:qbittorrent")).toMatchObject({ lines: 1 });
+  expect(sources.find(source => source.id === "svc:zurg")).toEqual({ id: "svc:zurg", state: "running" });
+  expect(sources.find(source => source.id === "svc:zilean")).toEqual({ id: "svc:zilean", state: "absent" });
+  expect(sources.find(source => source.id === "app:jellyfin")).toEqual({ id: "app:jellyfin", state: "absent" });
+  expect(sources.some(source => source.id.includes("not-ours"))).toBe(false);
+
+  const api = await json("GET", "/logs/read?source=core:streamrd-api&tail=10");
+  expect(api.lines.map((line: { text: string }) => line.text)).toEqual(["{\"level\":\"info\",\"message\":\"listening\"}", "second api line"]);
+  expect(api.lines[0]).toMatchObject({ time: "2026-11-15T10:00:00.000000000Z", source: "core:streamrd-api" });
+  const merged = (await json("GET", "/logs/read?source=all&tail=50")).lines as Array<{ source: string; text: string }>;
+  expect(merged.map(line => line.source)).toEqual(["core:streamrd-api", "svc:zurg", "core:qbittorrent", "core:streamrd-api", "svc:zurg"]);   // oldest first, across apps
+  const text = JSON.stringify(merged);
+  expect(text).not.toMatch(/abcdefghijk123|supersecretvalue/); expect(text).toContain("token=****");
+  expect((await json("GET", "/logs/read?source=svc:zurg&tail=1")).lines).toHaveLength(1);   // a tail
+  for (const bad of ["svc:not-ours", "svc:streamrd", "app:../x", "core:", "other", "svc:zurg;x"]) expect((await call("GET", `/logs/read?source=${encodeURIComponent(bad)}`)).status, bad).toBe(404);
+  expect((await call("GET", "/logs/sources", undefined, null)).status).toBe(401);
+});
