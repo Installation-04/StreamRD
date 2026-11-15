@@ -91,9 +91,11 @@ are not revoked. Default bridge, host, multiple networks and other network modes
 unavailable; use a reachable external client or change the installation's network.
 
 ## Not done yet
-Root folders, FlareSolverr in Prowlarr, and Bazarr,
-Seerr, Tautulli and Maintainerr setup remain open. A successful connection test
+Seerr, Tautulli and Maintainerr setup remain open: they need a sign-in to Plex or Jellyfin. A successful connection test
 does not establish successful downloading or importing of media.
 
 ## Folders and FlareSolverr
 Sonarr, Radarr and Lidarr with no root folder are given `data/media/tv`, `data/media/movies` and `data/media/music` (made first; a folder someone added is left alone). When FlareSolverr runs, Prowlarr is told about it as a proxy under the tag `flaresolverr`; give that tag to an indexer that sits behind a browser check.
+
+## Bazarr
+When Bazarr runs, StreamRD gives it the address, port and API key of each running Sonarr and Radarr it has none for, and turns them on. One someone filled in is left alone.

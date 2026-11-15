@@ -162,7 +162,49 @@ export async function ensureFlareSolverr(prowlarr: { base: string; key: string }
   return true;
 }
 
-export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; rootFolders: string[]; flaresolverr: boolean; errors: string[] }
+/** Bazarr keeps its API key in its settings folder (config.yaml, or config.ini on older versions). */
+export function bazarrKey(root = process.env.CONFIG_DIR || process.env.DATA_DIR || "/data"): string {
+  for (const file of ["config.yaml", "config.ini"]) {
+    try { const found = /^\s*apikey\s*[:=]\s*['"]?([A-Za-z0-9]{16,64})['"]?\s*$/m.exec(fs.readFileSync(path.join(root, "bazarr", "config", file), "utf8")); if (found) return found[1]; } catch { /* try the next */ }
+  }
+  return "";
+}
+/** Where Bazarr answers: the address from the probe order used for the others. */
+async function reachBazarr(address?: string): Promise<string | null> {
+  const list = [process.env.BAZARR_URL, "http://streamrd-bazarr:6767", address ? `http://${address.includes(":") ? `[${address}]` : address}:6767` : undefined]
+    .filter((value): value is string => Boolean(value)).map(value => value.replace(/\/+$/, ""));
+  for (const base of list) {
+    try { const response = await fetch(`${base}/api/system/ping`, { signal: AbortSignal.timeout(3000), redirect: "error" }); await response.body?.cancel(); if (response.ok) return base; } catch { /* next */ }
+  }
+  return null;
+}
+/**
+ * Tells Bazarr where Sonarr and Radarr are (address, port, API key) when it has none yet, and turns them on. A source someone already
+ * filled in is left alone. Done through Bazarr's own settings API, with the addresses that passed the probe.
+ */
+export async function ensureBazarrSources(bazarr: { base: string; key: string }, sources: Partial<Record<"sonarr" | "radarr", { base: string; key: string }>>): Promise<string[]> {
+  const headers = { "X-API-KEY": bazarr.key, Accept: "application/json" };
+  const current = await fetch(`${bazarr.base}/api/system/settings`, { headers, signal: AbortSignal.timeout(10_000), redirect: "error" });
+  if (!current.ok) { await current.body?.cancel(); throw new Error(`bazarr answered ${current.status} to GET /api/system/settings`); }
+  const settings = await current.json() as Record<string, Record<string, unknown> | undefined>;
+  const form = new URLSearchParams(), done: string[] = [];
+  for (const name of ["sonarr", "radarr"] as const) {
+    const source = sources[name]; if (!source) continue;
+    const have = settings[name]; if (have && typeof have.apikey === "string" && have.apikey) continue;
+    const url = new URL(source.base);
+    form.set(`settings-${name}-ip`, url.hostname.replace(/^\[|\]$/g, "")); form.set(`settings-${name}-port`, url.port || (url.protocol === "https:" ? "443" : "80"));
+    form.set(`settings-${name}-apikey`, source.key); form.set(`settings-${name}-ssl`, url.protocol === "https:" ? "true" : "false"); form.set(`settings-${name}-base_url`, "/");
+    form.set(`settings-general-use_${name}`, "true"); done.push(name);
+  }
+  if (!done.length) return done;
+  const saved = await fetch(`${bazarr.base}/api/system/settings`, { method: "POST", headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString(), signal: AbortSignal.timeout(15_000), redirect: "error" });
+  await saved.body?.cancel();
+  if (!saved.ok) throw new Error(`bazarr answered ${saved.status} to POST /api/system/settings`);
+  void logEvent("info", "system", `Bazarr now looks at ${done.join(" and ")} for what to find subtitles for`).catch(() => undefined);
+  return done;
+}
+
+export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; rootFolders: string[]; flaresolverr: boolean; bazarr: string[]; errors: string[] }
 let linking: Promise<LinkReport> | undefined;
 /** Manual requests and the background timer share one pass so credentials and links cannot race. */
 export function linkAddons(): Promise<LinkReport> {
@@ -171,7 +213,7 @@ export function linkAddons(): Promise<LinkReport> {
 }
 /** One pass over every Servarr add-on that is running: a login for each, and Prowlarr told about the others. */
 async function linkAddonsPass(): Promise<LinkReport> {
-  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], rootFolders: [], flaresolverr: false, errors: [] };
+  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], rootFolders: [], flaresolverr: false, bazarr: [], errors: [] };
   if (dockerControl().mode === "off") return report;
   let status: Record<string, { state: string; address?: string }> = {};
   try { status = (await manager<{ servers: typeof status }>("GET", "/status")).servers; } catch { return report; }
@@ -209,6 +251,12 @@ async function linkAddonsPass(): Promise<LinkReport> {
   if (prowlarr && status.flaresolverr?.state === "running") {
     try { report.flaresolverr = await ensureFlareSolverr(prowlarr, `http://${status.flaresolverr.address ?? "streamrd-flaresolverr"}:8191`); }
     catch (error) { report.errors.push(`flaresolverr: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  if (status.bazarr?.state === "running" && (up.sonarr || up.radarr)) {
+    const key = bazarrKey(), base = key ? await reachBazarr(status.bazarr.address) : null;
+    if (!key || !base) report.waiting.push("bazarr" as ServarrName);
+    else try { report.bazarr = await ensureBazarrSources({ base, key }, { sonarr: up.sonarr, radarr: up.radarr }); }
+    catch (error) { report.errors.push(`bazarr: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
   }
   return report;
 }

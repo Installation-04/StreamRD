@@ -149,6 +149,9 @@ report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins |
 curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
   length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
 ' >/dev/null || fail "the second pass changed the application list"
+bkey="$(docker exec "$name" sh -c "grep -h -o -E 'apikey[:=] *[A-Za-z0-9]+' /config/bazarr/config/config.yaml /config/bazarr/config/config.ini 2>/dev/null | head -1" | sed -E 's/apikey[:=] *//')"
+[ -n "$bkey" ] || fail "Bazarr wrote no API key"
+curl -fsS -H "X-API-KEY: $bkey" "http://127.0.0.1:16767/api/system/settings" | jq -e '(.sonarr.apikey | length > 0) and (.radarr.apikey | length > 0)' >/dev/null || fail "Bazarr was not pointed at Sonarr and Radarr"
 echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
 say "Sonarr, Radarr and Lidarr connect to real qBittorrent without deleting completed or failed downloads"
 # Only this disposable fixture exposes the bundled client on the container's

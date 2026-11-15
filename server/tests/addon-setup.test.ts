@@ -4,7 +4,7 @@ import path from "node:path";
 import http from "node:http";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { resetDb } from "./helpers";
-import { ensureFlareSolverr, ensureRootFolder } from "../src/addon-links";
+import { bazarrKey, ensureBazarrSources, ensureFlareSolverr, ensureRootFolder } from "../src/addon-links";
 
 // Add-ons are played by small servers that answer as the real ones do; the tests look at what StreamRD asks of them and that a second pass changes nothing.
 let servers: http.Server[] = [], dir = "";
@@ -59,4 +59,28 @@ it("tells Prowlarr about FlareSolverr once, under a tag of its own", async () =>
   expect(Object.fromEntries((proxies[0].fields as Array<{ name: string; value: unknown }>).map(f => [f.name, f.value]))).toEqual({ host: "http://streamrd-flaresolverr:8191", requestTimeout: 60 });
   expect(await ensureFlareSolverr({ base: prowlarr.base, key: "k" }, "http://x:8191")).toBe(false);
   expect(proxies).toHaveLength(1);
+});
+
+it("points Bazarr at Sonarr and Radarr once, and leaves a source someone filled in", async () => {
+  const settings: Record<string, Record<string, unknown>> = { sonarr: { apikey: "" }, radarr: { apikey: "theirs" } };
+  const posted: string[] = [];
+  const bazarr = await serve((req, body, res) => {
+    if (req.url === "/api/system/settings" && req.method === "GET") return json(res, settings);
+    if (req.url === "/api/system/settings" && req.method === "POST") { posted.push(body); settings.sonarr = { apikey: "sonarrkey" }; return json(res, {}, 204); }
+    json(res, {}, 404);
+  });
+  const sources = { sonarr: { base: "http://streamrd-sonarr:8989", key: "sonarrkey" }, radarr: { base: "http://streamrd-radarr:7878", key: "radarrkey" } };
+  expect(await ensureBazarrSources({ base: bazarr.base, key: "b" }, sources)).toEqual(["sonarr"]);
+  const form = new URLSearchParams(posted[0]);
+  expect(Object.fromEntries(form)).toMatchObject({ "settings-sonarr-ip": "streamrd-sonarr", "settings-sonarr-port": "8989", "settings-sonarr-apikey": "sonarrkey", "settings-general-use_sonarr": "true" });
+  expect(form.has("settings-radarr-apikey")).toBe(false);
+  expect(await ensureBazarrSources({ base: bazarr.base, key: "b" }, sources)).toEqual([]);
+  expect(posted).toHaveLength(1);
+});
+
+it("reads Bazarr's key from its yaml or ini settings", () => {
+  fs.mkdirSync(path.join(dir, "bazarr", "config"), { recursive: true });
+  expect(bazarrKey(dir)).toBe("");
+  fs.writeFileSync(path.join(dir, "bazarr", "config", "config.yaml"), "auth:\n  apikey: abcdef0123456789abcdef0123456789\n");
+  expect(bazarrKey(dir)).toBe("abcdef0123456789abcdef0123456789");
 });
