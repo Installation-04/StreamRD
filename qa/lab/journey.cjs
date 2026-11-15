@@ -187,6 +187,14 @@ async function main() {
     });
 
     await step("a season pack offers its episodes, plays one and moves on to the next", async () => {
+      // The lab holds one season, so a second is added to the answer for the title: only what the player does with it is looked at here.
+      // (The server side of seasons is covered by its own tests, and the library page lists them from the same answer.)
+      await owner.page.route(/\/api\/shared-libraries\/[^/]+\/items\/[^/?]+(\?.*)?$/, async route => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch(), body = await response.json(), here = body.item?.id;
+        const version = (id, from, current) => ({ id, quality: null, release: null, season: { from, to: from }, phase: "finished", health: "ok", createdAt: "2026-11-01T00:00:00.000Z", ...(current ? { current: true } : {}) });
+        await route.fulfill({ response, json: { ...body, versions: [version(here, 1, true), version("lab-season-two", 2, false)] } });
+      });
       await owner.open("TV Shows", "Example Show"); await owner.page.getByRole("button", { name: /play from server/i }).click();
       await until("the episode list", async () => /S01E03/.test(await owner.text()), 20_000);
       assert.doesNotMatch(await owner.text(), /\/Example\.Show/, "file names are shown without the provider's leading slash");
@@ -207,6 +215,16 @@ async function main() {
       assert.match(await owner.page.getByRole("tab", { name: /Season 1/ }).innerText(), /1\/3/, "the season shows how many episodes are watched");
       await owner.shot("episodes-watched");
       await owner.page.getByRole("button", { name: "Keep watching", exact: true }).click();
+      // At the end of the last episode of the season, the next season is offered and opens in the player.
+      await owner.page.getByRole("button", { name: "Videos", exact: true }).click();
+      await owner.page.getByRole("tabpanel", { name: "Season 1" }).getByRole("button", { name: /Episode 3\b/ }).click();
+      await until("episode 3", async () => { const now = await owner.video(); return now && now.at > 1 && /S01E03/.test(await owner.text()); }, 60_000, 500);
+      await owner.seek(0.93);
+      await until("the season to finish", async () => /Season finished/.test(await owner.text()), 45_000, 500);
+      await owner.shot("season-finished");
+      await owner.page.getByRole("button", { name: "Play season 2", exact: true }).click();
+      await until("the next season's player", async () => owner.page.url().endsWith("/lab-season-two"), 20_000, 300);
+      await owner.page.unroute(/\/api\/shared-libraries\/[^/]+\/items\/[^/?]+(\?.*)?$/);
     });
 
     await step("invitations are created for a child (kids' limit) and a friend", async () => {

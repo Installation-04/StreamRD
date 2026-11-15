@@ -6,6 +6,7 @@ import { mseSupported, startMse } from "@/lib/mse-playback";
 import { api, API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { AccountMedia, AccountPlayResult, accountMediaName, safeMediaUrl } from "@/lib/account-library";
+import { TitleVersion } from "@/lib/shared-libraries";
 import { sourceType } from "@/lib/playback";
 import PlaybackHelp from "@/components/PlaybackHelp";
 import { episodeOf, groupEpisodes } from "@/lib/episodes";
@@ -35,7 +36,7 @@ function reportProblem(streamUrl: string | undefined, kind: "network" | "decode"
 export default function SharedPlayer() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [item, setItem] = useState<AccountMedia | null>(null), [loadError, setLoadError] = useState(""), [busy, setBusy] = useState(true), [playError, setPlayError] = useState(""), [pending, setPending] = useState<number | null>(null);
-  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seen, setSeen] = useState<Set<string>>(() => new Set()), [seasonTab, setSeasonTab] = useState<number | null>(null);
+  const [files, setFiles] = useState<Files>([]), [current, setCurrent] = useState<string | null>(null), [choosing, setChoosing] = useState(false), [search, setSearch] = useState(""), [limit, setLimit] = useState(50), [seen, setSeen] = useState<Set<string>>(() => new Set()), [versions, setVersions] = useState<TitleVersion[]>([]), [seasonTab, setSeasonTab] = useState<number | null>(null);
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
@@ -143,8 +144,8 @@ export default function SharedPlayer() {
     if (!authLoading && !user) router.replace("/login");
     if (!user) return;
     const controller = new AbortController();
-    api<{ item: AccountMedia }>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, { signal: controller.signal })
-      .then(response => { if (!controller.signal.aborted) { setItem(response.item); void play(); } })
+    api<{ item: AccountMedia; versions?: TitleVersion[] }>(`/api/shared-libraries/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`, { signal: controller.signal })
+      .then(response => { if (!controller.signal.aborted) { setItem(response.item); setVersions(response.versions ?? []); void play(); } })
       .catch(reason => { if (!controller.signal.aborted) { setLoadError(reason instanceof Error ? reason.message : "This title could not be opened."); setBusy(false); } });
     return () => { controller.abort(); saveLatest.current(true); };
   }, [user, authLoading, router, id, itemId, play]);
@@ -160,6 +161,9 @@ export default function SharedPlayer() {
   }, [stream, paused]);
 
   const list = files, index = current ? list.findIndex(file => file.token === current) : -1, next = index >= 0 && index + 1 < list.length ? list[index + 1] : null;
+  // When a season ends, the next season (its own download) is offered, if it is there and finished: the nearest one after this one.
+  const here = versions.find(version => version.current)?.season?.to ?? null;
+  const nextSeason = here === null ? null : versions.filter(version => version.season && version.season.from > here && version.phase === "finished").sort((a, b) => a.season!.from - b.season!.from)[0] ?? null;
   // "Up next": when a file of a pack ends, the next one starts after a short countdown unless cancelled.
   useEffect(() => {
     if (!ended || !next || countdown === null) return;
@@ -278,7 +282,7 @@ export default function SharedPlayer() {
         {stream && <button type="button" className="btn btn-secondary" onClick={() => { setChoosing(false); void video.current?.play(); }}>Keep watching</button>}
       </div>}
       {ended && next && countdown !== null && <div className={`${styles.card} ${styles.upnext}`} role="status"><p className={styles.kicker}>UP NEXT</p><h2>{fileLabel(next.name)}</h2><p>Starting in {Math.max(0, countdown)} seconds</p><div className={styles.actions}><button type="button" className="btn" onClick={() => void play(next.token)}>Play now</button><button type="button" className="btn btn-secondary" onClick={() => setCountdown(null)}>Cancel</button></div></div>}
-      {ended && !(next && countdown !== null) && <div className={`${styles.card} ${styles.upnext}`}><h2>Finished</h2><div className={styles.actions}>{next && <button type="button" className="btn" onClick={() => void play(next.token)}>Play next</button>}<button type="button" className="btn btn-secondary" onClick={leave}>Back to {name}</button></div></div>}
+      {ended && !(next && countdown !== null) && <div className={`${styles.card} ${styles.upnext}`}><h2>{!next && nextSeason ? "Season finished" : "Finished"}</h2><div className={styles.actions}>{next && <button type="button" className="btn" onClick={() => void play(next.token)}>Play next</button>}{!next && nextSeason?.season && <button type="button" className="btn" onClick={() => { saveProgress(true); router.replace(`/play/${encodeURIComponent(id)}/${encodeURIComponent(nextSeason.id)}`); }}>{nextSeason.season.from === nextSeason.season.to ? `Play season ${nextSeason.season.from}` : `Play seasons ${nextSeason.season.from}–${nextSeason.season.to}`}</button>}<button type="button" className="btn btn-secondary" onClick={leave}>Back to {name}</button></div></div>}
     </div>
     {stream && (videoError || (!paused && !converted)) && <div className={styles.help}><PlaybackHelp url={stream.url} filename={stream.filename} mimeType={stream.mimeType} failed={videoError} converted={Boolean(converted)} reason={reason} /></div>}
     {stream && visible && !choosing && <p className={styles.hint} aria-hidden="true">Space play/pause · J/L ±10s · ↑↓ volume · M mute · F fullscreen{next ? " · N next" : ""} · Esc back{shownTotal > 0 ? ` · ${clock(shownAt)} / ${clock(shownTotal)}` : ""}</p>}

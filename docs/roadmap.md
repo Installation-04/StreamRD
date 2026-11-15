@@ -31,7 +31,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.28.1 | The episode list marks what you have watched: a check on each finished episode, a thin bar on one you began, and how many of a season are done | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
-| next | TV shows keep going across seasons: continue with the next season's download when one ends | M | none |
+| v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |
 | next | Zilean and Zurg started and stopped from the page, and updated the same way; Phosphor and the bundled download client switched on and off from the page | M | none |
 
 Plex and Jellyfin stay in containers of their own, started from the page: they are large separate programs with their own releases.
