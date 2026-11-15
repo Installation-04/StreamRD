@@ -79,8 +79,8 @@ it("points Bazarr at Sonarr and Radarr once, and leaves a source someone filled 
 });
 
 it("reads Bazarr's key from its yaml or ini settings", () => {
-  fs.mkdirSync(path.join(dir, "bazarr", "config"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "bazarr", "config", "config"), { recursive: true });
   expect(bazarrKey(dir)).toBe("");
-  fs.writeFileSync(path.join(dir, "bazarr", "config", "config.yaml"), "auth:\n  apikey: abcdef0123456789abcdef0123456789\n");
+  fs.writeFileSync(path.join(dir, "bazarr", "config", "config", "config.yaml"), "auth:\n  apikey: abcdef0123456789abcdef0123456789\n");
   expect(bazarrKey(dir)).toBe("abcdef0123456789abcdef0123456789");
 });

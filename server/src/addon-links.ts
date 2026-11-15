@@ -162,10 +162,10 @@ export async function ensureFlareSolverr(prowlarr: { base: string; key: string }
   return true;
 }
 
-/** Bazarr keeps its API key in its settings folder (config.yaml, or config.ini on older versions). */
+/** Bazarr keeps its API key in its settings folder (config/config/config.yaml, or config.ini on older versions). */
 export function bazarrKey(root = process.env.CONFIG_DIR || process.env.DATA_DIR || "/data"): string {
-  for (const file of ["config.yaml", "config.ini"]) {
-    try { const found = /^\s*apikey\s*[:=]\s*['"]?([A-Za-z0-9]{16,64})['"]?\s*$/m.exec(fs.readFileSync(path.join(root, "bazarr", "config", file), "utf8")); if (found) return found[1]; } catch { /* try the next */ }
+  for (const folder of [["config", "config"], ["config"]]) for (const file of ["config.yaml", "config.ini"]) {   // Bazarr keeps them in <its folder>/config/config
+    try { const found = /^\s*apikey\s*[:=]\s*['"]?([A-Za-z0-9]{16,64})['"]?\s*$/m.exec(fs.readFileSync(path.join(root, "bazarr", ...folder, file), "utf8")); if (found) return found[1]; } catch { /* try the next */ }
   }
   return "";
 }

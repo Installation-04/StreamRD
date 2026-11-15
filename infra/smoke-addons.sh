@@ -138,7 +138,7 @@ for attempt in $(seq 1 40); do
 done
 if [ "$linked" != yes ]; then
   echo "-- bazarr settings folder (keys redacted)" >&2
-  docker exec "$name" sh -c 'ls -la /config/bazarr /config/bazarr/config 2>&1; for f in /config/bazarr/config/config.yaml /config/bazarr/config/config.ini; do [ -f "$f" ] && { echo "$f"; grep -n -i -B1 "apikey" "$f" | sed -E "s/(apikey[:= ]+).*/\1<redacted>/I"; }; done' >&2 || true
+  docker exec "$name" sh -c 'ls -la /config/bazarr /config/bazarr/config /config/bazarr/config/config 2>&1; for f in /config/bazarr/config/config/config.yaml /config/bazarr/config/config/config.ini; do [ -f "$f" ] && { echo "$f"; grep -n -i -B1 "apikey" "$f" | sed -E "s/(apikey[:= ]+).*/\1<redacted>/I"; }; done' >&2 || true
   curl -s -o /dev/null -w 'bazarr ping: %{http_code}\n' "http://127.0.0.1:16767/api/system/ping" >&2 || true
 fi
 [ "$linked" = yes ] || fail "the add-ons were not linked: $report"
@@ -154,7 +154,7 @@ report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins |
 curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
   length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
 ' >/dev/null || fail "the second pass changed the application list"
-bkey="$(docker exec "$name" sh -c "grep -h -o -E 'apikey[:=] *[A-Za-z0-9]+' /config/bazarr/config/config.yaml /config/bazarr/config/config.ini 2>/dev/null | head -1" | sed -E 's/apikey[:=] *//')"
+bkey="$(docker exec "$name" sh -c "grep -h -o -E 'apikey[:=] *[A-Za-z0-9]+' /config/bazarr/config/config/config.yaml /config/bazarr/config/config/config.ini 2>/dev/null | head -1" | sed -E 's/apikey[:=] *//')"
 [ -n "$bkey" ] || fail "Bazarr wrote no API key"
 curl -fsS -H "X-API-KEY: $bkey" "http://127.0.0.1:16767/api/system/settings" | jq -e '(.sonarr.apikey | length > 0) and (.radarr.apikey | length > 0)' >/dev/null || fail "Bazarr was not pointed at Sonarr and Radarr"
 echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
