@@ -233,7 +233,20 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   });
   const { mediaKey, ...result } = resolved;
   await authorize();
-  if (!result.stream || !mediaKey) { res.json(result); return; }
+  if (!result.stream || !mediaKey) {
+    // The episode list says what this viewer has watched: a mark for a finished file, a thin bar for one begun. The file keys stay on the server.
+    if (result.files?.length) {
+      const keys = result.files.map(file => file.mediaKey).filter((key): key is string => Boolean(key));
+      const rows = keys.length ? await db.sharedLibraryProgress.findMany({ where: { userId: req.session!.sub, itemId, mediaKey: { in: keys } }, select: { mediaKey: true, completed: true, positionSeconds: true, durationSeconds: true } }) : [];
+      const byKey = new Map(rows.map(row => [row.mediaKey, row]));
+      res.json({ ...result, files: result.files.map(({ mediaKey: key, ...file }) => {
+        const row = key ? byKey.get(key) : undefined;
+        return row?.completed ? { ...file, watched: true } : row && row.positionSeconds > 5 && row.durationSeconds > 0 ? { ...file, percent: Math.min(94, Math.max(1, Math.round(row.positionSeconds / row.durationSeconds * 100))) } : file;
+      }) });
+      return;
+    }
+    res.json(result); return;
+  }
   // Resume state belongs to the viewer; each play supersedes older player sessions.
   const userId = req.session!.sub, progressSessionId = randomUUID();
   const saved = await db.sharedLibraryProgress.upsert({
