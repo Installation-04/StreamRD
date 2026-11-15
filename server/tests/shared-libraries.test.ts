@@ -123,6 +123,21 @@ it("marks the episodes a viewer has finished or begun in the file list, for that
   const theirs = await request(app).post(playUrl(shared.id, film.id)).set(auth(other.token)).send({});
   expect(theirs.body.files.every((file: { watched?: boolean; percent?: number }) => file.watched === undefined && file.percent === undefined)).toBe(true);
 });
+it("hides a title whose link is broken from viewers, and shows it again once the link works", async () => {
+  const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member);
+  const names = async () => (await request(app).get(`/api/shared-libraries/${shared.id}/items`).set(auth(member.token))).body.items.map((entry: { id: string }) => entry.id);
+  const detail = async () => (await request(app).get(`/api/shared-libraries/${shared.id}/items/${film.id}`).set(auth(member.token))).status;
+  expect(await names()).toContain(film.id); expect(await detail()).toBe(200);
+  await db.accountMedia.update({ where: { id: film.id }, data: { health: "broken", healthFailures: 2 } });
+  expect(await names()).not.toContain(film.id);   // gone from the list...
+  expect(await detail()).toBe(404);   // ...and from its own page
+  expect((await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({})).status).toBe(404);
+  const count = async () => (await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries[0].itemCount;
+  expect(await count()).toBe(0);   // and it is no longer counted
+  await db.accountMedia.update({ where: { id: film.id }, data: { health: "ok", healthFailures: 0 } });
+  expect(await names()).toContain(film.id); expect(await detail()).toBe(200); expect(await count()).toBe(1);   // back by itself
+});
 it("revokes access to lookup and future playback immediately without removing imports", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);
