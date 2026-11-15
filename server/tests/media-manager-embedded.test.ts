@@ -357,3 +357,20 @@ it("reports an update still being finished when the new container's helper is as
   const crashed = await (await helper({ logSettleMs: 10 })).json("GET", "/update");
   expect(crashed).toMatchObject({ state: "failed", error: "The updater stopped before it finished (exit code 137)" }); expect(crashed.log.map((line: { message: string }) => line.message)).toEqual(["Error: connect EACCES /var/run/docker.sock"]);
 });
+
+
+it("provides a stable peer hostname only for an authenticated named bridge installation", async () => {
+  await start(); const { call, json } = await helper();
+  expect((await call("GET", "/peer", undefined, null)).status).toBe(401);
+  expect(await json("GET", "/peer")).toEqual({ host: "streamrd" });
+});
+it.each([
+  { networks: { bridge: { IPAddress: "172.17.0.2" } } },
+  { networks: { host: {} } },
+  { networks: { named_bridge: {}, lan: {} } },
+  { networkDriver: "macvlan" },
+  { networkDriver: "overlay" },
+])("leaves bundled access unavailable on unsupported networks: %j", async options => {
+  await start(options); const { json } = await helper();
+  expect(await json("GET", "/peer")).toEqual({ host: null });
+});

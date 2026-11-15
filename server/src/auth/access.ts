@@ -43,6 +43,18 @@ export async function lockRegistration(tx: Prisma.TransactionClient): Promise<vo
   await tx.setting.upsert({ where: { key: "auth.signup.lock" }, create: { key: "auth.signup.lock", value: "1" }, update: { value: "1" } });
 }
 
+/** Retry a rolled-back signup when another SQLite writer temporarily holds the database. */
+export async function registrationTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await db.$transaction(operation, { maxWait: 10000, timeout: 10000 });
+    } catch (error) {
+      if (attempt >= 2 || !(error instanceof Prisma.PrismaClientKnownRequestError) || !["P1008", "P2034"].includes(error.code)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+    }
+  }
+}
+
 export function invitationHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

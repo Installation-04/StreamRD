@@ -1,4 +1,11 @@
 Name,Status,Priority,Milestone,Owner,Acceptance
+Real Radarr and Lidarr link acceptance,Verified locally,P1,v0.27.0,Continuation,All ten CI checks pass on dd3e194 including exactly one authenticated Prowlarr link per application and an unchanged second pass
+Generated add-on logins and Prowlarr application links,Implementation complete,P0,v0.27.0,Claude and continuation,Encrypted logins and repeatable links with owner replacements preserved and overlapping passes coalesced
+Concurrent signup lock recovery,Verified locally,P0,v0.27.0,Continuation,Full backend suites pass with bounded retries preserving policy invitation and bootstrap administrator checks in both products
+Configured qBittorrent add-on connections,Verified locally,P1,v0.27.0,Continuation,Real connection tests for all three apps with owner-only opt-in default privacy existing clients preserved and automatic download removal disabled
+Bundled download-client reachability,Verified locally,P1,v0.27.0,Continuation,dd3e194 real-container CI verifies owner opt-in stable DNS authenticated Sonarr restart persistence and withdrawal closing peer access
+Root folders and actual media import,Backlog,P1,v0.27.x,Community,Reviewed reachable paths and real media download and import acceptance
+Remaining add-on integrations,Backlog,P1,v0.27.x,Community,FlareSolverr Bazarr Seerr Tautulli and Maintainerr configured and checked against real programs
 StreamRD responsive discovery,Done,P0,v0.3.0,Lead integration,Desktop and mobile journeys preserve favorites and profile progress
 Phosphor cockpit refresh,Done,P0,v0.3.0,Lead integration,Readable themes and working search and saved searches
 Mounted media browsing and reviewed bulk export,Done,P0,v0.3.0,Lead integration,Traversal and cursor regressions plus real browser export

@@ -75,7 +75,7 @@ async function ready(url) { for (let attempt = 0; attempt < 120; attempt++) { tr
   }
   const env = { NODE_ENV: "production", PORT: String(ports.api), DATABASE_URL: `file:${path.join(data, "streamrd.db")}`, JWT_SECRET: secret("jwt"), DATA_ENCRYPTION_KEY: secret("data-key"),
     MEDIA_SOURCE_ROOT: path.join(data, "downloads"), MEDIA_LIBRARY_ROOT: path.join(data, "library"), CORS_ORIGINS: "", TRANSCODE_ALLOW_PRIVATE_HOSTS: "true",
-    TMDB_DEFAULT_API_KEY: "lab-tmdb-key-0123456789", STREAMRD_LAB: "1", LAB_ORIGIN: `http://127.0.0.1:${ports.origin}`, LAB_MEDIA: media, LAB_ORIGIN_PORT: String(ports.origin), LAB_OUTBOUND_LOG: path.join(lab, "outbound.log") };
+    TMDB_DEFAULT_API_KEY: "lab-tmdb-key-0123456789", STREAMRD_LAB: "1", BUNDLED_QBIT_HOST: "streamrd-lab-fixture", BUNDLED_QBIT_ACCESS_ACTIVE: "false", LAB_ORIGIN: `http://127.0.0.1:${ports.origin}`, LAB_MEDIA: media, LAB_ORIGIN_PORT: String(ports.origin), LAB_OUTBOUND_LOG: path.join(lab, "outbound.log") };
   fs.mkdirSync(env.MEDIA_SOURCE_ROOT, { recursive: true });
   run(server, process.execPath, ["scripts/prepare-db.cjs"], env);
   if (process.env.LAB_HELPER !== "0") {
