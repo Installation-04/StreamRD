@@ -272,6 +272,7 @@ async function main() {
       await until("the viewer's setup page", async () => /Server-managed playback/.test(await friend.text()), 20_000, 300);
       assert.doesNotMatch(await friend.text(), /private debrid library/i, "a viewer is not sent to import from a debrid account");
       await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
+      assert.equal(await friend.page.getByRole("link", { name: "Apps", exact: true }).count(), 0, "the Apps tab is for administrators only");
       // One search covers movies and shows, and a title is requested with one click on its card, as on a request page.
       await friend.page.getByLabel("Search movies or shows", { exact: true }).fill("Cosmos Laundromat");
       assert.equal(await friend.page.getByRole("combobox", { name: /^Media type/ }).inputValue(), "all", "the search covers movies and shows unless told otherwise");
@@ -425,6 +426,16 @@ async function main() {
     });
 
     await step("An add-on (Sonarr) is installed from the marketplace page: its log follows the download, it opens, stops, starts again and is removed", async () => {
+      // The add-ons are one tab away from anywhere: an Apps tab in the top bar, for administrators, lit on its own pages and not on Admin's.
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      const nav = owner.page.getByRole("navigation", { name: "Main navigation" });
+      assert.equal(await nav.getByRole("link", { name: "Apps", exact: true }).getAttribute("href"), "/admin/addons");
+      assert.equal(await nav.getByRole("link", { name: "Admin", exact: true }).getAttribute("aria-current"), "page", "Admin is lit on its own pages");
+      await nav.getByRole("link", { name: "Apps", exact: true }).click();
+      await owner.page.waitForURL(/\/admin\/addons$/);
+      assert.equal(await nav.getByRole("link", { name: "Apps", exact: true }).getAttribute("aria-current"), "page", "Apps is lit on the add-ons page");
+      assert.equal(await nav.getByRole("link", { name: "Admin", exact: true }).getAttribute("aria-current"), null, "Admin is not lit on the add-ons page");
+      await owner.shot("apps-tab");
       await owner.page.goto(`${base}/admin/addons`, { waitUntil: "networkidle" });
       const card = owner.page.getByRole("article", { name: "Sonarr", exact: true }), status = () => card.getByRole("status", { name: "Sonarr status" }).innerText().catch(() => "");
       await until("the marketplace to list Sonarr", async () => (await status()) === "Not installed", 20_000, 300);

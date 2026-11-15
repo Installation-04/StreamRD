@@ -17,7 +17,9 @@ export function libraryMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | 
 }
 /** Local configuration only; never resolves or tests an upstream connection. */
 export async function sharedMediaWhere(library: Pick<SharedLibrary, "sourceUserId" | "mediaType">, limit: number | null = null) {
-  return { AND: [libraryMediaWhere(library), await currentAccountMediaFilter(library.sourceUserId), ageWhere(limit)] } satisfies Prisma.AccountMediaWhereInput;
+  // A title whose link stopped working is not shown to anyone who watches: it comes back by itself when the link works again or a replacement arrives.
+  // The owner still finds it, with the reason, in Imports under "Needs attention".
+  return { AND: [libraryMediaWhere(library), await currentAccountMediaFilter(library.sourceUserId), ageWhere(limit), { health: { not: "broken" } }] } satisfies Prisma.AccountMediaWhereInput;
 }
 export async function visibleSharedLibrary(userId: string, libraryId: string) {
   const library = await db.sharedLibrary.findFirst({ where: { id: libraryId, ...visibleSharedLibraryWhere(userId) } });

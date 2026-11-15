@@ -1,12 +1,13 @@
 import type { CSSProperties } from "react";
 
-export type IconName = "play" | "search" | "home" | "heart" | "grid" | "arrow" | "clock" | "user" | "settings" | "sun" | "moon" | "screen" | "logout" | "film" | "plus" | "chevron";
+export type IconName = "play" | "search" | "home" | "heart" | "grid" | "arrow" | "clock" | "user" | "settings" | "sun" | "moon" | "screen" | "logout" | "film" | "plus" | "chevron" | "apps";
 const paths: Record<IconName, string> = {
   play: "m9 5 11 7-11 7V5Z",
   search: "m21 21-4.35-4.35M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0Z",
   home: "m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10Z",
   heart: "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z",
   grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  apps: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6",
   arrow: "M4 12h16m-6-6 6 6-6 6",
   clock: "M12 8v4l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   user: "M20 21v-2a7 7 0 0 0-14 0v2m10-14a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z",

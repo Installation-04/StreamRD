@@ -49,6 +49,20 @@ function boxes(data: Uint8Array, from = 0, to = data.length): Box[] {
 const child = (data: Uint8Array, box: Box, type: string, skip = 0) => boxes(data, box.body + skip, box.end).find(entry => entry.type === type);
 const hex = (value: number) => value.toString(16).toUpperCase().padStart(2, "0");
 
+/**
+ * The type to open the buffer with. The one the file declares, or, when the browser will not take it, the same codecs with another H.264 level
+ * (or the common High profile): a type string only says what the buffer may be given, while the picture is decoded from the stream itself, and a
+ * browser that is fussy about one level of a stream it plays well is common. Null when none of them is accepted.
+ */
+export function usableType(declared: string, supported: (type: string) => boolean): string | null {
+  if (supported(declared)) return declared;
+  const found = /avc[13]\.([0-9a-f]{4})([0-9a-f]{2})/i.exec(declared); if (!found) return null;
+  for (const alternative of [found[1] + "28", found[1] + "1f", "640028"]) {
+    const type = declared.replace(found[0], found[0].slice(0, found[0].length - 6) + alternative);
+    if (type !== declared && supported(type)) return type;
+  }
+  return null;
+}
 /** The MIME type, with codecs, of what a fragmented MP4 header declares; null when it is not something every browser plays (H.264 with AAC, MP3 or Opus). */
 export function codecsOf(init: Uint8Array): string | null {
   const moov = boxes(init).find(box => box.type === "moov"); if (!moov) return null;
@@ -172,8 +186,9 @@ export function startMse(options: MseOptions): MsePlayback {
           // The header is done once its movie box is whole.
           const list = boxes(held), moov = list.find(box => box.type === "moov");
           if (moov) {
-            initEnd = moov.end; const code = codecsOf(held.subarray(0, initEnd));
-            if (!code || !MediaSource.isTypeSupported(code)) { void reader.cancel().catch(() => undefined); options.onProblem("unsupported", "This browser cannot play this video's format through its streaming API."); return; }
+            initEnd = moov.end; const declared = codecsOf(held.subarray(0, initEnd)), code = declared ? usableType(declared, type => MediaSource.isTypeSupported(type)) : null;
+            // Said in the log with the codecs asked for, so a refusal can be told apart from a header that has none we know.
+            if (!code) { void reader.cancel().catch(() => undefined); options.onProblem("unsupported", declared ? `This browser refused ${declared.replace(/^video\/mp4; codecs=/, "")} for its streaming API.` : "The video's header names no codecs this player knows."); return; }
             if (!buffer) { buffer = mediaSource.addSourceBuffer(code); mime = code; buffer.mode = "segments"; buffer.addEventListener("error", () => options.onProblem("unsupported", "The browser refused this video's data.")); }
             else if (code !== mime) { if (typeof buffer.changeType !== "function") { options.onProblem("unsupported", "This browser cannot change a video's format part-way."); return; } await idle(); buffer.changeType(code); mime = code; }
             await idle(); try { buffer.abort(); } catch { /* it was not mid-segment */ }
