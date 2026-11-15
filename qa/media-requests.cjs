@@ -58,7 +58,7 @@ module.exports = async function mediaRequests({ product, page, url, api, admin, 
   async function approve(request, destination, libraryId) {
     await page.goto(`${url}/admin/requests`, { waitUntil: 'networkidle' });
     const article = page.getByRole('article', { name: `Request for ${request.name}`, exact: true });
-    await article.getByRole('button', { name: 'Choose release…', exact: true }).click();
+    await article.getByRole('button', { name: /^(Review request|Choose release…)$/ }).click();
     await article.getByRole('combobox', { name: /^Download destination/ }).selectOption(destination);
     if (destination === 'cloud') {
       await article.getByRole('combobox', { name: /^Cloud provider/ }).selectOption('realdebrid');
