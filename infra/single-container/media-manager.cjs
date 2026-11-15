@@ -165,6 +165,7 @@ function createManager(config) {
       const found = response.json, mounts = found.Mounts || [];
       me = {
         id: found.Id, name: String(found.Name || '').replace(/^\//, '') || found.Id, image: found.Image, mounts,
+        networks: Object.keys(found.NetworkSettings?.Networks || {}),
         network: Object.keys(found.NetworkSettings?.Networks || {}).find(network => !['bridge', 'host', 'none'].includes(network)) || '',
         socket: hostPath(mounts, config.socketPath) || config.socketPath,
         labelOptions: (found.HostConfig?.SecurityOpt || []).filter(option => /^label[=:]/.test(option)),
@@ -174,6 +175,17 @@ function createManager(config) {
     throw Object.assign(new Error('StreamRD could not find its own container through Docker. Set STREAMRD_CONTAINER to the container\'s name'), { status: 409 });
   }
   const targetName = async () => config.embedded ? (await self()).name : STREAMRD;
+  // Stable names only resolve on a named bridge shared with the add-ons. Host,
+  // default bridge, macvlan and unknown layouts must not expose a bundled client.
+  async function peerHost() {
+    if (!config.embedded) return null;
+    try {
+      const own = await self();
+      if (!own.network || own.networks.length !== 1 || !/^[a-z0-9][a-z0-9_.-]{0,62}$/i.test(own.name)) return null;
+      const network = await docker('GET', `/networks/${encodeURIComponent(own.network)}`);
+      return network.status === 200 && network.json?.Driver === 'bridge' ? own.name : null;
+    } catch { return null; }
+  }
   async function layout() {
     if (!config.embedded) return { ...fixedLayout(config.hostDir, config.zurg), network: config.network || '' };
     const own = await self();
@@ -546,6 +558,7 @@ function createManager(config) {
         const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
       }
       const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs|autostart|update))?$/.exec(url.pathname);
+      if (request.method === 'GET' && url.pathname === '/peer') return send(200, { host: await peerHost() });
       if (request.method === 'GET' && url.pathname === '/status') return send(200, { servers: await status(), ...(config.embedded ? { embedded: true } : {}) });
       if (!match || !SERVERS[match[1]]) return send(404, { error: 'Unknown server' });
       const name = match[1];

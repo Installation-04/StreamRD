@@ -1,11 +1,12 @@
 import request from "supertest";
+import { Prisma } from "@prisma/client";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { config } from "../src/config";
 import { db } from "../src/db";
 import { signSession } from "../src/auth/jwt";
 import { hashPassword } from "../src/auth/passwords";
 import * as passwords from "../src/auth/passwords";
-import { invitationHash, REGISTRATION_KEY, settleRegistrationDefault } from "../src/auth/access";
+import { invitationHash, REGISTRATION_KEY, registrationTransaction, settleRegistrationDefault } from "../src/auth/access";
 import { app, auth, resetDb } from "./helpers";
 
 let passwordHash: string;
@@ -23,6 +24,28 @@ beforeEach(async () => {
 });
 afterEach(() => { config.adminEmail = originalAdminEmail; vi.restoreAllMocks(); });
 const signupBody = (email="invited@access.test",inviteToken?:string) => ({email,password:"password123",displayName:"Guest",...(inviteToken?{inviteToken}:{})});
+
+it.each(["P1008", "P2034"])("retries a rolled-back registration transaction after %s", async code => {
+  const transaction = vi.spyOn(db, "$transaction").mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError("Synthetic contention", { code, clientVersion: "5.22.0" }));
+  const value = await registrationTransaction(tx => tx.setting.create({ data: { key: "retry-fixture", value: "committed" } }));
+  expect(value.value).toBe("committed");
+  expect(transaction).toHaveBeenCalledTimes(2);
+  expect(await db.setting.count({ where: { key: "retry-fixture" } })).toBe(1);
+});
+
+it("stops retrying registration after three lock timeouts", async () => {
+  const error = new Prisma.PrismaClientKnownRequestError("Synthetic contention", { code: "P1008", clientVersion: "5.22.0" });
+  const transaction = vi.spyOn(db, "$transaction").mockRejectedValue(error);
+  await expect(registrationTransaction(tx => tx.user.count())).rejects.toBe(error);
+  expect(transaction).toHaveBeenCalledTimes(3);
+});
+
+it("does not retry a duplicate-account constraint failure", async () => {
+  const error = new Prisma.PrismaClientKnownRequestError("Synthetic duplicate", { code: "P2002", clientVersion: "5.22.0" });
+  const transaction = vi.spyOn(db, "$transaction").mockRejectedValue(error);
+  await expect(registrationTransaction(tx => tx.user.count())).rejects.toBe(error);
+  expect(transaction).toHaveBeenCalledTimes(1);
+});
 const policy = (mode:"open"|"invite"|"closed") => request(app).put("/api/admin/access").set(auth(admin.token)).send({mode});
 async function invite(email="invited@access.test") {
   const result=await request(app).post("/api/admin/invitations").set(auth(admin.token)).send({email});
