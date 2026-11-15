@@ -13,7 +13,7 @@ const kept: Record<string, string | undefined> = {};
 let admin: TestUser, member: TestUser, servers: http.Server[] = [];
 const NAMES = ["sonarr", "radarr", "lidarr", "bazarr", "seerr", "tautulli", "prowlarr", "flaresolverr", "maintainerr"];
 
-async function helper(running: Record<string, Record<string, unknown>> = {}) {
+async function helper(running: Record<string, Record<string, unknown>> = {}, services: Record<string, string> = {}) {
   const asked: string[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = []; req.on("data", chunk => chunks.push(chunk));
@@ -21,6 +21,7 @@ async function helper(running: Record<string, Record<string, unknown>> = {}) {
       const body = Buffer.concat(chunks).toString("utf8"); asked.push(`${req.method} ${req.url}${body ? ` ${body}` : ""}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       if (req.url === "/status") res.end(JSON.stringify({ servers: running }));
+      else if (req.url === "/services") res.end(JSON.stringify({ services }));
       else if (/\/logs/.test(req.url ?? "")) res.end(JSON.stringify({ deploy: [{ time: "2026-11-12T10:00:00Z", message: "Started." }], container: ["ready"] }));
       else res.end(JSON.stringify({ state: "pulling" }));
     });
@@ -117,4 +118,25 @@ it("says plainly that Docker control is off and does not pretend an add-on start
   expect(listed.body.addons.every((one: { state: string }) => one.state === "unknown")).toBe(true);
   const started = await request(app).post("/api/admin/addons/sonarr/launch").set(auth(admin.token)).send({});
   expect(started.status).toBe(409); expect(started.body.error).toMatch(/Docker control/);
+});
+
+it("shows Zilean and Zurg with their state and what is missing, and starts, stops or restarts them through the helper, for administrators only", async () => {
+  const asked = await helper({}, { zilean: "running", "zilean-db": "running", zurg: "absent", "zurg-rclone": "absent" });
+  const listed = await request(app).get("/api/admin/addons").set(auth(admin.token));
+  const by = Object.fromEntries(listed.body.services.map((one: { name: string }) => [one.name, one]));
+  expect(by.zilean).toMatchObject({ label: "Zilean", state: "running", command: "bash install.sh --zilean", parts: [{ name: "zilean", state: "running" }, { name: "zilean-db", state: "running" }] });
+  expect(by.zurg).toMatchObject({ state: "absent", command: expect.stringContaining("--rd-token") });
+  expect((await request(app).post("/api/admin/addons/services/zilean/restart")).status).toBe(401);
+  expect((await request(app).post("/api/admin/addons/services/zilean/restart").set(auth(member.token))).status).toBe(403);
+  expect((await request(app).post("/api/admin/addons/services/zilean/restart").set(auth(admin.token))).status).toBe(200);
+  expect(asked).toContain("POST /services/zilean/restart");
+  expect(await db.logEvent.count({ where: { message: "Restarted Zilean", type: "admin_action" } })).toBe(1);
+  for (const bad of ["/services/zilean/delete", "/services/plex/stop", "/services/zilean-db/stop"]) expect((await request(app).post(`/api/admin/addons${bad}`).set(auth(admin.token))).status, bad).toBe(404);
+  expect(asked.filter(line => line.includes("plex") || line.includes("delete") || line.includes("zilean-db"))).toEqual([]);
+});
+
+it("says the services are unknown, not absent, when Docker control is off", async () => {
+  process.env.DOCKER_CONTROL_STATE = "off"; delete process.env.MEDIA_MANAGER_URL; delete process.env.MEDIA_MANAGER_TOKEN;
+  const listed = await request(app).get("/api/admin/addons").set(auth(admin.token));
+  expect(listed.body.services.map((one: { state: string }) => one.state)).toEqual(["unknown", "unknown"]);
 });

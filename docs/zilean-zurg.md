@@ -24,8 +24,10 @@ examples) and only removes them after you confirm. Removed names are skipped by 
 [Zilean](https://github.com/iPromKnight/zilean) keeps a searchable copy of Debrid Media Manager's public hash lists and
 serves it as a Torznab feed, which Phosphor can search like Jackett or Prowlarr.
 
+**On by default for a new install** (since v0.30.0). Refuse it with `--no-zilean`; add it to an install that already exists with:
+
 ```bash
-bash install.sh --zilean          # add it to an existing install (re-running is safe)
+bash install.sh --zilean          # re-running is safe
 ```
 
 This adds two containers to your Compose project, `zilean` and `zilean-db` (PostgreSQL 17), with their own named volumes and a
@@ -43,6 +45,8 @@ exercised against real data. Zilean sets its own database connection from a stri
 
 [Zurg](https://github.com/debridmediamanager/zurg-testing) turns a Real-Debrid account into a WebDAV share and rclone mounts it
 as folders. StreamRD then reads real files from `/mnt/zurg` for its optional Plex/Jellyfin exports.
+
+**Turned on by a Real-Debrid token** (since v0.30.0): the Default install asks for it (Enter skips), and `--rd-token` on a new install turns Zurg on with no other option. If the machine cannot do the FUSE mount, a Zurg that was only switched on this way is skipped with a message and everything else is installed; `--zurg` by name still stops with the reason. `--no-zurg` keeps it off. To add it later:
 
 ```bash
 bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_API_TOKEN

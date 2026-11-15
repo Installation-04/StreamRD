@@ -305,6 +305,18 @@ function createManager(config) {
     for (const name of SERVICES) sources.push({ id: `svc:${name}`, state: await stateOfContainer(name) });
     return sources;
   }
+  /** Start, stop or restart one of the installer's optional services (each is a pair: the program and what it needs). Only these four containers. */
+  const SERVICE_SETS = { zilean: ['zilean-db', 'zilean'], zurg: ['zurg', 'zurg-rclone'] };
+  async function controlService(name, action) {
+    const set = SERVICE_SETS[name]; if (!set) throw Object.assign(new Error('Unknown service'), { status: 404 });
+    if (!['start', 'stop', 'restart'].includes(action)) throw Object.assign(new Error('Unknown action'), { status: 400 });
+    if ((await stateOfContainer(set[0])) === 'absent') throw Object.assign(new Error(`${name} is not installed here. The installer adds it (install.sh --${name}).`), { status: 409 });
+    const order = action === 'stop' ? [...set].reverse() : set;   // the database before Zilean, Zurg before its mount, and the other way round on the way down
+    for (const container of order) {
+      const response = await docker('POST', `/containers/${encodeURIComponent(container)}/${action}`);
+      if (![204, 304, 404].includes(response.status)) throw Object.assign(new Error(`Docker could not ${action} ${container} (${response.status})`), { status: 502 });
+    }
+  }
   async function readSource(id, tail) {
     const kind = /^(core|app|svc):([a-z0-9-]{1,30})$/.exec(id);
     if (!kind) return null;
@@ -597,6 +609,9 @@ function createManager(config) {
         if (request.method !== 'POST') return send(405, { error: 'Method not allowed' });
         const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
       }
+      if (request.method === 'GET' && url.pathname === '/services') { const states = {}; for (const name of SERVICES) states[name] = await stateOfContainer(name); return send(200, { services: states }); }
+      const service = /^\/services\/([a-z]+)\/(start|stop|restart)$/.exec(url.pathname);
+      if (service) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await controlService(service[1], service[2]); return send(200, { ok: true }); }
       if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });
       if (request.method === 'GET' && url.pathname === '/logs/read') {
         const id = url.searchParams.get('source') || 'all', tail = Math.max(1, Math.min(Number(url.searchParams.get('tail')) || 200, 1000));

@@ -401,3 +401,21 @@ it("lists and reads the output of what StreamRD runs, split by process, with sec
   for (const bad of ["svc:not-ours", "svc:streamrd", "app:../x", "core:", "other", "svc:zurg;x"]) expect((await call("GET", `/logs/read?source=${encodeURIComponent(bad)}`)).status, bad).toBe(404);
   expect((await call("GET", "/logs/sources", undefined, null)).status).toBe(401);
 });
+
+it("shows the state of Zilean and Zurg and starts, stops or restarts them with what they need, in order, and nothing else", async () => {
+  await start(); const { json, call } = await helper();
+  const add = (name: string, running: boolean) => docker.boxes.push({ id: `${name}`.padEnd(64, "a").slice(0, 64), name, image: `sha256:${name}`, running, alive: true, status: running ? "running" : "exited", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec: { Image: name, Labels: {} }, output: [] });
+  add("zilean", true); add("zilean-db", true); add("not-a-service", true);
+  expect((await json("GET", "/services")).services).toEqual({ zilean: "running", "zilean-db": "running", zurg: "absent", "zurg-rclone": "absent" });
+  expect((await call("POST", "/services/zilean/stop")).status).toBe(200);
+  expect(docker.calls.filter(line => line.startsWith("POST /containers/zilean")).slice(-2)).toEqual(["POST /containers/zilean/stop", "POST /containers/zilean-db/stop"]);   // Zilean first, then its database
+  expect((await json("GET", "/services")).services).toMatchObject({ zilean: "stopped", "zilean-db": "stopped" });
+  expect((await call("POST", "/services/zilean/start")).status).toBe(200);
+  expect(docker.calls.filter(line => line.startsWith("POST /containers/zilean")).slice(-2)).toEqual(["POST /containers/zilean-db/start", "POST /containers/zilean/start"]);   // the database first
+  expect((await call("POST", "/services/zurg/start")).status).toBe(409);   // not installed: the message says how to add it
+  expect(await (await call("POST", "/services/zurg/start")).json()).toMatchObject({ error: expect.stringMatching(/install\.sh --zurg/) });
+  for (const bad of ["/services/not-a-service/start", "/services/zilean/delete", "/services/streamrd/stop", "/services/zilean-db/stop"]) expect((await call("POST", bad)).status, bad).toBe(404);
+  expect(docker.calls.some(line => line.includes("not-a-service"))).toBe(false);
+  expect((await call("GET", "/services/zilean/stop")).status).toBe(405);
+  expect((await call("POST", "/services/zilean/stop", undefined, null)).status).toBe(401);
+});

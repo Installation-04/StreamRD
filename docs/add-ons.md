@@ -102,3 +102,7 @@ When Bazarr runs, StreamRD gives it the address, port and API key of each runnin
 
 ## Music
 With Lidarr running, **Discover** gets a **Music (albums)** choice. Search an artist and an album ("Radiohead OK Computer"), press **Request**, and Lidarr adds the album, monitors it, searches the indexers Prowlarr shares with it and downloads through the qBittorrent it is linked to, into `data/media/music`. The result says *Requested* once it is asked for and *In your library* once Lidarr has every track. Asking again changes nothing. Lidarr looks albums up in its own online catalogue, so no account or key is needed; if that service does not answer, the page says so. Music is not followed on **My requests** yet, and a finished album is for Lidarr's folder: point Plex or Jellyfin at `music` to play it.
+
+## Zilean and Zurg
+Admin → Add-ons also has a **Search and library files** row with **Zilean** and **Zurg**. They come from the installer (Zilean needs its own database, Zurg needs a mount on the machine), so the cards show their state, offer **Start**, **Restart** and **Stop** for the containers the installer made, and link to **See its log** in Admin → Monitor. When one is not installed the card gives the exact installer command and a copy button. A new install has Zilean by default and Zurg when a Real-Debrid token is given; see [Zilean and Zurg](zilean-zurg.md).
+
