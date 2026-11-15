@@ -276,7 +276,16 @@ wizard() {
     case "$choice" in 1|2|3) break ;; *) say "  Enter 1, 2 or 3." ;; esac
   done
   [ "$choice" != 3 ] || { say "  Cancelled. Nothing was changed."; exit 0; }
-  [ "$choice" = 2 ] || return 0
+  if [ "$choice" != 2 ]; then
+    # Zurg shows your Real-Debrid library as real files, which is what Plex and Jellyfin read, so it is offered in the Default install too. Enter skips it.
+    if [ -z "$ZURG" ] && [ -z "$RD_TOKEN" ] && [ "$(uname -s)" = Linux ]; then
+      say ""
+      say "  Real-Debrid: StreamRD can show your Real-Debrid library as files for Plex and Jellyfin (Zurg), and Zilean is added to search for releases."
+      printf '  Real-Debrid API token from https://real-debrid.com/apitoken (not shown; Enter to skip): ' >/dev/tty
+      IFS= read -rs RD_TOKEN </dev/tty || RD_TOKEN=""; printf '\n' >/dev/tty
+    fi
+    return 0
+  fi
 
   ask "Install folder" "$DIR"; DIR="$REPLY"
   [ -n "$PORT" ] || { ask_port "StreamRD web port" 8080; PORT="$REPLY"; }
@@ -367,7 +376,7 @@ docker_socket_path() {
 write_zilean() {
   cat > "$DIR/docker-compose.zilean.yml" <<'EOF'
 # Zilean: a self-hosted index of Debrid Media Manager's cached torrents, exposed as a Torznab feed.
-# Phosphor registers it automatically (ZILEAN_URL). The first import can take a while and uses CPU and disk.
+# StreamRD (and Phosphor) use it automatically for release search (ZILEAN_URL). The first import can take a while and uses CPU and disk.
 services:
   streamrd:
     environment:
@@ -768,17 +777,26 @@ main() {
   [ -z "$JWT_SECRET" ] || set_env STREAMRD_JWT_SECRET "$JWT_SECRET" yes
 
   # Optional add-ons: each is an overlay file named in COMPOSE_FILE, so a plain `docker compose pull && up -d` keeps them.
-  local use_zilean=false use_zurg=false
+  local use_zilean=false use_zurg=false zurg_by_default=false
   [ "$ZILEAN" = on ] && use_zilean=true
   [ -z "$ZILEAN" ] && env_value COMPOSE_FILE | grep -q zilean && use_zilean=true
   [ "$ZURG" = on ] && use_zurg=true
   [ -z "$ZURG" ] && env_value COMPOSE_FILE | grep -q zurg && use_zurg=true
+  # On by default for a new install: Zilean finds releases for requests, and Zurg mounts the Real-Debrid library for Plex and Jellyfin once a token is
+  # given (Linux only). --no-zilean and --no-zurg keep them off; an install that already exists is left as it is.
+  if [ "$FIRST" = true ]; then
+    [ -n "$ZILEAN" ] || use_zilean=true
+    [ -n "$ZURG" ] || { [ -n "$RD_TOKEN" ] && [ "$(uname -s)" = Linux ] && { use_zurg=true; zurg_by_default=true; }; }
+  fi
   if [ "$use_zilean" = true ]; then
     write_zilean
     [ -n "$(env_value ZILEAN_DB_PASSWORD)" ] || set_env ZILEAN_DB_PASSWORD "$( (openssl rand -hex 16 2>/dev/null) || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   fi
-  if [ "$use_zurg" = true ]; then write_zurg; prepare_zurg_mount; fi
-  [ "$use_zilean" != true ] || [ "$(env_value ENABLE_PHOSPHOR)" != false ] || log "Zilean is added to Phosphor, which is not running. Run Phosphor too with --phosphor."
+  if [ "$zurg_by_default" = true ]; then
+    # Switched on by the default (a token was given), not asked for by name: a machine that cannot do the FUSE mount carries on without it.
+    if ! ( prepare_zurg_mount ); then log "Zurg was not set up (see above). StreamRD is installed without it; run install.sh --zurg later to add it."; use_zurg=false; fi
+    [ "$use_zurg" != true ] || write_zurg
+  elif [ "$use_zurg" = true ]; then write_zurg; prepare_zurg_mount; fi
   local use_jellyfin=false use_plex=false
   case "$MEDIA_SERVER" in
     jellyfin) use_jellyfin=true ;; plex) use_plex=true ;; both) use_jellyfin=true; use_plex=true ;; none) ;;

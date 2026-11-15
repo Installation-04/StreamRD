@@ -51,10 +51,23 @@ async function helperStatus(): Promise<Record<string, HelperServer> | null> {
   try { return (await manager<{ servers: Record<string, HelperServer> }>("GET", "/status")).servers; } catch { return null; }
 }
 
+/** Zilean and Zurg are installed and updated by the installer (they need a database, or a mount of the machine's own), so here they are shown, controlled and linked to their logs. */
+export const SERVICES = {
+  zilean: { label: "Zilean", blurb: "Searches the cached torrents that Debrid Media Manager shares, so a request finds its release without a paid indexer. StreamRD uses it by itself once it runs; the first import of its lists takes a while.", containers: ["zilean", "zilean-db"], command: "bash install.sh --zilean", home: "https://github.com/iPromKnight/zilean", licence: "Apache-2.0" },
+  zurg: { label: "Zurg", blurb: "Shows your Real-Debrid library as real files (a movies and a shows folder) that Plex and Jellyfin can read. Linux only; it mounts a folder on the machine.", containers: ["zurg", "zurg-rclone"], command: "bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_TOKEN", home: "https://github.com/debridmediamanager/zurg-testing", licence: "see its page" },
+} as const;
+export type ServiceName = keyof typeof SERVICES;
+async function serviceStates(): Promise<Record<string, string> | null> {
+  if (dockerControl().mode === "off") return null;
+  try { return (await manager<{ services: Record<string, string> }>("GET", "/services")).services; } catch { return null; }
+}
+
 export async function addonsView() {
-  const [stored, status] = await Promise.all([readStored(), helperStatus()]), control = dockerControl();
+  const [stored, status, states] = await Promise.all([readStored(), helperStatus(), serviceStates()]), control = dockerControl();
   return {
     control: { mode: control.mode, reason: control.reason }, groups: GROUPS,
+    services: (Object.keys(SERVICES) as ServiceName[]).map(name => { const one = SERVICES[name], mine = states?.[one.containers[0]] ?? (states ? "absent" : "unknown");
+      return { name, label: one.label, blurb: one.blurb, command: one.command, home: one.home, licence: one.licence, state: mine, parts: one.containers.map(part => ({ name: part, state: states?.[part] ?? (states ? "absent" : "unknown") })) }; }),
     addons: NAMES.map(name => {
       const entry = CATALOG[name], found = status?.[name];
       return { name, label: entry.label, group: entry.group, blurb: entry.blurb, home: entry.home, licence: entry.licence, ui: entry.ui, needs: entry.needs ?? null,
@@ -72,6 +85,14 @@ const guard = (run: Parameters<typeof asyncHandler>[0]) => asyncHandler(async (r
 const limit = rateLimit({ windowMs: 60_000, max: 30 });
 addonsRouter.get("/", guard(async (_req, res) => { res.json(await addonsView()); }));
 /** Install it, or start it again: made from the same fixed specification each time, so its settings under config/ carry over. */
+/** Start, stop or restart Zilean or Zurg (with what they need), when the installer has put them there. */
+addonsRouter.post("/services/:service/:action", limit, guard(async (req, res) => {
+  const name = req.params.service as string, action = req.params.action as string;
+  if (!(name in SERVICES) || !["start", "stop", "restart"].includes(action)) { res.status(404).json({ error: "Unknown service." }); return; }
+  await manager("POST", `/services/${name}/${action}`);
+  void logEvent("info", "admin_action", `${action === "start" ? "Started" : action === "stop" ? "Stopped" : "Restarted"} ${SERVICES[name as ServiceName].label}`, { userId: req.session!.sub }).catch(() => undefined);
+  res.json(await addonsView());
+}));
 addonsRouter.post("/:addon/launch", limit, guard(async (req, res) => {
   const name = req.params.addon as string;
   const body = parseBody(z.object({ port: port.optional(), autostart: z.boolean().optional() }).strict(), req.body ?? {}, res); if (!body) return;
