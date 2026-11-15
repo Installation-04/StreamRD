@@ -29,6 +29,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.27.1 | Root folders for Sonarr, Radarr and Lidarr, FlareSolverr in Prowlarr, Bazarr pointed at Sonarr and Radarr | S | none |
 | v0.28.0 | Music: search albums and request one with a click, through the Lidarr from Admin → Add-ons | M | none |
 | v0.28.1 | The episode list marks what you have watched: a check on each finished episode, a thin bar on one you began, and how many of a season are done | S | none |
+| v0.28.3 | A waiting request is approved or declined in one click from its card; choosing the release stays one step away | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |

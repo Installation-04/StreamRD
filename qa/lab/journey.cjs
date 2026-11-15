@@ -311,7 +311,11 @@ async function main() {
       await owner.page.getByRole("button", { name: "Add indexer" }).click();
       await until("the indexer to be added", async () => /Indexer added\. Working/.test(await owner.text()), 30_000);
       await owner.page.goto(`${base}/admin/requests`, { waitUntil: "networkidle" });
-      await owner.page.getByRole("button", { name: "Review request" }).click();
+      // A waiting request can be approved or declined in one click from its card; choosing the release stays one step away.
+      await owner.page.getByRole("button", { name: /^Approve /, exact: false }).first().waitFor();
+      assert.ok(await owner.page.getByRole("button", { name: /^Decline / }).first().isVisible(), "a waiting request can be declined from its card");
+      await owner.shot("request-quick-actions");
+      await owner.page.getByRole("button", { name: "Choose release…" }).click();
       await owner.page.getByRole("button", { name: "Find releases" }).click();
       const page = await until("the releases", async () => { const now = await owner.text(); return /Best match/.test(now) ? now : null; }, 30_000);
       assert.match(page, /Cosmos\.Laundromat\.2015\.1080p\.WEB-DL\.H264\.AAC-LAB \/ ★ Best match/);
