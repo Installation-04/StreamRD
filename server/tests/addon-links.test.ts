@@ -32,6 +32,7 @@ it("gives each add-on a login of its own making and tells Prowlarr about Sonarr,
   const sonarr = await serve((req, body, res) => {
     if (req.url === "/ping") return json(res, { status: "OK" });
     if (req.headers["x-api-key"] !== KEY) return json(res, {}, 401);
+    if (req.url === "/api/v3/rootfolder") return json(res, [{ path: "/data/media/tv" }]);   // already has one
     if (req.url === "/api/v3/config/host" && req.method === "GET") return json(res, host);
     if (req.url === "/api/v3/config/host/1" && req.method === "PUT") { Object.assign(host, JSON.parse(body)); return json(res, host); }
     json(res, {}, 404);

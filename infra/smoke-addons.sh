@@ -112,8 +112,8 @@ for entry in "${ADDONS[@]}"; do
   docker exec "$name" sh -c "ls /config/$addon" >/dev/null 2>&1 || [ "$addon" = flaresolverr ] || fail "removing $addon took its settings with it"
   docker images --format '{{.Repository}} {{.ID}}' | awk -v a="/$addon" 'index($1, a) {print $2}' | xargs -r docker rmi >/dev/null 2>&1 || true   # keep the runner's disk free for the next one
 done
-say "Prowlarr, Sonarr, Radarr and Lidarr: signed in and linked by StreamRD, against the real programs"
-for addon in prowlarr sonarr radarr lidarr; do
+say "Prowlarr, Sonarr, Radarr, Lidarr and Bazarr: signed in and linked by StreamRD, against the real programs"
+for addon in prowlarr sonarr radarr lidarr bazarr; do
   tries=0; waited=0; body='{}'
   if [ "$addon" != prowlarr ]; then
     port="$(node -e 'console.log(require("./infra/single-container/media-manager.cjs").SERVERS[process.argv[1]].port)' "$addon")"
@@ -136,6 +136,11 @@ for attempt in $(seq 1 40); do
   fi
   sleep 6
 done
+if [ "$linked" != yes ]; then
+  echo "-- bazarr settings folder (keys redacted)" >&2
+  docker exec "$name" sh -c 'ls -la /config/bazarr /config/bazarr/config /config/bazarr/config/config 2>&1; for f in /config/bazarr/config/config/config.yaml /config/bazarr/config/config/config.ini; do [ -f "$f" ] && { echo "$f"; grep -n -i -B1 "apikey" "$f" | sed -E "s/(apikey[:= ]+).*/\1<redacted>/I"; }; done' >&2 || true
+  curl -s -o /dev/null -w 'bazarr ping: %{http_code}\n' "http://127.0.0.1:16767/api/system/ping" >&2 || true
+fi
 [ "$linked" = yes ] || fail "the add-ons were not linked: $report"
 for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18686 v1"; do
   read -r addon label shown api <<< "$entry"
@@ -143,11 +148,15 @@ for entry in "sonarr Sonarr 18989 v3" "radarr Radarr 17878 v3" "lidarr Lidarr 18
   key="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' "/config/$addon/config/config.xml" | sed 's/<[^>]*>//g')"
   [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$shown/api/$api/system/status")" = 401 ] || fail "$label answers without a key or a login"
   [ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/system/status")" = 200 ] || fail "$label does not accept its own key after the login was set"
+  curl -fsS -H "X-Api-Key: $key" "http://127.0.0.1:$shown/api/$api/rootfolder" | jq -e 'length == 1 and (.[0].path | startswith("/data/media/"))' >/dev/null || fail "$label was not given a root folder under the data folder"
 done
-report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
+report="$(call POST /api/admin/addons/link)"; echo "$report" | jq -e '(.logins | length) == 0 and (.linked | length) == 0 and (.bazarr | length) == 0 and (.waiting | length) == 0 and (.errors | length) == 0' >/dev/null || fail "a second pass changed something: $report"
 curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq -e '
   length == 3 and (map(.implementation) | sort == ["Lidarr", "Radarr", "Sonarr"])
 ' >/dev/null || fail "the second pass changed the application list"
+bkey="$(docker exec "$name" sh -c "grep -h -o -E 'apikey[:=] *[A-Za-z0-9]+' /config/bazarr/config/config/config.yaml /config/bazarr/config/config/config.ini 2>/dev/null | head -1" | sed -E 's/apikey[:=] *//')"
+[ -n "$bkey" ] || fail "Bazarr wrote no API key"
+curl -fsS -H "X-API-KEY: $bkey" "http://127.0.0.1:16767/api/system/settings" | jq -e '(.sonarr.apikey | length > 0) and (.radarr.apikey | length > 0)' >/dev/null || fail "Bazarr was not pointed at Sonarr and Radarr"
 echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
 say "Sonarr, Radarr and Lidarr connect to real qBittorrent without deleting completed or failed downloads"
 # Only this disposable fixture exposes the bundled client on the container's

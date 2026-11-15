@@ -126,7 +126,85 @@ export async function linkToProwlarr(prowlarr: { base: string; key: string }, ap
   return true;
 }
 
-export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; errors: string[] }
+const MEDIA_FOLDERS = { sonarr: "tv", radarr: "movies", lidarr: "music" } as const;
+/**
+ * Gives Sonarr, Radarr and Lidarr a place to put what they import, under StreamRD's data folder (the one they share with the downloads), when
+ * they have no root folder yet. A root folder someone added is left alone. The folder is made here first: the add-ons refuse one that is not there.
+ */
+export async function ensureRootFolder(name: keyof typeof MEDIA_FOLDERS, base: string, key: string, dataRoot = process.env.DATA_DIR || "/data"): Promise<boolean> {
+  const existing = await call<unknown[]>(base, name, key, "GET", "/rootfolder");
+  if (Array.isArray(existing) && existing.length) return false;
+  const folder = path.join(dataRoot, "media", MEDIA_FOLDERS[name]); fs.mkdirSync(folder, { recursive: true });
+  const body: Record<string, unknown> = { path: folder };
+  if (name === "lidarr") {   // Lidarr's root folder carries the defaults for what is added under it
+    const [quality, metadata] = await Promise.all([call<Array<{ id: number }>>(base, name, key, "GET", "/qualityprofile"), call<Array<{ id: number }>>(base, name, key, "GET", "/metadataprofile")]);
+    if (!quality[0] || !metadata[0]) throw new Error("lidarr has no quality or metadata profile to give its root folder");
+    Object.assign(body, { name: "Music", defaultQualityProfileId: quality[0].id, defaultMetadataProfileId: metadata[0].id, defaultMonitorOption: "all", defaultNewItemMonitorOption: "all", defaultTags: [] });
+  }
+  await call(base, name, key, "POST", "/rootfolder", body);
+  void logEvent("info", "system", `${SERVARR[name].implementation} was given ${folder} to keep what it imports`).catch(() => undefined);
+  return true;
+}
+/** Tells Prowlarr about FlareSolverr as a proxy, under a tag of the same name: an indexer behind a browser check is given that tag. */
+export async function ensureFlareSolverr(prowlarr: { base: string; key: string }, host: string): Promise<boolean> {
+  const proxies = await call<Array<{ implementation?: string }>>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/indexerProxy");
+  if (proxies.some(entry => entry.implementation === "FlareSolverr")) return false;
+  const schemas = await call<Schema[]>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/indexerProxy/schema");
+  const schema = schemas.find(entry => entry.implementation === "FlareSolverr"); if (!schema) throw new Error("Prowlarr has no FlareSolverr proxy type");
+  const tags = await call<Array<{ id: number; label: string }>>(prowlarr.base, "prowlarr", prowlarr.key, "GET", "/tag");
+  const tag = tags.find(entry => entry.label === "flaresolverr") ?? await call<{ id: number }>(prowlarr.base, "prowlarr", prowlarr.key, "POST", "/tag", { label: "flaresolverr" });
+  const values: Record<string, unknown> = { host, requestTimeout: 60 };
+  await call(prowlarr.base, "prowlarr", prowlarr.key, "POST", "/indexerProxy", {
+    name: "FlareSolverr", implementation: schema.implementation, configContract: schema.configContract, tags: [tag.id],
+    fields: schema.fields.map(field => field.name in values ? { ...field, value: values[field.name] } : field),
+  });
+  void logEvent("info", "system", "Prowlarr can reach indexers behind a browser check through FlareSolverr (give such an indexer the flaresolverr tag)").catch(() => undefined);
+  return true;
+}
+
+/** Bazarr keeps its API key in its settings folder (config/config/config.yaml, or config.ini on older versions). */
+export function bazarrKey(root = process.env.CONFIG_DIR || process.env.DATA_DIR || "/data"): string {
+  for (const folder of [["config", "config"], ["config"]]) for (const file of ["config.yaml", "config.ini"]) {   // Bazarr keeps them in <its folder>/config/config
+    try { const found = /^\s*apikey\s*[:=]\s*['"]?([A-Za-z0-9]{16,64})['"]?\s*$/m.exec(fs.readFileSync(path.join(root, "bazarr", ...folder, file), "utf8")); if (found) return found[1]; } catch { /* try the next */ }
+  }
+  return "";
+}
+/** Where Bazarr answers: the address from the probe order used for the others. */
+async function reachBazarr(address?: string): Promise<string | null> {
+  const list = [process.env.BAZARR_URL, "http://streamrd-bazarr:6767", address ? `http://${address.includes(":") ? `[${address}]` : address}:6767` : undefined]
+    .filter((value): value is string => Boolean(value)).map(value => value.replace(/\/+$/, ""));
+  for (const base of list) {
+    try { const response = await fetch(`${base}/api/system/ping`, { signal: AbortSignal.timeout(3000), redirect: "manual" }); await response.body?.cancel(); if (response.status < 500) return base; /* any answer means it is up */ } catch { /* next */ }
+  }
+  return null;
+}
+/**
+ * Tells Bazarr where Sonarr and Radarr are (address, port, API key) when it has none yet, and turns them on. A source someone already
+ * filled in is left alone. Done through Bazarr's own settings API, with the addresses that passed the probe.
+ */
+export async function ensureBazarrSources(bazarr: { base: string; key: string }, sources: Partial<Record<"sonarr" | "radarr", { base: string; key: string }>>): Promise<string[]> {
+  const headers = { "X-API-KEY": bazarr.key, Accept: "application/json" };
+  const current = await fetch(`${bazarr.base}/api/system/settings`, { headers, signal: AbortSignal.timeout(10_000), redirect: "error" });
+  if (!current.ok) { await current.body?.cancel(); throw new Error(`bazarr answered ${current.status} to GET /api/system/settings`); }
+  const settings = await current.json() as Record<string, Record<string, unknown> | undefined>;
+  const form = new URLSearchParams(), done: string[] = [];
+  for (const name of ["sonarr", "radarr"] as const) {
+    const source = sources[name]; if (!source) continue;
+    const have = settings[name]; if (have && typeof have.apikey === "string" && have.apikey) continue;
+    const url = new URL(source.base);
+    form.set(`settings-${name}-ip`, url.hostname.replace(/^\[|\]$/g, "")); form.set(`settings-${name}-port`, url.port || (url.protocol === "https:" ? "443" : "80"));
+    form.set(`settings-${name}-apikey`, source.key); form.set(`settings-${name}-ssl`, url.protocol === "https:" ? "true" : "false"); form.set(`settings-${name}-base_url`, "/");
+    form.set(`settings-general-use_${name}`, "true"); done.push(name);
+  }
+  if (!done.length) return done;
+  const saved = await fetch(`${bazarr.base}/api/system/settings`, { method: "POST", headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" }, body: form.toString(), signal: AbortSignal.timeout(15_000), redirect: "error" });
+  await saved.body?.cancel();
+  if (!saved.ok) throw new Error(`bazarr answered ${saved.status} to POST /api/system/settings`);
+  void logEvent("info", "system", `Bazarr now looks at ${done.join(" and ")} for what to find subtitles for`).catch(() => undefined);
+  return done;
+}
+
+export interface LinkReport { logins: ServarrName[]; linked: ServarrName[]; waiting: ServarrName[]; downloadClients: DownloadApp[]; downloadClientWaiting: DownloadApp[]; rootFolders: string[]; flaresolverr: boolean; bazarr: string[]; errors: string[] }
 let linking: Promise<LinkReport> | undefined;
 /** Manual requests and the background timer share one pass so credentials and links cannot race. */
 export function linkAddons(): Promise<LinkReport> {
@@ -135,7 +213,7 @@ export function linkAddons(): Promise<LinkReport> {
 }
 /** One pass over every Servarr add-on that is running: a login for each, and Prowlarr told about the others. */
 async function linkAddonsPass(): Promise<LinkReport> {
-  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], errors: [] };
+  const report: LinkReport = { logins: [], linked: [], waiting: [], downloadClients: [], downloadClientWaiting: [], rootFolders: [], flaresolverr: false, bazarr: [], errors: [] };
   if (dockerControl().mode === "off") return report;
   let status: Record<string, { state: string; address?: string }> = {};
   try { status = (await manager<{ servers: typeof status }>("GET", "/status")).servers; } catch { return report; }
@@ -165,6 +243,20 @@ async function linkAddonsPass(): Promise<LinkReport> {
       if (result === "set") report.downloadClients.push(name);
       if (result === "local-only") report.downloadClientWaiting.push(name);
     } catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  for (const name of ["sonarr", "radarr", "lidarr"] as const) {
+    const one = up[name]; if (!one) continue;
+    try { if (await ensureRootFolder(name, one.base, one.key)) report.rootFolders.push(name); } catch (error) { report.errors.push(`${name}: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  if (prowlarr && status.flaresolverr?.state === "running") {
+    try { report.flaresolverr = await ensureFlareSolverr(prowlarr, `http://${status.flaresolverr.address ?? "streamrd-flaresolverr"}:8191`); }
+    catch (error) { report.errors.push(`flaresolverr: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
+  }
+  if (status.bazarr?.state === "running" && (up.sonarr || up.radarr)) {
+    const key = bazarrKey(), base = key ? await reachBazarr(status.bazarr.address) : null;
+    if (!key || !base) report.waiting.push("bazarr" as ServarrName);
+    else try { report.bazarr = await ensureBazarrSources({ base, key }, { sonarr: up.sonarr, radarr: up.radarr }); }
+    catch (error) { report.errors.push(`bazarr: ${error instanceof Error ? error.message : "failed"}`.slice(0, 200)); }
   }
   return report;
 }
