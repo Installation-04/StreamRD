@@ -44,8 +44,8 @@ async function ownedLibrary(req: Request) {
   return library;
 }
 /** Withhold a stale page if account bindings or item eligibility changed while decorating it. */
-async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[], limit: number | null) {
-  const freshWhere = await sharedMediaWhere(library, limit);
+async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[], limit: number | null, includeBroken = false) {
+  const freshWhere = await sharedMediaWhere(library, limit, includeBroken);
   if (JSON.stringify(freshWhere) !== JSON.stringify(originalWhere)) throw new AccountLibraryError("Shared library account changed. Refresh and try again.", 409);
   if (itemIds.length && await db.accountMedia.count({ where: { id: { in: itemIds }, AND: [freshWhere] } }) !== itemIds.length) throw new AccountLibraryError("Shared library items changed. Refresh and try again.", 409);
 }
@@ -143,7 +143,7 @@ for (const method of ["put", "delete"] as const) {
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type, attention } = parse(list, req.query), admin = req.session!.role === "admin";
-  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
+  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit, Boolean(attention && admin));   // only the administrator's "needs attention" view lists titles with a broken link
   const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, { isPrimary: true }, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : []), ...(attention && admin ? [await attentionWhere(library.sourceUserId)] : [])] };
   const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
   let after: z.infer<typeof cursorSchema> | undefined;
@@ -155,8 +155,8 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const [items, total] = await Promise.all([db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 }), db.accountMedia.count({ where: filters })]);
   const page = items.slice(0, limit), last = page.at(-1), listed = await favoriteIds(req.session!.sub, page), views = (await accountMediaViews(page)).map((view, index) => ({ ...view, favorite: listed.has(page[index].id) }));
   await assertUnchangedSharedViewer(req.session!, library);
-  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit);
-  const needs = admin ? await attentionCounts(sourceWhere, library.sourceUserId) : undefined;
+  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit, Boolean(attention && admin));
+  const needs = admin ? await attentionCounts(await sharedMediaWhere(library, ageLimit, true), library.sourceUserId) : undefined;
   res.json({ items: views, total, ...(needs ? { attention: needs } : {}), nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
 }));
 sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
