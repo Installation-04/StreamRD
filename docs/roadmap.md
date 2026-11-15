@@ -28,9 +28,10 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.27.0 | Add-ons sign themselves in: logins for Sonarr, Radarr, Lidarr and Prowlarr, Prowlarr linked to the others, an owner-approved qBittorrent shared with them | M | none |
 | v0.27.1 | Root folders for Sonarr, Radarr and Lidarr, FlareSolverr in Prowlarr, Bazarr pointed at Sonarr and Radarr | S | none |
 | v0.28.0 | Music: search albums and request one with a click, through the Lidarr from Admin → Add-ons | M | none |
+| v0.28.1 | The episode list marks what you have watched: a check on each finished episode, a thin bar on one you began, and how many of a season are done | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
-| next | TV shows work like Plex: seasons grouped under their show when the Real-Debrid account is scanned, with an episode browser | L | additive |
+| next | TV shows keep going across seasons: continue with the next season's download when one ends | M | none |
 | next | Zilean and Zurg started and stopped from the page, and updated the same way; Phosphor and the bundled download client switched on and off from the page | M | none |
 
 Plex and Jellyfin stay in containers of their own, started from the page: they are large separate programs with their own releases.

@@ -110,6 +110,19 @@ it("resolves a server-owned stream with no member credentials and persists no st
   expect(JSON.stringify(await db.accountMedia.findMany())).not.toContain("temporary-stream.invalid");
   expect(await db.debridConfig.findUnique({ where: { userId: member.id } })).toBeNull();
 });
+it("marks the episodes a viewer has finished or begun in the file list, for that viewer only, without showing file keys", async () => {
+  const owner = await user("admin"), member = await user(), other = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member); await grant(owner, shared.id, other);
+  const files = [1, 2, 3].map(n => ({ token: `t${n}`, name: `Show.S01E0${n}.mkv`, size: 100 + n, mediaKey: `key-${n}` }));
+  await db.sharedLibraryProgress.create({ data: { userId: member.id, itemId: film.id, mediaKey: "key-1", activeSessionId: "s", positionSeconds: 98, durationSeconds: 100, completed: true } });
+  await db.sharedLibraryProgress.create({ data: { userId: member.id, itemId: film.id, mediaKey: "key-2", activeSessionId: "s", positionSeconds: 30, durationSeconds: 120, completed: false } });
+  play.mockResolvedValue({ selectionRequired: true, files });
+  const mine = await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({});
+  expect(mine.body.files).toEqual([{ token: "t1", name: "Show.S01E01.mkv", size: 101, watched: true }, { token: "t2", name: "Show.S01E02.mkv", size: 102, percent: 25 }, { token: "t3", name: "Show.S01E03.mkv", size: 103 }]);
+  expect(JSON.stringify(mine.body)).not.toContain("key-");
+  const theirs = await request(app).post(playUrl(shared.id, film.id)).set(auth(other.token)).send({});
+  expect(theirs.body.files.every((file: { watched?: boolean; percent?: number }) => file.watched === undefined && file.percent === undefined)).toBe(true);
+});
 it("revokes access to lookup and future playback immediately without removing imports", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);
