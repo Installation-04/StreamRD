@@ -99,3 +99,6 @@ Sonarr, Radarr and Lidarr with no root folder are given `data/media/tv`, `data/m
 
 ## Bazarr
 When Bazarr runs, StreamRD gives it the address, port and API key of each running Sonarr and Radarr it has none for, and turns them on. One someone filled in is left alone.
+
+## Music
+With Lidarr running, **Discover** gets a **Music (albums)** choice. Search an artist and an album ("Radiohead OK Computer"), press **Request**, and Lidarr adds the album, monitors it, searches the indexers Prowlarr shares with it and downloads through the qBittorrent it is linked to, into `data/media/music`. The result says *Requested* once it is asked for and *In your library* once Lidarr has every track. Asking again changes nothing. Lidarr looks albums up in its own online catalogue, so no account or key is needed; if that service does not answer, the page says so. Music is not followed on **My requests** yet, and a finished album is for Lidarr's folder: point Plex or Jellyfin at `music` to play it.

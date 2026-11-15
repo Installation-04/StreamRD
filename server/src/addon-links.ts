@@ -51,7 +51,7 @@ async function reach(name: ServarrName, address?: string): Promise<string | null
   for (const base of bases(name, address)) if (await ping(base)) return base;
   return null;
 }
-async function call<T>(base: string, name: ServarrName, key: string, method: string, route: string, body?: unknown): Promise<T> {
+export async function call<T>(base: string, name: ServarrName, key: string, method: string, route: string, body?: unknown): Promise<T> {
   const response = await fetch(`${base}/api/${SERVARR[name].api}${route}`, { method, headers: { "X-Api-Key": key, Accept: "application/json", ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10_000), redirect: "error" });
   if (!response.ok) { await response.body?.cancel(); throw new Error(`${name} answered ${response.status} to ${method} ${route}`); }
   return response.status === 204 ? undefined as T : await response.json() as T;
@@ -124,6 +124,16 @@ export async function linkToProwlarr(prowlarr: { base: string; key: string }, ap
   });
   void logEvent("info", "system", `Prowlarr now sends its indexers to ${implementation}`).catch(() => undefined);
   return true;
+}
+
+/** Where a running add-on answers and its API key, or null when it is not running (or has not written its key yet). */
+export async function connection(name: ServarrName): Promise<{ base: string; key: string } | null> {
+  if (dockerControl().mode === "off") return null;
+  let found: { state: string; address?: string } | undefined;
+  try { found = (await manager<{ servers: Record<string, { state: string; address?: string }> }>("GET", "/status")).servers[name]; } catch { return null; }
+  if (found?.state !== "running") return null;
+  const key = servarrKey(name), base = key ? await reach(name, found.address) : null;
+  return key && base ? { base, key } : null;
 }
 
 const MEDIA_FOLDERS = { sonarr: "tv", radarr: "movies", lidarr: "music" } as const;

@@ -9,3 +9,4 @@
 .resultState{align-self:flex-start;font-size:12px;border:1px solid var(--border);border-radius:999px;padding:3px 10px;color:var(--dim)}
 .resultState[data-state="available"]{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,var(--border))}
 .resultState[data-state="attention"],.resultState[data-state="declined"]{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--border))}
+.cover{aspect-ratio:1}

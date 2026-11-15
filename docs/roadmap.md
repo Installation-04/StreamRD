@@ -25,7 +25,10 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.25.3 | Phosphor is off unless asked for (`install.sh --phosphor`); an install already running it keeps it | S | none |
 | v0.26.0 | Admin → Add-ons: Sonarr, Radarr, Lidarr, Bazarr, Seerr, Tautulli, Prowlarr, FlareSolverr and Maintainerr installed, stopped, updated and removed with one button each, with a log box | M | none |
 | v0.26.1 | Converted video keeps playing in Firefox; a video that stops says why in the log; Plex and Jellyfin list Movies and TV Shows from the first start; a refused request says why; a show's seasons are one show, with an episode picker; Discover searches movies and shows together with one-click requests | M | none (seasons are regrouped by name) |
-| next | Add-ons sign themselves in and link to each other: logins and API keys, Prowlarr to Sonarr and Radarr, a download client, Bazarr and Seerr to their sources | M | none |
+| v0.27.0 | Add-ons sign themselves in: logins for Sonarr, Radarr, Lidarr and Prowlarr, Prowlarr linked to the others, an owner-approved qBittorrent shared with them | M | none |
+| v0.27.1 | Root folders for Sonarr, Radarr and Lidarr, FlareSolverr in Prowlarr, Bazarr pointed at Sonarr and Radarr | S | none |
+| v0.28.0 | Music: search albums and request one with a click, through the Lidarr from Admin → Add-ons | M | none |
+| next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | next | TV shows work like Plex: seasons grouped under their show when the Real-Debrid account is scanned, with an episode browser | L | additive |
 | next | Zilean and Zurg started and stopped from the page, and updated the same way; Phosphor and the bundled download client switched on and off from the page | M | none |
