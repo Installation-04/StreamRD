@@ -199,6 +199,14 @@ async function main() {
       await owner.seek(0.93);
       await until("Up next", async () => /UP NEXT/.test(await owner.text()), 45_000, 500);
       await until("episode 2", async () => { const now = await owner.video(); return now && now.at > 1 && /S01E02[^/]*Audio converted/.test(await owner.text()); }, 60_000, 500);
+      // The episode just finished is marked as watched in the list, the others are not, and the season says how many are done.
+      await owner.page.getByRole("button", { name: "Videos", exact: true }).click();
+      const panel = owner.page.getByRole("tabpanel", { name: "Season 1" });
+      await until("episode 1 to be marked watched", async () => (await panel.getByRole("button", { name: /Episode 1\b/ }).getAttribute("data-watched").catch(() => null)) === "true", 20_000, 300);
+      assert.equal(await panel.getByRole("button", { name: /Episode 2\b/ }).getAttribute("data-watched"), null, "an episode that has not been finished is not marked");
+      assert.match(await owner.page.getByRole("tab", { name: /Season 1/ }).innerText(), /1\/3/, "the season shows how many episodes are watched");
+      await owner.shot("episodes-watched");
+      await owner.page.getByRole("button", { name: "Keep watching", exact: true }).click();
     });
 
     await step("invitations are created for a child (kids' limit) and a friend", async () => {
