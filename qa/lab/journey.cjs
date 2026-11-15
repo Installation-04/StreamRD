@@ -389,6 +389,19 @@ async function main() {
       await owner.shot("jellyfin-launch");
     });
 
+    await step("the Updates panel lists what is new and what was corrected in the releases after the installed one, as plain text", async () => {
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      const notes = owner.page.getByRole("region", { name: "Release notes" });
+      await notes.waitFor({ timeout: 20_000 });
+      const shown = await notes.innerText();
+      assert.match(shown, /What.s new in the 2 updates/, "both releases after the installed one are listed");
+      assert.match(shown, /v0\.99\.0.*The lab release/, "the newest comes first with its title");
+      assert.match(shown, /A lab feature that is new[\s\S]*A lab correction that was made/, "features and corrections are in the panel, without markup characters");
+      assert.doesNotMatch(shown, /\*\*/, "markdown is shown as plain text");
+      assert.ok(shown.indexOf("v0.99.0") < shown.indexOf("v0.98.0"), "newest first");
+      await owner.shot("update-notes");
+    });
+
     await step("Jellyfin is checked for a newer version and updated from the System page, keeping how it was set, and the log box tells the story", async () => {
       await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
       const row = owner.page.locator('[data-module="jellyfin"]'), text = () => row.innerText().catch(() => "");
