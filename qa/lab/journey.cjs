@@ -385,6 +385,23 @@ async function main() {
       await owner.shot("jellyfin-launch");
     });
 
+    await step("the Monitor page shows the output of the programs StreamRD runs in one place: pick one, filter it, copy or download it", async () => {
+      await owner.page.goto(`${base}/admin/monitor`, { waitUntil: "networkidle" });
+      const sources = owner.page.getByRole("navigation", { name: "Log sources" });
+      await sources.getByRole("button", { name: "StreamRD events" }).waitFor({ timeout: 20_000 });
+      assert.equal(await sources.getByRole("button", { name: "All apps" }).getAttribute("aria-pressed"), "true", "all apps are shown together to begin with");
+      await sources.getByRole("button", { name: "StreamRD events" }).click();
+      const pane = owner.page.getByRole("log", { name: "StreamRD events output" });
+      await until("the event log's lines", async () => /\[admin_action\]|\[login\]|\[system\]/.test(await pane.innerText()), 20_000, 300);
+      await owner.page.getByRole("searchbox", { name: "Filter" }).fill("zzz-no-such-word");
+      await until("the filter to match nothing", async () => /Nothing matches that filter/.test(await pane.innerText()), 10_000, 300);
+      await owner.page.getByRole("searchbox", { name: "Filter" }).fill("");
+      await until("the lines to come back", async () => /\[[a-z_]+\]/.test(await pane.innerText()), 10_000, 300);
+      const [file] = await Promise.all([owner.page.waitForEvent("download", { timeout: 10_000 }), owner.page.getByRole("button", { name: "Download", exact: true }).click()]);
+      assert.match(file.suggestedFilename(), /logs\.txt$/);
+      await owner.shot("monitor");
+    });
+
     await step("Jellyfin is checked for a newer version and updated from the System page, keeping how it was set, and the log box tells the story", async () => {
       await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
       const row = owner.page.locator('[data-module="jellyfin"]'), text = () => row.innerText().catch(() => "");

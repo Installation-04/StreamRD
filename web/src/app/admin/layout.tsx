@@ -18,6 +18,7 @@ const NAV = [
   { href: "/admin/users", label: t("admin.users") },
   { href: "/admin/server", label: t("admin.server") },
   { href: "/admin/providers", label: t("admin.providers") },
+  { href: "/admin/monitor", label: "Monitor" },
   { href: "/admin/logs", label: t("admin.logs") },
 ];
 

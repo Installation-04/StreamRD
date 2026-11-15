@@ -61,6 +61,7 @@ const SERVERS = {
 const redact = text => String(text)
   .replace(/claim-[A-Za-z0-9_-]{4,}/g, 'claim-****')
   .replace(/(X-Plex-Token|X-Emby-Token|api_key|ApiKey|PLEX_CLAIM)(["'=: ]+)[^\s&"']+/gi, '$1$2****')
+  .replace(/(token|password|passwd|secret|authorization)(["']?\s*[=:]\s*["']?)(?:(?:Bearer|Basic)\s+)?[^\s"']{6,}/gi, '$1$2****')
   .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
 const LOG_LINES = 200;
 const CLAIM = /^claim-[A-Za-z0-9_-]{1,100}$/;
@@ -281,6 +282,45 @@ function createManager(config) {
     const out = {};
     for (const name of Object.keys(SERVERS)) out[name] = jobs[name] ? { ...jobs[name] } : await inspect(name);
     return out;
+  }
+  // ---- The monitor page: the output of everything StreamRD runs, in one place.
+  // Only containers StreamRD itself runs can be read: its own, the media servers and add-ons it started, and the optional services the installer
+  // puts beside it. A name from outside this list is refused, so this is never a way to read some other container.
+  const SERVICES = ['zilean', 'zilean-db', 'zurg', 'zurg-rclone'];
+  const stateOfContainer = async container => { const response = await docker('GET', `/containers/${encodeURIComponent(container)}/json`); return response.status !== 200 ? 'absent' : response.json?.State?.Running ? 'running' : 'stopped'; };
+  const stampOf = raw => { const found = /^(\d{4}-\d\d-\d\dT[0-9:.]+Z) ?([\s\S]*)$/.exec(raw); return found ? { time: found[1], text: found[2] } : { time: '', text: raw }; };
+  /** StreamRD's own container, split by the process that wrote each line ("[streamrd-api] ..."). */
+  async function coreLines(tail) {
+    let mine; try { mine = await self(); } catch { return []; }
+    return (await output(mine.id, tail, true)).map(raw => {
+      const { time, text } = stampOf(raw), tag = /^\[([a-z0-9-]{2,30})\] ([\s\S]*)$/.exec(text);
+      return { time, source: `core:${tag ? tag[1] : 'container'}`, text: redact(tag ? tag[2] : text).slice(0, 600) };
+    });
+  }
+  async function logSources() {
+    const sources = [], counts = {};
+    for (const line of await coreLines(1500)) counts[line.source] = (counts[line.source] || 0) + 1;
+    for (const [id, lines] of Object.entries(counts).sort()) sources.push({ id, state: 'running', lines });
+    for (const name of Object.keys(SERVERS)) sources.push({ id: `app:${name}`, state: (jobs[name] ? jobs[name].state : (await inspect(name)).state) || 'absent' });
+    for (const name of SERVICES) sources.push({ id: `svc:${name}`, state: await stateOfContainer(name) });
+    return sources;
+  }
+  async function readSource(id, tail) {
+    const kind = /^(core|app|svc):([a-z0-9-]{1,30})$/.exec(id);
+    if (!kind) return null;
+    if (kind[1] === 'core') return (await coreLines(Math.min(tail * 8, 2000))).filter(line => line.source === id).slice(-tail);
+    if (kind[1] === 'app' && SERVERS[kind[2]]) {
+      const lines = (await output(containerName(kind[2]), tail, true)).map(raw => { const { time, text } = stampOf(raw); return { time, source: id, text: redact(text).slice(0, 600) }; });
+      const notes = (deploy[kind[2]] || []).map(entry => ({ time: entry.time, source: id, text: `[deploy] ${entry.message}` }));
+      return [...notes, ...lines].sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0).slice(-tail);
+    }
+    if (kind[1] === 'svc' && SERVICES.includes(kind[2])) return (await output(kind[2], tail, true)).map(raw => { const { time, text } = stampOf(raw); return { time, source: id, text: redact(text).slice(0, 600) }; });
+    return null;
+  }
+  async function readAll(tail) {
+    const merged = [];
+    for (const source of await logSources()) if (source.state !== 'absent') merged.push(...(await readSource(source.id, tail) || []));
+    return merged.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0).slice(-tail);
   }
   async function stop(name) { delete jobs[name]; note(name, 'Stop requested'); const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
   async function remove(name) { delete jobs[name]; note(name, 'Remove requested'); const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
@@ -556,6 +596,12 @@ function createManager(config) {
       if (url.pathname === '/restart') {
         if (request.method !== 'POST') return send(405, { error: 'Method not allowed' });
         const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
+      }
+      if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });
+      if (request.method === 'GET' && url.pathname === '/logs/read') {
+        const id = url.searchParams.get('source') || 'all', tail = Math.max(1, Math.min(Number(url.searchParams.get('tail')) || 200, 1000));
+        const lines = id === 'all' ? await readAll(tail) : await readSource(id, tail);
+        return lines === null ? send(404, { error: 'Unknown log source' }) : send(200, { source: id, lines });
       }
       const match = /^\/servers\/([a-z]+)(?:\/(launch|stop|logs|autostart|update))?$/.exec(url.pathname);
       if (request.method === 'GET' && url.pathname === '/peer') return send(200, { host: await peerHost() });
