@@ -1,6 +1,7 @@
 import { addonsRouter } from "./addons";
 import { modulesRouter } from "./modules";
 import { prowlarrRouter } from "./prowlarr";
+import { musicRouter } from "./music";
 import { discoveryRouter, requestsRouter, adminRequestsRouter, requestIndexersRouter } from "./routes/requests";
 import { requestSettingsRouter } from "./requests/config";
 import { sharedLibrariesRouter, adminSharedLibrariesRouter } from "./routes/shared-libraries";
@@ -45,11 +46,12 @@ export function createApp(): Express {
   app.use(csrfGuard);
 
   // Accounts with a viewing limit only watch what the libraries show them: discovery, requests, personal libraries and search are closed to them.
-  app.use(["/api/discovery", "/api/requests", "/api/account/library", "/api/debrid"], requireUnrestricted);
+  app.use(["/api/discovery", "/api/music", "/api/requests", "/api/account/library", "/api/debrid"], requireUnrestricted);
   app.use("/api/health", healthRouter);
   // Retired in v0.18.0 (see routes/retired.ts). Mounted before the routers that used to own these paths.
   app.use(["/api/catalog", "/api/play", "/api/admin/catalog", "/api/account/favorites", "/api/account/profiles", "/api/account/continue-watching"], retiredRouter);
   app.use("/api/discovery", discoveryRouter);
+  app.use("/api/music", musicRouter);
   app.use("/api/requests", requestsRouter);
   app.use("/api/admin/requests", adminRequestsRouter);
   app.use("/api/admin/request-settings", requestSettingsRouter);

@@ -157,6 +157,24 @@ curl -fsS -H "X-Api-Key: $pkey" "http://127.0.0.1:9696/api/v1/applications" | jq
 bkey="$(docker exec "$name" sh -c "grep -h -o -E 'apikey[:=] *[A-Za-z0-9]+' /config/bazarr/config/config/config.yaml /config/bazarr/config/config/config.ini 2>/dev/null | head -1" | sed -E 's/apikey[:=] *//')"
 [ -n "$bkey" ] || fail "Bazarr wrote no API key"
 curl -fsS -H "X-API-KEY: $bkey" "http://127.0.0.1:16767/api/system/settings" | jq -e '(.sonarr.apikey | length > 0) and (.radarr.apikey | length > 0)' >/dev/null || fail "Bazarr was not pointed at Sonarr and Radarr"
+say "Music: the real Lidarr is searched and asked for an album through StreamRD"
+# Lidarr looks albums up in its own online catalogue. If that service does not answer from this runner, say so and skip: it is not StreamRD's to fail on.
+album=""
+for attempt in $(seq 1 6); do
+  album="$(call GET "/api/music/search?q=radiohead%20ok%20computer" | jq -r '.results[0].id // empty' 2>/dev/null || true)"
+  [ -n "$album" ] && break; sleep 10
+done
+if [ -z "$album" ]; then
+  echo "WARNING: Lidarr's catalogue gave no answer from this runner; the music request was not exercised." >&2
+else
+  [ "$(call GET /api/music/status | jq -r '.available')" = true ] || fail "StreamRD does not see the running Lidarr"
+  call POST /api/music/request "{\"id\":\"$album\"}" | jq -e '.status == "requested"' >/dev/null || fail "the album was not requested through Lidarr"
+  lkey="$(docker exec "$name" grep -o '<ApiKey>[A-Za-z0-9]*</ApiKey>' /config/lidarr/config/config.xml | sed 's/<[^>]*>//g')"
+  curl -fsS -H "X-Api-Key: $lkey" "http://127.0.0.1:18686/api/v1/album?foreignAlbumId=$album" | jq -e 'length == 1 and .[0].monitored == true' >/dev/null || fail "Lidarr does not have the requested album monitored"
+  call POST /api/music/request "{\"id\":\"$album\"}" | jq -e '.status == "requested"' >/dev/null || fail "asking for the same album again failed"
+  curl -fsS -H "X-Api-Key: $lkey" "http://127.0.0.1:18686/api/v1/album?foreignAlbumId=$album" | jq -e 'length == 1' >/dev/null || fail "asking again added the album twice"
+  echo 'An album was searched and requested through StreamRD and is monitored in the real Lidarr, once.'
+fi
 echo 'Sonarr, Radarr, Lidarr and Prowlarr were signed in and linked, and a second pass changed nothing.'
 say "Sonarr, Radarr and Lidarr connect to real qBittorrent without deleting completed or failed downloads"
 # Only this disposable fixture exposes the bundled client on the container's

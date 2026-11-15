@@ -238,6 +238,9 @@ catalog, a port and whether it starts with the machine. 409 when Docker control 
 | GET | `/api/admin/addons/:addon/login` | `{ username, password }` made by StreamRD for sonarr, radarr, lidarr or prowlarr; 404 until it exists. |
 | POST | `/api/admin/addons/link` | Signs in and links now: `{ logins, linked, waiting, downloadClients, downloadClientWaiting, errors }`. Arrays contain add-on names, never credentials. `downloadClients` lists newly configured Sonarr/Radarr/Lidarr qBittorrent connections; `downloadClientWaiting` lists apps whose opted-in client uses an unusable local-only address. Existing download clients are preserved. The connection must be enabled, owned by an active administrator, and explicitly opted into `shareWithAddons` through the existing owner-protected request-settings API; the new flag defaults to false. |
 | GET | `/api/admin/addons/:addon/logs?tail=` | `{ deploy: [{ time, message }], container: [lines] }`, tokens blanked. |
+| GET | `/api/music/status` | `{ available }`: whether Lidarr is running, so the page offers music. Signed-in accounts without a viewing limit. |
+| GET | `/api/music/search?q=` | Albums found by Lidarr: `{ results: [{ id (MusicBrainz id), title, artist, year, kind, coverUrl, status: "available" \| "requested" \| null }] }`. 409 when Lidarr is not running, 502 when its catalogue does not answer. |
+| POST | `/api/music/request` | `{ id }` and nothing else. Adds the album to Lidarr (its artist is left unmonitored), monitors it and searches for it: `{ status }`, 202. Asking again changes nothing. |
 
 `:addon` is `sonarr`, `radarr`, `lidarr`, `bazarr`, `seerr`, `tautulli`, `prowlarr`, `flaresolverr` or `maintainerr`; any other name is 404.
 ## My List (any signed-in viewer)
