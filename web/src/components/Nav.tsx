@@ -41,8 +41,10 @@ export function Nav() {
   const pathname = usePathname(), router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   if (pathname.startsWith("/play/")) return null;
+  const onApps = pathname.startsWith("/admin/addons");
   const link = (href: string, label: string, icon: IconName) => {
-    const active = href === "/" ? pathname === "/" : pathname.startsWith(href.split("/").slice(0, 2).join("/"));
+    // Apps (the add-ons) sits inside Admin's address space: each tab is lit on its own pages.
+    const active = href === "/" ? pathname === "/" : href === "/admin/addons" ? onApps : href === "/admin" ? pathname.startsWith("/admin") && !onApps : pathname.startsWith(href.split("/").slice(0, 2).join("/"));
     return <Link href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}><Icon name={icon} size={17} /><span>{label}</span></Link>;
   };
   return <>
@@ -59,6 +61,7 @@ export function Nav() {
           {user?.role === "admin" && link("/library", "Imports", "grid")}
           {user && !limited && link("/setup", "Setup", "settings")}
           {user && link("/account/profile", t("nav.account"), "user")}
+          {user?.role === "admin" && link("/admin/addons", "Apps", "apps")}
           {user?.role === "admin" && link("/admin", t("nav.admin"), "grid")}
         </div>
         <div className="nav-actions">

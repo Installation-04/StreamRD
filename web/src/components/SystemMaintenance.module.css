@@ -29,3 +29,5 @@
 .danger { border-color:var(--err);color:var(--err); }
 .empty { font-size:12px;color:var(--text-dim,var(--fg-dim));margin:0; }
 @media (max-width:640px) { .row { grid-template-columns:1fr; } .rowActions { justify-content:flex-start; } .panel { padding:18px; } }
+.notes{margin:18px 0 6px}.notes h4{font-size:15px;margin:0 0 10px}.release{border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:12px 16px;margin:0 0 10px}.release>summary{cursor:pointer;font-size:13px;line-height:1.6;overflow-wrap:anywhere}.release[open]>summary{margin-bottom:10px}.noteDate{color:var(--dim, var(--fg-dim))}
+.noteSection h5{font-size:12px;letter-spacing:.4px;margin:14px 0 6px;color:var(--brand, var(--accent, var(--fg)))}.noteSection ul{margin:0 0 8px;padding-left:20px}.noteSection li,.noteSection p{font-size:12px;line-height:1.8;margin:0 0 4px;overflow-wrap:anywhere}

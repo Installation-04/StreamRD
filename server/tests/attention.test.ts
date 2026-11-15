@@ -34,7 +34,7 @@ it("counts the matches to fix and the broken links for the administrator, and fi
   await db.accountMedia.update({ where: { id: broken.id }, data: { health: "broken" } });
   const libraryId = await library(owner);
   const all = await page(libraryId, owner);
-  expect(all.status).toBe(200); expect(all.body.attention).toEqual({ match: 2, links: 1 }); expect(names(all)).toHaveLength(5);
+  expect(all.status).toBe(200); expect(all.body.attention).toEqual({ match: 2, links: 1 }); expect(names(all)).toHaveLength(4); expect(names(all)).not.toContain("Broken Link");   // still counted, but not listed with the titles that play
   const needs = await page(libraryId, owner, "?attention=1");
   expect(names(needs)).toEqual(["Broken Link", "Needs Review", "No Match"]); expect(needs.body.total).toBe(3);
 });
