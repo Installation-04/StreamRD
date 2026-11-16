@@ -190,7 +190,10 @@ function createManager(config) {
   async function layout() {
     if (!config.embedded) return { ...fixedLayout(config.hostDir, config.zurg), network: config.network || '' };
     const own = await self();
-    return { ...ownLayout(own.mounts, config.dirs), network: own.network };
+    const base = ownLayout(own.mounts, config.dirs);
+    // A Zurg mount made from the page (zurg-rclone, below) is shown to the media servers too, as the installer's is: they see it at /mnt/zurg.
+    if (!base.zurg) { const made = await docker('GET', '/containers/zurg-rclone/json'); const mount = (made.json?.Mounts || []).find(entry => entry.Destination === '/data' && entry.Source); if (mount) base.zurg = String(mount.Source); }
+    return { ...base, network: own.network };
   }
   /** The embedded helper shares StreamRD's settings folder, so it makes the folders a server is about to be given, owned by the servers' user. */
   function prepareFolders(name) {
@@ -378,15 +381,87 @@ function createManager(config) {
     const appStart = await docker('POST', '/containers/zilean/start');
     if (![204, 304].includes(appStart.status)) throw new Error(`Zilean could not be started (${appStart.status})`);
   }
-  async function installService(name) {
-    if (name !== 'zilean') throw Object.assign(new Error('That service cannot be installed from here yet'), { status: 404 });
+  // ---- Zurg from the page: the same two containers and files as the installer's Compose file (zurg, and rclone that mounts it). The Real-Debrid
+  // token comes from StreamRD (the administrator's stored key) and is only ever written to zurg/config.yml (mode 600) under the settings folder.
+  const ZURG_APP = ['ghcr.io/debridmediamanager/zurg-public', 'latest'], RCLONE = ['rclone/rclone', 'latest'];
+  const ZURG_VIDEO = '/\\.(mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg|wmv)$/i', ZURG_NOT = '/(fitgirl|repack.*(game|iso)|xbox|ps[2345]\\b|playstation|nintendo|\\bnsw\\b|keygen|crack(ed)?\\b|discography|udemy|coursera|ebook)/i';
+  const zurgConfig = token => `zurg: v1
+token: ${token}
+check_for_changes_every_secs: 10
+enable_repair: false
+# Movies and shows only: a torrent must contain a video file, and obvious games, software, music and
+# courses are excluded. Edit freely; restart Zurg on the Add-ons page to apply.
+directories:
+  shows:
+    group_order: 10
+    group: media
+    filters:
+      - and:
+          - has_episodes: true
+          - any_file_inside_regex: ${ZURG_VIDEO}
+          - not_regex: ${ZURG_NOT}
+  movies:
+    group_order: 20
+    group: media
+    only_show_the_biggest_file: true
+    filters:
+      - and:
+          - any_file_inside_regex: ${ZURG_VIDEO}
+          - not_regex: ${ZURG_NOT}
+`;
+  async function installZurg(network, job, token) {
+    const where = await layout(), settings = where.settings, inside = path.join(config.dirs.config, 'zurg');
+    const mountSource = `${path.posix.dirname(settings)}/mnt/zurg`;   // next to the settings folder, where the installer puts it (./mnt/zurg)
+    ownFolder(config.dirs.config, 'zurg', 0, 0);
+    const file = path.join(inside, 'config.yml');
+    if (!fs.existsSync(file)) { fs.writeFileSync(file, zurgConfig(token), { mode: 0o600 }); fs.chmodSync(file, 0o600); }   // an existing config (and its edits) is kept
+    const rclone = path.join(inside, 'rclone.conf');
+    if (!fs.existsSync(rclone)) fs.writeFileSync(rclone, '[zurg]\ntype = webdav\nurl = http://zurg:9999/dav/\nvendor = other\npacer_min_sleep = 0\n', { mode: 0o644 });
+    for (const [image, tag, label] of [[...ZURG_APP, 'Zurg'], [...RCLONE, 'the mount program (rclone)']]) {
+      if ((await docker('GET', `/images/${encodeURIComponent(`${image}:${tag}`)}/json`)).status === 200) continue;
+      job.step = `Downloading ${label}`; await pullImage(image, tag, say => { job.step = say; });
+    }
+    const labels = { 'streamrd.managed': 'true', 'streamrd.service': 'zurg' }, restart = { Name: 'unless-stopped' };
+    const net = alias => ({ NetworkingConfig: { EndpointsConfig: { [network]: { Aliases: [alias] } } } });
+    job.step = 'Starting Zurg'; await docker('DELETE', '/containers/zurg?force=true');
+    const zurg = await docker('POST', '/containers/create?name=zurg', { Image: `${ZURG_APP[0]}:${ZURG_APP[1]}`, Labels: labels,
+      Healthcheck: { Test: ['CMD', 'curl', '-f', 'http://localhost:9999/http/version.txt'], Interval: 30e9, Timeout: 10e9, Retries: 10 },
+      HostConfig: { Mounts: [{ Type: 'bind', Source: `${settings}/zurg/config.yml`, Target: '/app/config.yml' }, volume('streamrd-zurg-data', '/app/data')], RestartPolicy: restart }, ...net('zurg') });
+    if (zurg.status !== 201) throw new Error(`Zurg could not be created (${zurg.status}${zurg.json?.message ? `: ${String(zurg.json.message).slice(0, 160)}` : ''})`);
+    const zurgStart = await docker('POST', '/containers/zurg/start');
+    if (![204, 304].includes(zurgStart.status)) throw new Error(`Zurg could not be started (${zurgStart.status})`);
+    job.step = 'Waiting for Zurg'; if (!(await waitHealthy('zurg', 120))) throw new Error('Zurg did not become ready in two minutes. Its log is in Admin → Monitor; a wrong token is the usual cause');
+    job.step = 'Mounting your library'; await docker('DELETE', '/containers/zurg-rclone?force=true');
+    const mount = await docker('POST', '/containers/create?name=zurg-rclone', { Image: `${RCLONE[0]}:${RCLONE[1]}`, Labels: labels,
+      Cmd: ['mount', 'zurg:', '/data', '--allow-other', '--allow-non-empty', '--uid', '1000', '--gid', '1000', '--dir-cache-time', '10s', '--vfs-cache-mode', 'full'],
+      HostConfig: { Mounts: [{ Type: 'bind', Source: mountSource, Target: '/data', BindOptions: { Propagation: 'rshared', CreateMountpoint: true } }, { Type: 'bind', Source: `${settings}/zurg/rclone.conf`, Target: '/config/rclone/rclone.conf', ReadOnly: true }],
+        CapAdd: ['SYS_ADMIN'], SecurityOpt: ['apparmor:unconfined'], Devices: [{ PathOnHost: '/dev/fuse', PathInContainer: '/dev/fuse', CgroupPermissions: 'rwm' }], RestartPolicy: restart }, ...net('zurg-rclone') });
+    if (mount.status !== 201) throw new Error(`The mount program could not be created (${mount.status}${mount.json?.message ? `: ${String(mount.json.message).slice(0, 200)}` : ''})`);
+    const mountStart = await docker('POST', '/containers/zurg-rclone/start');
+    if (![204, 304].includes(mountStart.status)) {
+      const said = String(mountStart.json?.message || '').slice(0, 220);
+      throw new Error(`The folder could not be mounted${said ? `: ${said}` : ''}. This machine needs FUSE and a shared mount for it; the installer sets both up (install.sh --zurg --rd-token …)`);
+    }
+    // rclone stops by itself when it cannot mount: say so, with its own words, instead of showing a running program that mounts nothing.
+    await new Promise(resolve => setTimeout(resolve, config.mountSettleMs ?? 5000));
+    if ((await stateOfContainer('zurg-rclone')) !== 'running') {
+      const last = (await output('zurg-rclone', 5, false)).map(text => redact(text)).filter(Boolean).pop() || 'no message';
+      throw new Error(`The mount stopped: ${last.slice(0, 200)}. This machine needs FUSE and a shared mount for it; the installer sets both up (install.sh --zurg --rd-token …)`);
+    }
+  }
+  async function installService(name, options = {}) {
+    if (name !== 'zilean' && name !== 'zurg') throw Object.assign(new Error('That service cannot be installed from here'), { status: 404 });
     if (serviceJobs[name] && serviceJobs[name].state !== 'failed') return serviceJobs[name];
-    if ((await stateOfContainer('zilean')) !== 'absent') throw Object.assign(new Error('Zilean is already installed here'), { status: 409 });
+    if ((await stateOfContainer(name)) !== 'absent') throw Object.assign(new Error(`${name === 'zilean' ? 'Zilean' : 'Zurg'} is already installed here`), { status: 409 });
+    if (name === 'zurg') {
+      if (!config.embedded) throw Object.assign(new Error('Zurg is added from the page only when the Docker helper runs inside StreamRD. Use install.sh --zurg --rd-token …'), { status: 409 });
+      if (!/^[A-Za-z0-9_-]{20,120}$/.test(String(options.token || ''))) throw Object.assign(new Error('A Real-Debrid token is needed (connect Real-Debrid in My account first)'), { status: 400 });
+    }
     const where = await layout();
-    if (!where.network) throw Object.assign(new Error('Zilean is added next to StreamRD on its own Docker network (the one the installer makes). This StreamRD does not run on one, so it cannot be reached by name. Use install.sh --zilean'), { status: 409 });
+    if (!where.network) throw Object.assign(new Error(`${name === 'zilean' ? 'Zilean' : 'Zurg'} is added next to StreamRD on its own Docker network (the one the installer makes). This StreamRD does not run on one, so it cannot be reached by name. Use install.sh --${name}`), { status: 409 });
     const job = serviceJobs[name] = { state: 'installing', step: 'Starting' };
     (async () => {
-      try { await installZilean(where.network, job); delete serviceJobs[name]; }
+      try { await (name === 'zilean' ? installZilean(where.network, job) : installZurg(where.network, job, options.token)); delete serviceJobs[name]; }
       catch (error) { serviceJobs[name] = { state: 'failed', step: '', error: redact(error instanceof Error ? error.message : 'The install failed').slice(0, 300) }; }
     })();
     return job;
@@ -668,7 +743,7 @@ function createManager(config) {
       }
       if (request.method === 'GET' && url.pathname === '/services') { const states = {}; for (const name of SERVICES) states[name] = await stateOfContainer(name); return send(200, { services: states, jobs: serviceJobs }); }
       const install = /^\/services\/([a-z]+)\/install$/.exec(url.pathname);
-      if (install) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); return send(202, { job: await installService(install[1]) }); }
+      if (install) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); return send(202, { job: await installService(install[1], await readBody(request)) }); }
       const service = /^\/services\/([a-z]+)\/(start|stop|restart)$/.exec(url.pathname);
       if (service) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await controlService(service[1], service[2]); return send(200, { ok: true }); }
       if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });

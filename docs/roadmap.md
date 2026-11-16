@@ -41,6 +41,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.37.0 | A movie's versions as a list (quality, release name, date, link state) instead of a drop-down | S | none |
 | v0.37.1 | Fix: a converted video no longer stops after about a minute in Firefox (the front door cut a quiet stream) | S | none |
 | v0.38.0 | Install Zilean from the Add-ons page (database + Zilean through the Docker helper) | M | none |
+| v0.39.0 | Install Zurg from the Add-ons page with the stored Real-Debrid key (zurg + rclone mount; Plex/Jellyfin from the page see it) | M | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |

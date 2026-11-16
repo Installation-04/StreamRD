@@ -46,7 +46,7 @@ exercised against real data. Zilean sets its own database connection from a stri
 [Zurg](https://github.com/debridmediamanager/zurg-testing) turns a Real-Debrid account into a WebDAV share and rclone mounts it
 as folders. StreamRD then reads real files from `/mnt/zurg` for its optional Plex/Jellyfin exports.
 
-**Turned on by a Real-Debrid token** (since v0.30.0): the Default install asks for it (Enter skips), and `--rd-token` on a new install turns Zurg on with no other option. If the machine cannot do the FUSE mount, a Zurg that was only switched on this way is skipped with a message and everything else is installed; `--zurg` by name still stops with the reason. `--no-zurg` keeps it off. To add it later:
+**From the page** (since v0.39.0): Admin → Add-ons → **Install Zurg** uses the Real-Debrid key stored for your account, creates `zurg` and `zurg-rclone` and mounts the library at `mnt/zurg` next to the settings folder; Plex and Jellyfin started from the page afterwards see it. StreamRD's own library export from the mount still needs the installer. **Turned on by a Real-Debrid token** (since v0.30.0): the Default install asks for it (Enter skips), and `--rd-token` on a new install turns Zurg on with no other option. If the machine cannot do the FUSE mount, a Zurg that was only switched on this way is skipped with a message and everything else is installed; `--zurg` by name still stops with the reason. `--no-zurg` keeps it off. To add it later:
 
 ```bash
 bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_API_TOKEN
