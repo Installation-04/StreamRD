@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/lib/auth";
 import { Nav } from "@/components/Nav";
 import "./globals.css";
@@ -6,7 +6,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "StreamRD",
   description: "Self-hosted multiservice debrid streaming",
+  appleWebApp: { capable: true, title: "StreamRD" },
 };
+
+export const viewport: Viewport = { themeColor: "#0a0a0a" };
 
 // Runs before paint so a "system" preference (or a saved light/dark choice)
 // applies immediately — otherwise the page flashes the hardcoded default
