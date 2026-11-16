@@ -56,7 +56,7 @@ RUN mkdir -p /config /data && chown node:node /config /data
 COPY --from=bundle --chown=node:node /opt /opt
 # The container's first program and the Docker helper run as root when Docker control is on (see init.cjs), so the user StreamRD runs
 # as must not be able to change them, nor swap the folder they are in.
-COPY --chown=root:root --chmod=0644 infra/single-container/init.cjs infra/single-container/start.cjs infra/single-container/health.cjs infra/single-container/media-manager.cjs /opt/single-container/
+COPY --chown=root:root --chmod=0644 infra/single-container/init.cjs infra/single-container/start.cjs infra/single-container/health.cjs infra/single-container/gateway.cjs infra/single-container/media-manager.cjs /opt/single-container/
 RUN chown root:root /opt /opt/single-container && chmod 0755 /opt /opt/single-container
 USER node
 VOLUME ["/config", "/data"]

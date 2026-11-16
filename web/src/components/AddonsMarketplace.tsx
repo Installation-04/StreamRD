@@ -7,7 +7,7 @@ import styles from "./AddonsMarketplace.module.css";
 
 type State = "unknown" | "absent" | "stopped" | "running" | "pulling" | "starting" | "failed";
 interface Addon { name: string; label: string; group: string; blurb: string; home: string; licence: string; ui: boolean; needs: string | null; state: State; port: number; autostart: boolean; error: string | null }
-interface Service { name: string; label: string; blurb: string; command: string; home: string; licence: string; state: string; parts: Array<{ name: string; state: string }> }
+interface Service { name: string; label: string; blurb: string; command: string; home: string; licence: string; state: string; installable?: boolean; step?: string | null; error?: string | null; parts: Array<{ name: string; state: string }> }
 interface View { control: { mode: "embedded" | "external" | "off"; reason: string | null }; groups: string[]; addons: Addon[]; services?: Service[] }
 interface Logs { deploy: Array<{ time: string; message: string }>; container: string[] }
 interface LinkReport { logins: string[]; linked: string[]; waiting: string[]; downloadClients?: string[]; downloadClientWaiting?: string[]; errors: string[] }
@@ -31,7 +31,7 @@ export default function AddonsMarketplace() {
     } catch { if (mounted.current) setError("The add-ons could not be loaded."); }
   }, []);
   useEffect(() => { mounted.current = true; void load(); return () => { mounted.current = false; }; }, [load]);
-  const working = view?.addons.some(one => one.state === "pulling" || one.state === "starting") ?? false;
+  const working = (view?.addons.some(one => one.state === "pulling" || one.state === "starting") || view?.services?.some(one => one.state === "installing")) ?? false;
   useEffect(() => { if (!working) return; const timer = setInterval(() => void load(), 3000); return () => clearInterval(timer); }, [working, load]);
   const loadLog = useCallback(async (name: string) => {
     try { const next = await api<Logs>(`/api/admin/addons/${name}/logs?tail=120`); if (mounted.current) setLogs(current => ({ ...current, [name]: next })); } catch { /* the page keeps showing what it had */ }
@@ -78,6 +78,10 @@ export default function AddonsMarketplace() {
     await api(`/api/admin/addons/services/${one.name}/${action}`, { method: "POST" });
     return `${one.label} ${action === "start" ? "started" : action === "stop" ? "stopped" : "restarted"}.`;
   });
+  const install = (one: Service) => run(`service:${one.name}:install`, async () => {
+    await api(`/api/admin/addons/services/${one.name}/install`, { method: "POST" });
+    return `${one.label} is being installed. This takes a few minutes: two programs are downloaded.`;
+  });
   const copy = (text: string) => { void navigator.clipboard?.writeText(text).then(() => setNotice("Copied. Run it on the computer that runs StreamRD.")); };
   const autostart = (one: Addon, enabled: boolean) => run(`auto:${one.name}`, async () => { await api(`/api/admin/addons/${one.name}/autostart`, { method: "PUT", body: JSON.stringify({ enabled }) }); });
 
@@ -101,9 +105,9 @@ export default function AddonsMarketplace() {
       <h2 className={styles.groupTitle}>Search and library files</h2>
       <div className={styles.grid}>
         {view.services.map(one => {
-          const installed = one.state === "running" || one.state === "stopped";
+          const installed = one.state === "running" || one.state === "stopped", installing = one.state === "installing";
           return <article key={one.name} className={styles.card} data-service={one.name} aria-label={one.label}>
-            <div className={styles.top}><h3>{one.label}</h3><span className={`${styles.status} ${one.state === "running" ? styles.running : ""}`} role="status" aria-label={`${one.label} status`}>{one.state === "running" ? "Running" : one.state === "stopped" ? "Stopped" : one.state === "unknown" ? "Docker control is off" : "Not installed"}</span></div>
+            <div className={styles.top}><h3>{one.label}</h3><span className={`${styles.status} ${one.state === "running" ? styles.running : ""}`} role="status" aria-label={`${one.label} status`}>{one.state === "running" ? "Running" : one.state === "stopped" ? "Stopped" : installing ? "Installing…" : one.state === "unknown" ? "Docker control is off" : "Not installed"}</span></div>
             <p className={styles.blurb}>{one.blurb}</p>
             <p className={styles.small}>{one.licence} · <a href={one.home} target="_blank" rel="noreferrer">Website</a></p>
             {installed && <p className={styles.small}>{one.parts.map(part => `${part.name}: ${part.state}`).join(" · ")}</p>}
@@ -112,7 +116,13 @@ export default function AddonsMarketplace() {
               {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "restart")}>Restart</button>}
               {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "stop")}>Stop</button>}
             </div>}
-            {one.state === "absent" && <div>
+            {installing && <p className={styles.small} role="status">{one.step ?? "Installing…"}</p>}
+            {one.error && one.state === "absent" && <p className={styles.error} role="alert">The install did not finish: {one.error}</p>}
+            {one.state === "absent" && one.installable && control && <div>
+              <button type="button" className="btn btn-sm" disabled={Boolean(busy)} onClick={() => void install(one)}>{busy === `service:${one.name}:install` ? "Starting…" : one.error ? `Try installing ${one.label} again` : `Install ${one.label}`}</button>
+              <p className={styles.small}>Adds {one.label} and its database next to StreamRD, with their own storage. Nothing else on this machine is changed.</p>
+            </div>}
+            {one.state === "absent" && !(one.installable && control) && <div>
               <p className={styles.small}>The installer adds it, because it needs more than one container{one.name === "zurg" ? " and a mount on this machine" : ""}. On the computer that runs StreamRD, run:</p>
               <p className={styles.small}><code>{one.command}</code></p>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => copy(one.command)}>Copy the command</button>

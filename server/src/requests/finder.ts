@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { dockerControl } from "../maintenance";
 import { db } from "../db";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { MediaTag, mediaTags } from "../media-tags";
@@ -35,7 +36,20 @@ function builtin(env: NodeJS.ProcessEnv = process.env): Indexer[] {
   const raw = env.ZILEAN_URL?.trim(); if (!raw) return [];
   try { const base = new URL(raw); if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) return []; return [{ id: "zilean", name: "Zilean", baseUrl: `${base.origin}/torznab/api`, apiKey: env.ZILEAN_API_KEY?.trim() || "zilean", builtin: true }]; } catch { return []; }
 }
-export async function listIndexers(): Promise<Indexer[]> { return [...builtin(), ...await prowlarrSources(), ...await readStored()]; }
+/**
+ * Zilean put there from the page (Add-ons) has no ZILEAN_URL: StreamRD finds it by its name on the network. Only asked when Docker control is on
+ * (that is when StreamRD can have put it there), and remembered for a minute so a search does not wait for the answer each time.
+ */
+let found: { at: number; value: Indexer[] } | null = null;
+async function neighbour(): Promise<Indexer[]> {
+  if (process.env.ZILEAN_URL?.trim() || dockerControl().mode === "off") return [];
+  if (found && Date.now() - found.at < 60_000) return found.value;
+  let value: Indexer[] = [];
+  try { const reply = await fetch("http://zilean:8181/healthchecks/ping", { signal: AbortSignal.timeout(800) }); if (reply.ok) value = builtin({ ZILEAN_URL: "http://zilean:8181" }); await reply.body?.cancel(); } catch { /* not there */ }
+  found = { at: Date.now(), value }; return value;
+}
+export const forgetNeighbour = () => { found = null; };
+export async function listIndexers(): Promise<Indexer[]> { return [...builtin(), ...await neighbour(), ...await prowlarrSources(), ...await readStored()]; }
 export const publicIndexer = (indexer: Indexer) => ({ id: indexer.id, name: indexer.name, baseUrl: indexer.baseUrl, hasKey: Boolean(indexer.apiKey), builtin: Boolean(indexer.builtin) });
 export async function addIndexer(input: { name: string; baseUrl: string; apiKey: string }): Promise<Indexer> {
   const list = await readStored();

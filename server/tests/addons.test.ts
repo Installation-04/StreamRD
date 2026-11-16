@@ -13,7 +13,7 @@ const kept: Record<string, string | undefined> = {};
 let admin: TestUser, member: TestUser, servers: http.Server[] = [];
 const NAMES = ["sonarr", "radarr", "lidarr", "bazarr", "seerr", "tautulli", "prowlarr", "flaresolverr", "maintainerr"];
 
-async function helper(running: Record<string, Record<string, unknown>> = {}, services: Record<string, string> = {}) {
+async function helper(running: Record<string, Record<string, unknown>> = {}, services: Record<string, string> = {}, jobs: Record<string, unknown> = {}) {
   const asked: string[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = []; req.on("data", chunk => chunks.push(chunk));
@@ -21,7 +21,8 @@ async function helper(running: Record<string, Record<string, unknown>> = {}, ser
       const body = Buffer.concat(chunks).toString("utf8"); asked.push(`${req.method} ${req.url}${body ? ` ${body}` : ""}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       if (req.url === "/status") res.end(JSON.stringify({ servers: running }));
-      else if (req.url === "/services") res.end(JSON.stringify({ services }));
+      else if (req.url === "/services") res.end(JSON.stringify({ services, jobs }));
+      else if (req.url === "/services/zilean/install") res.end(JSON.stringify({ job: { state: "installing" } }));
       else if (/\/logs/.test(req.url ?? "")) res.end(JSON.stringify({ deploy: [{ time: "2026-11-12T10:00:00Z", message: "Started." }], container: ["ready"] }));
       else res.end(JSON.stringify({ state: "pulling" }));
     });
@@ -139,4 +140,24 @@ it("says the services are unknown, not absent, when Docker control is off", asyn
   process.env.DOCKER_CONTROL_STATE = "off"; delete process.env.MEDIA_MANAGER_URL; delete process.env.MEDIA_MANAGER_TOKEN;
   const listed = await request(app).get("/api/admin/addons").set(auth(admin.token));
   expect(listed.body.services.map((one: { state: string }) => one.state)).toEqual(["unknown", "unknown"]);
+});
+
+it("installs Zilean from the page: administrators only, only Zilean, and the card says it is installing and why an install failed", async () => {
+  const jobs: Record<string, unknown> = {}, services: Record<string, string> = { zilean: "absent", "zilean-db": "absent", zurg: "absent", "zurg-rclone": "absent" };
+  const asked = await helper({}, services, jobs);
+  const card = async (name: string) => (await request(app).get("/api/admin/addons").set(auth(admin.token))).body.services.find((one: { name: string }) => one.name === name);
+  expect((await request(app).post("/api/admin/addons/services/zilean/install")).status).toBe(401);
+  expect((await request(app).post("/api/admin/addons/services/zilean/install").set(auth(member.token))).status).toBe(403);
+  expect((await request(app).post("/api/admin/addons/services/zurg/install").set(auth(admin.token))).status).toBe(404);   // Zurg is still the installer's
+  expect((await request(app).post("/api/admin/addons/services/nothing/install").set(auth(admin.token))).status).toBe(404);
+  expect(asked.some(line => line.includes("/install"))).toBe(false);
+  expect(await card("zilean")).toMatchObject({ state: "absent", installable: true, step: null, error: null }); expect(await card("zurg")).toMatchObject({ installable: false });
+  jobs.zilean = { state: "installing", step: "Downloading the database" };
+  const started = await request(app).post("/api/admin/addons/services/zilean/install").set(auth(admin.token));
+  expect(started.status).toBe(202); expect(asked).toContain("POST /services/zilean/install");
+  expect(started.body.services.find((one: { name: string }) => one.name === "zilean")).toMatchObject({ state: "installing", step: "Downloading the database" });
+  jobs.zilean = { state: "failed", error: "The database did not become ready" };
+  expect(await card("zilean")).toMatchObject({ state: "absent", error: "The database did not become ready", step: null });
+  delete jobs.zilean; services.zilean = "running"; services["zilean-db"] = "running";
+  expect(await card("zilean")).toMatchObject({ state: "running", error: null, step: null });
 });
