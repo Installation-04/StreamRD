@@ -9,7 +9,7 @@ afterEach(() => { for (const name of ENV) { if (kept[name] === undefined) delete
 const ids = async () => (await listIndexers()).map(indexer => indexer.id);
 
 it("uses a Zilean that answers by name when Docker control is on, remembers the answer for a minute, and asks nothing when it is off", async () => {
-  const fetcher = vi.fn(async () => new Response("pong", { status: 200 })); vi.stubGlobal("fetch", fetcher);
+  const fetcher = vi.fn(async (_input: string) => new Response("pong", { status: 200 })); vi.stubGlobal("fetch", fetcher);
   expect(await ids()).toEqual([]); expect(fetcher).not.toHaveBeenCalled();   // Docker control is off: StreamRD did not put anything there
   process.env.DOCKER_CONTROL_STATE = "embedded"; process.env.MEDIA_MANAGER_URL = "http://127.0.0.1:9"; process.env.MEDIA_MANAGER_TOKEN = "m".repeat(40);
   expect(await ids()).toEqual(["zilean"]);
@@ -20,7 +20,7 @@ it("uses a Zilean that answers by name when Docker control is on, remembers the 
 
 it("finds nothing when no Zilean answers, and lets ZILEAN_URL (the installer's way) win without asking", async () => {
   process.env.DOCKER_CONTROL_STATE = "embedded"; process.env.MEDIA_MANAGER_URL = "http://127.0.0.1:9"; process.env.MEDIA_MANAGER_TOKEN = "m".repeat(40);
-  const refused = vi.fn(async () => { throw new Error("getaddrinfo ENOTFOUND zilean"); }); vi.stubGlobal("fetch", refused);
+  const refused = vi.fn(async (_input: string): Promise<Response> => { throw new Error("getaddrinfo ENOTFOUND zilean"); }); vi.stubGlobal("fetch", refused);
   expect(await ids()).toEqual([]);
   process.env.ZILEAN_URL = "http://zilean:8181"; forgetNeighbour(); refused.mockClear();
   expect(await ids()).toEqual(["zilean"]); expect(refused).not.toHaveBeenCalled();
