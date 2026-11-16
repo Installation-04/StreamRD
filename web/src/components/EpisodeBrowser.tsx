@@ -17,7 +17,7 @@ export function episodeTitle(name: string): string {
 
 /** The seasons and episodes of a title on its own page, the way a media server shows them: a tab per season, a row per episode with what the viewer has watched, and one button for what to watch next. */
 export default function EpisodeBrowser({ libraryId, itemId }: { libraryId: string; itemId: string }) {
-  const [files, setFiles] = useState<EpisodeFile[] | null>(null), [note, setNote] = useState(""), [tab, setTab] = useState<number | null>(null);
+  const [files, setFiles] = useState<EpisodeFile[] | null>(null), [note, setNote] = useState(""), [tab, setTab] = useState<number | null>(null), [marking, setMarking] = useState(false);
   useEffect(() => {
     const controller = new AbortController(); setFiles(null); setNote("");
     api<{ files: EpisodeFile[]; pending?: boolean; progress?: number }>(`/api/shared-libraries/${encodeURIComponent(libraryId)}/items/${encodeURIComponent(itemId)}/episodes`, { signal: controller.signal })
@@ -25,6 +25,12 @@ export default function EpisodeBrowser({ libraryId, itemId }: { libraryId: strin
       .catch(reason => { if (!controller.signal.aborted) { setFiles([]); setNote(reason instanceof Error ? reason.message : "The episodes could not be listed."); } });
     return () => controller.abort();
   }, [libraryId, itemId]);
+  async function mark(tokens: string[], watched: boolean) {
+    if (marking || !tokens.length) return; setMarking(true); setNote("");
+    try { const result = await api<{ files: EpisodeFile[] }>(`/api/shared-libraries/${encodeURIComponent(libraryId)}/items/${encodeURIComponent(itemId)}/episodes/watched`, { method: "POST", body: JSON.stringify({ tokens, watched }) }); setFiles(result.files); }
+    catch (reason) { setNote(reason instanceof Error ? reason.message : "That could not be saved. Try again."); }
+    finally { setMarking(false); }
+  }
   if (files === null) return <section className={styles.box} aria-label="Episodes" aria-busy="true"><p className={styles.note} role="status">Loading episodes…</p></section>;
   const grouped = groupEpisodes(files);
   if (!grouped) return note ? <section className={styles.box} aria-label="Episodes"><p className={styles.note} role="status">{note}</p></section> : null;
@@ -44,13 +50,18 @@ export default function EpisodeBrowser({ libraryId, itemId }: { libraryId: strin
     <div role="tablist" aria-label="Seasons" className={styles.tabs}>
       {grouped.seasons.map(group => <button type="button" role="tab" key={group.season} aria-selected={active === group.season} className={active === group.season ? styles.on : undefined} onClick={() => setTab(group.season)}>Season {group.season}<small>{watchedIn(group.items)}/{group.items.length}</small></button>)}
     </div>
+    <div className={styles.seasonActions}>
+      {watchedIn(season.items) < season.items.length && <button type="button" className={styles.linkish} disabled={marking} onClick={() => void mark(season.items.map(entry => entry.file.token), true)}>Mark season {season.season} watched</button>}
+      {watchedIn(season.items) > 0 && <button type="button" className={styles.linkish} disabled={marking} onClick={() => void mark(season.items.map(entry => entry.file.token), false)}>Mark season {season.season} unwatched</button>}
+    </div>
     <ol className={styles.list}>
       {season.items.map(({ file, episode }) => <li key={file.token} className={file.watched ? styles.seen : undefined}>
         <Link href={href(file.token)} aria-label={`Play season ${season.season} episode ${episode}`}>
           <span className={styles.num}>{episode}</span>
           <span className={styles.title}><strong>{episodeTitle(file.name) || `Episode ${episode}`}</strong>{typeof file.size === "number" && file.size > 0 && <small>{(file.size / 1e9).toFixed(file.size > 1e10 ? 0 : 1)} GB</small>}</span>
-          {file.watched ? <span className={styles.mark} aria-label="Watched">✓</span> : file.percent ? <span className={styles.bar} role="img" aria-label={`${file.percent}% watched`}><i style={{ width: `${file.percent}%` }} /></span> : <span className={styles.play} aria-hidden="true">▶</span>}
+          {!file.watched && file.percent ? <span className={styles.bar} role="img" aria-label={`${file.percent}% watched`}><i style={{ width: `${file.percent}%` }} /></span> : <span className={styles.play} aria-hidden="true">▶</span>}
         </Link>
+        <button type="button" className={file.watched ? styles.check : styles.uncheck} disabled={marking} aria-pressed={Boolean(file.watched)} aria-label={`${file.watched ? "Mark unwatched" : "Mark watched"}: season ${season.season} episode ${episode}`} title={file.watched ? "Watched: click to mark unwatched" : "Mark watched"} onClick={() => void mark([file.token], !file.watched)}>✓</button>
       </li>)}
     </ol>
   </section>;
