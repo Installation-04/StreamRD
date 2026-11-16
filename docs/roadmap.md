@@ -38,6 +38,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.34.0 | Subtitles menu in the player (text tracks built into the file) | M | none |
 | v0.35.0 | Audio track menu in the player (switch language or commentary from where you are) | M | none |
 | v0.36.0 | The player remembers the audio and subtitle language you chose (per browser) | S | none |
+| v0.37.0 | A movie's versions as a list (quality, release name, date, link state) instead of a drop-down | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |
