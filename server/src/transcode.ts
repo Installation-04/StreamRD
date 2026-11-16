@@ -15,7 +15,12 @@ import { runtime } from "./runtime-settings";
  * and ffmpeg is given only the https link the server itself resolved. ffmpeg runs with a protocol allow-list and without a shell.
  */
 export type Mode = "direct" | "remux" | "audio" | "video";
-export interface Probe { formats: string[]; video: string | null; audio: string | null; pixFmt: string | null; durationSeconds: number; width: number; height: number }
+/** A subtitle or audio track of a file: `index` counts among the tracks of its kind (0 is the first subtitle), the way ffmpeg's `0:s:N` does. */
+export interface Track { index: number; language: string | null; title: string | null; codec: string; default: boolean; channels?: number }
+export interface Probe { formats: string[]; video: string | null; audio: string | null; pixFmt: string | null; durationSeconds: number; width: number; height: number; audioTracks?: Track[]; subtitles?: Track[] }
+/** Subtitles that are text (they can be sent as WebVTT). Picture subtitles (Blu-ray PGS, DVD) cannot, and are left out. */
+const TEXT_SUBTITLES = new Set(["subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text", "subviewer", "microdvd"]);
+export const textSubtitles = (probe: Probe | null | undefined): Track[] => (probe?.subtitles ?? []).filter(track => TEXT_SUBTITLES.has(track.codec)).slice(0, 40);
 export interface Plan { mode: Mode; probe: Probe | null; reason?: string }
 
 // These are choices in Admin → Server (runtime-settings.ts); the environment variables of the same names are their starting values.
@@ -50,13 +55,15 @@ const run = (command: string, args: string[], timeoutMs: number) => new Promise<
 /** Reads the container, codecs and length of a link with ffprobe; null when it cannot be read or ffprobe is missing. */
 export async function probeStream(url: string, timeoutMs = 15_000): Promise<Probe | null> {
   const safe = convertibleUrl(url); if (!safe) return null;
-  const { code, out } = await run(ffprobeBin(), ["-v", "error", "-protocol_whitelist", PROTOCOLS, "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,pix_fmt,width,height", "-of", "json", safe], timeoutMs);
+  const { code, out } = await run(ffprobeBin(), ["-v", "error", "-protocol_whitelist", PROTOCOLS, "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,pix_fmt,width,height,channels:stream_tags=language,title:stream_disposition=default", "-of", "json", safe], timeoutMs);
   if (code !== 0) return null;
   try {
-    const data = JSON.parse(out) as { format?: { format_name?: string; duration?: string }; streams?: Array<{ codec_type?: string; codec_name?: string; pix_fmt?: string; width?: number; height?: number }> };
+    const data = JSON.parse(out) as { format?: { format_name?: string; duration?: string }; streams?: Array<{ codec_type?: string; codec_name?: string; pix_fmt?: string; width?: number; height?: number; channels?: number; tags?: { language?: string; title?: string }; disposition?: { default?: number } }> };
     const video = data.streams?.find(stream => stream.codec_type === "video"), audio = data.streams?.find(stream => stream.codec_type === "audio");
+    const tracks = (kind: string): Track[] => (data.streams ?? []).filter(stream => stream.codec_type === kind).map((stream, index) => ({
+      index, language: /^[a-z]{2,3}$/i.test(stream.tags?.language ?? "") ? stream.tags!.language!.toLowerCase() : null, title: (stream.tags?.title ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 80) || null, codec: stream.codec_name ?? "", default: stream.disposition?.default === 1, ...(typeof stream.channels === "number" ? { channels: stream.channels } : {}) }));
     const duration = Number.parseFloat(data.format?.duration ?? "");
-    return { formats: (data.format?.format_name ?? "").split(",").map(part => part.trim()).filter(Boolean), video: video?.codec_name ?? null, audio: audio?.codec_name ?? null, pixFmt: video?.pix_fmt ?? null,
+    return { audioTracks: tracks("audio"), subtitles: tracks("subtitle"), formats: (data.format?.format_name ?? "").split(",").map(part => part.trim()).filter(Boolean), video: video?.codec_name ?? null, audio: audio?.codec_name ?? null, pixFmt: video?.pix_fmt ?? null,
       durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : 0, width: video?.width ?? 0, height: video?.height ?? 0 };
   } catch { return null; }
 }
@@ -93,7 +100,7 @@ let found: boolean | undefined;
 async function available() { if (found === undefined || process.env.NODE_ENV === "test") found = (await run(ffmpegBin(), ["-version"], 5000)).code === 0; return found; }
 
 // ---- Streams: short-lived, unguessable ids that stand for one resolved link.
-interface Registered { url: string; mode: Exclude<Mode, "direct">; userId: string; expires: number; lastError?: string; stop?: () => void }
+interface Registered { url: string; mode: Exclude<Mode, "direct">; userId: string; expires: number; audio?: number; lastError?: string; stop?: () => void }
 const streams = new Map<string, Registered>();
 const TTL_MS = 12 * 60 * 60 * 1000, MAX_STREAMS = 500;
 export function registerStream(url: string, mode: Exclude<Mode, "direct">, userId: string): string {
@@ -106,13 +113,13 @@ export function registerStream(url: string, mode: Exclude<Mode, "direct">, userI
 }
 
 /** ffmpeg's arguments for a mode. The link and the start time are the only variable parts, passed as separate arguments (no shell). */
-export function ffmpegArgs(url: string, mode: Exclude<Mode, "direct">, startSeconds: number): string[] {
+export function ffmpegArgs(url: string, mode: Exclude<Mode, "direct">, startSeconds: number, audioTrack = 0): string[] {
   const start = Number.isFinite(startSeconds) && startSeconds > 0 ? Math.min(startSeconds, 604_800) : 0;
   const args = ["-hide_banner", "-nostdin", "-loglevel", "error", "-protocol_whitelist", PROTOCOLS, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"];
   // A copied picture can only start on a keyframe. The sound is then cut from the same place (no accurate seek), so that it begins with the
   // picture it belongs to; cutting it at the exact second instead left the sound starting up to a whole GOP after its picture.
   if (start > 0) { args.push("-ss", start.toFixed(3)); if (mode !== "video") args.push("-noaccurate_seek"); }
-  args.push("-i", url, "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn");
+  args.push("-i", url, "-map", "0:v:0", "-map", `0:a:${Number.isInteger(audioTrack) && audioTrack > 0 && audioTrack < 100 ? audioTrack : 0}?`, "-sn", "-dn");
   if (mode === "video") args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-vf", "scale=w='min(1920,iw)':h=-2");
   else args.push("-c:v", "copy");
   if (mode === "remux") args.push("-c:a", "copy"); else args.push("-c:a", "aac", "-b:a", "192k", "-ac", "2");
@@ -179,7 +186,8 @@ export function streamConverted(id: string, startSeconds: number, res: Response,
   if (!entry || entry.expires < Date.now()) { res.status(404).json({ error: "This stream has expired. Open the video again." }); return false; }
   // A copied picture can be undecodable from where it starts (see the note on forceVideo below). The player then asks for the picture to be
   // re-encoded, which decodes the source leniently and hands the browser a clean stream.
-  const mode: Exclude<Mode, "direct"> = forceVideo ? "video" : entry.mode;
+  // Another audio track than the first is converted to AAC (its codec may be one a browser cannot play): a copied sound is only for the first.
+  const mode: Exclude<Mode, "direct"> = forceVideo ? "video" : entry.mode === "remux" && (entry.audio ?? 0) > 0 ? "audio" : entry.mode;
   if (forceVideo && entry.mode !== "video") {
     if (!videoTranscodeEnabled()) { entry.lastError = VIDEO_OFF; res.status(409).json({ error: VIDEO_OFF }); return false; }
     void logEvent("info", "playback", `The browser could not decode the copied picture (${entry.mode}) at ${Math.floor(startSeconds)}s; re-encoding it instead.`, { userId: entry.userId }).catch(() => undefined);
@@ -191,7 +199,7 @@ export function streamConverted(id: string, startSeconds: number, res: Response,
   active += 1; entry.lastError = undefined;
   let released = false, started = false, replaced = false, errorText = "";
   const release = () => { if (!released) { released = true; active -= 1; } };
-  const child: ChildProcess = spawn(ffmpegBin(), ffmpegArgs(entry.url, mode, startSeconds), { stdio: ["ignore", "pipe", "pipe"] });
+  const child: ChildProcess = spawn(ffmpegBin(), ffmpegArgs(entry.url, mode, startSeconds, entry.audio ?? 0), { stdio: ["ignore", "pipe", "pipe"] });
   const stop = () => { replaced = true; if (child.exitCode === null) child.kill("SIGKILL"); release(); if (entry.stop === stop) entry.stop = undefined; };
   entry.stop = stop;
   const fail = (message: string, status = 502) => {
@@ -215,4 +223,21 @@ export function streamConverted(id: string, startSeconds: number, res: Response,
   });
   res.on("close", () => { if (child.exitCode === null) { child.kill("SIGKILL"); } release(); if (entry.stop === stop) entry.stop = undefined; });
   return true;
+}
+
+/**
+ * One text subtitle track of a registered stream as WebVTT, or null when the id is unknown, the track is not there or ffmpeg could not read it.
+ * Not a conversion of the video: ffmpeg reads the file's subtitle track only, so it does not count against the conversion limit.
+ */
+export async function subtitleVtt(id: string, track: number): Promise<string | null> {
+  const entry = streams.get(id); if (!entry || entry.expires < Date.now() || !Number.isInteger(track) || track < 0 || track > 100) return null;
+  const url = convertibleUrl(entry.url); if (!url) return null;
+  const { code, out } = await run(ffmpegBin(), ["-v", "error", "-nostdin", "-protocol_whitelist", PROTOCOLS, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-i", url, "-map", `0:s:${track}`, "-f", "webvtt", "pipe:1"], 90_000);
+  return code === 0 && out.startsWith("WEBVTT") ? out : null;
+}
+
+/** Chooses which audio track the stream plays from now on (0 is the first); the player then asks for the stream again. False when the stream is not there. */
+export function chooseAudioTrack(id: string, track: number): boolean {
+  const entry = streams.get(id); if (!entry || entry.expires < Date.now() || !Number.isInteger(track) || track < 0 || track > 99) return false;
+  entry.audio = track; return true;
 }

@@ -27,7 +27,7 @@ export interface AccountPlayResult {
   /** Shared-library plays only: resume support for the signed-in viewer. */
   progressSessionId?: string; resumeSeconds?: number; durationSeconds?: number;
   /** How the browser should play it: as is, or from the server's converted stream (`url`, with `?start=` to seek). */
-  playback?: { mode: "direct" | "remux" | "audio" | "video"; url?: string; durationSeconds: number; video: string | null; audio: string | null; reason?: string };
+  playback?: { mode: "direct" | "remux" | "audio" | "video"; url?: string; durationSeconds: number; video: string | null; audio: string | null; reason?: string; /** Text subtitle tracks of the file, and the stream id they and the audio choice use (also for a file that plays as it is). */ streamId?: string; subtitles?: Array<{ index: number; language: string | null; title: string | null; default: boolean }>; /** The audio tracks, when there is more than one. */ audioTracks?: Array<{ index: number; language: string | null; title: string | null; codec: string; channels: number | null }> };
 }
 export function safeMediaUrl(value: string | null | undefined): string | null {
   try { const url = new URL(value ?? ""); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null; } catch { return null; }
