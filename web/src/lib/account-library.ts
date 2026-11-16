@@ -10,6 +10,8 @@ export interface AccountMedia {
   progress: number; createdAt: string; metadata: MetadataDetails | null; metadataStatus: string | null;
   /** The age rating in effect (for example PG-13), and whether an administrator set it by hand. */
   ratingLabel?: string | null; ratingManual?: boolean;
+  /** Where the viewer stopped, when there is something to resume (the shared title page only). */
+  resume?: { positionSeconds: number; durationSeconds: number; percent: number } | null;
 }
 export type ScanState = "not-started" | "queued" | "scanning" | "complete" | "error" | "cancelled";
 export interface AccountProviderScan {

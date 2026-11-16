@@ -200,12 +200,17 @@ sharedLibrariesRouter.get("/:id/items/:itemId/trailer", action(async (req, res) 
   const [view] = await accountMediaViews([item]);
   res.json({ trailer: await trailerFor(view.metadata?.imdbId, item.type === "series" ? "series" : "movie") });
 }));
+/** Where this viewer stopped in a title: the file begun most recently and not finished, so the page can offer Resume. Null when there is nothing to resume. */
+async function resumePoint(userId: string, itemId: string) {
+  const row = await db.sharedLibraryProgress.findFirst({ where: { userId, itemId, completed: false, positionSeconds: { gt: 5 }, durationSeconds: { gt: 0 } }, orderBy: { updatedAt: "desc" }, select: { positionSeconds: true, durationSeconds: true } });
+  return row ? { positionSeconds: Math.floor(row.positionSeconds), durationSeconds: Math.floor(row.durationSeconds), percent: Math.min(94, Math.max(1, Math.round(row.positionSeconds / row.durationSeconds * 100))) } : null;
+}
 sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
   const item = await db.accountMedia.findFirst({ where: { id: parse(id, req.params.itemId), AND: [sourceWhere] } });
   if (!item) throw new AccountLibraryError("Library item not found.", 404);
-  const result = { item: { ...(await accountMediaViews([item]))[0], favorite: (await favoriteIds(req.session!.sub, [item])).has(item.id), watched: (await watchedIds(req.session!.sub, [item])).has(item.id) }, library: await sharedLibraryView(library, ageLimit), versions: await versionViews(sourceWhere, item) };
+  const result = { item: { ...(await accountMediaViews([item]))[0], favorite: (await favoriteIds(req.session!.sub, [item])).has(item.id), watched: (await watchedIds(req.session!.sub, [item])).has(item.id), resume: await resumePoint(req.session!.sub, item.id) }, library: await sharedLibraryView(library, ageLimit), versions: await versionViews(sourceWhere, item) };
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, [item.id], ageLimit);
   res.json(result);
