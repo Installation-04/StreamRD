@@ -67,9 +67,15 @@ export default function SharedLibraryDetail() {
               <span>{version.quality ?? version.release ?? "Version"}{version.phase === "finished" ? "" : ` (${version.phase})`}{version.current ? " · you are here" : ""}</span>
             </Link></li>)}</ul>
         </section>}
-        {versions.length > 1 && !(item.type === "series" && versions.some(version => version.season)) && <label className={styles.availability} style={{ display: "block" }}>This title has {versions.length} versions:{" "}<select aria-label="Version" value={item.id} onChange={event => router.push(`/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(event.target.value)}`)}>
-          {versions.map(version => <option key={version.id} value={version.id}>{version.quality ?? version.release ?? "Version"}{version.phase === "finished" ? "" : ` (${version.phase})`}{version.health === "broken" ? " · link stopped working" : ""} · added {new Date(version.createdAt).toLocaleDateString()}</option>)}
-        </select></label>}
+        {versions.length > 1 && !(item.type === "series" && versions.some(version => version.season)) && <section aria-label="Versions" className={styles.versions}>
+          <h2>{versions.length} versions of this title</h2>
+          <ul aria-label="Versions">{versions.map(version => <li key={version.id}>
+            <button type="button" disabled={version.id === item.id} aria-current={version.id === item.id ? "true" : undefined} className={version.id === item.id ? styles.versionCurrent : undefined} onClick={() => router.push(`/shared-libraries/${encodeURIComponent(id)}/${encodeURIComponent(version.id)}`)}>
+              <strong>{version.quality ?? "Version"}</strong>
+              <span className={styles.versionRelease}>{version.release ?? "Release name unknown"}</span>
+              <small>{version.id === item.id ? "Showing this one · " : ""}{version.health === "broken" ? "Link stopped working · " : version.phase === "finished" ? "" : `${version.phase} · `}added {new Date(version.createdAt).toLocaleDateString()}</small>
+            </button></li>)}</ul>
+        </section>}
         {user?.role === "admin" && <label className={styles.availability} style={{ display: "block" }}>Age rating (administrators only):{" "}<select aria-label="Age rating" value={item.ratingManual ? item.ratingLabel ?? "" : ""} onChange={event => { void api(`/api/admin/shared-libraries/items/${encodeURIComponent(item.id)}/rating`, { method: "PUT", body: JSON.stringify({ rating: event.target.value || null }) }).then(() => load()).catch(reason => setError(reason instanceof Error ? reason.message : "The rating could not be saved.")); }}>
           <option value="">{!item.ratingManual && item.ratingLabel ? `From metadata: ${item.ratingLabel}` : "Not rated: hidden from limited accounts"}</option>
           {["G", "TV-Y", "TV-Y7", "PG", "TV-PG", "PG-13", "TV-14", "R", "TV-MA"].map(label => <option key={label} value={label}>{label}</option>)}

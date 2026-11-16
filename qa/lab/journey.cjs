@@ -137,7 +137,7 @@ async function main() {
 
     await step("an MKV with H.264 and DTS plays with its audio converted, and playback is asked for once", async () => {
       await owner.open("Movies", "Big Buck Bunny");
-      await owner.page.getByLabel("Version", { exact: true }).selectOption({ index: 1 }); await sleep(1000);   // the 1080p version
+      await owner.page.getByRole("list", { name: "Versions" }).locator("button:not([disabled])").first().click(); await sleep(1000);   // the other version (1080p)
       owner.plays.length = 0;
       const state = await owner.play("Big Buck Bunny (DTS)");
       assert.match(state.src, /^\/api\/stream\/[\w-]+\?start=0(\.000)?$/);
