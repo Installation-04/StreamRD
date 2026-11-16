@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rateLimit } from "../util/rateLimit";
 import { asyncHandler } from "../http";
-import { alignedStart, reportStreamProblem, streamConverted, streamStatus, subtitleVtt } from "../transcode";
+import { alignedStart, reportStreamProblem, streamConverted, streamStatus, subtitleVtt, chooseAudioTrack } from "../transcode";
 
 /**
  * Converted playback. The path carries an unguessable, short-lived id handed out by an authorised play request (see transcode.ts), so a
@@ -47,4 +47,10 @@ streamRouter.get("/:id/subtitles/:track", rateLimit({ windowMs: 60_000, max: 40 
   const vtt = await subtitleVtt(id.data, track.data);
   if (vtt === null) { res.status(404).json({ error: "This subtitle track is not available." }); return; }
   res.type("text/vtt").setHeader("Cache-Control", "private, max-age=3600"); res.send(vtt);
+}));
+/** The viewer's audio track choice for this video (0 is the first track). The player opens the stream again after it. */
+streamRouter.post("/:id/audio", rateLimit({ windowMs: 60_000, max: 30 }), asyncHandler(async (req, res) => {
+  const id = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).safeParse(req.params.id), body = z.object({ track: z.number().int().min(0).max(99) }).strict().safeParse(req.body ?? {});
+  if (!id.success || !body.success) { res.status(400).json({ error: "Invalid audio request." }); return; }
+  res.status(chooseAudioTrack(id.data, body.data.track) ? 204 : 404).end();
 }));

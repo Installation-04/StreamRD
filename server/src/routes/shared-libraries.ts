@@ -304,9 +304,13 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   });
   // A browser cannot play every file. When this one needs converting the viewer gets a stream id of ours instead of the provider link for the <video>.
   const plan = await planPlayback(result.stream.url, result.stream.filename).catch(() => ({ mode: "direct" as const, probe: null, reason: "error" }));
-  // The stream id stands for the link: the player plays it when the file is converted, and asks it for subtitles either way.
-  const subtitles = textSubtitles(plan.probe), streamId = plan.mode !== "direct" ? registerStream(result.stream.url, plan.mode, userId) : subtitles.length ? registerStream(result.stream.url, "remux", userId) : null;
-  const tracks: { subtitleId?: string; subtitles?: Array<{ index: number; language: string | null; title: string | null; default: boolean }> } = subtitles.length && streamId ? { subtitleId: streamId, subtitles: subtitles.map(track => ({ index: track.index, language: track.language, title: track.title, default: track.default })) } : {};
+  // The stream id stands for the link: the player plays it when the file is converted, and asks it for subtitles and another audio track either way.
+  // A file that would play as it is gets an id (as "audio": the first track's sound is not touched until another is chosen) only when there is a choice to make.
+  const subtitles = textSubtitles(plan.probe), audioTracks = (plan.probe?.audioTracks ?? []).slice(0, 20), choice = subtitles.length > 0 || audioTracks.length > 1;
+  const streamId = plan.mode !== "direct" ? registerStream(result.stream.url, plan.mode, userId) : choice ? registerStream(result.stream.url, "audio", userId) : null;
+  const tracks: { streamId?: string; subtitles?: Array<{ index: number; language: string | null; title: string | null; default: boolean }>; audioTracks?: Array<{ index: number; language: string | null; title: string | null; codec: string; channels: number | null }> } = streamId && choice ? {
+    streamId, ...(subtitles.length ? { subtitles: subtitles.map(track => ({ index: track.index, language: track.language, title: track.title, default: track.default })) } : {}),
+    ...(audioTracks.length > 1 ? { audioTracks: audioTracks.map(track => ({ index: track.index, language: track.language, title: track.title, codec: track.codec, channels: track.channels ?? null })) } : {}) } : {};
   const playback = plan.mode === "direct" ? { mode: "direct" as const, reason: plan.reason, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null, ...tracks }
     : { mode: plan.mode, reason: undefined as string | undefined, url: `/api/stream/${streamId}`, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null, ...tracks };
   // Each play is in the log with what the server decided and why: who, which title, and how the file reaches the browser. No link, no file path.
