@@ -13,6 +13,22 @@ const THEME_ORDER: ThemePreference[] = ["dark", "light", "system"];
 function resolveTheme(pref: ThemePreference): "dark" | "light" {
   return pref === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : pref;
 }
+type InstallPrompt = Event & { prompt: () => Promise<void> };
+
+// Shows only when the browser offers to install the site as an app (Chrome/Edge on Windows, Android).
+function InstallApp() {
+  const [offer, setOffer] = useState<InstallPrompt | null>(null);
+  useEffect(() => {
+    const onOffer = (e: Event) => { e.preventDefault(); setOffer(e as InstallPrompt); };
+    const onDone = () => setOffer(null);
+    window.addEventListener("beforeinstallprompt", onOffer);
+    window.addEventListener("appinstalled", onDone);
+    return () => { window.removeEventListener("beforeinstallprompt", onOffer); window.removeEventListener("appinstalled", onDone); };
+  }, []);
+  if (!offer) return null;
+  return <button type="button" className="btn btn-sm" onClick={async () => { await offer.prompt(); setOffer(null); }}>Install app</button>;
+}
+
 function ThemeToggle() {
   const [pref, setPref] = useState<ThemePreference>("dark");
   useEffect(() => {
@@ -65,6 +81,7 @@ export function Nav() {
           {user?.role === "admin" && link("/admin", t("nav.admin"), "grid")}
         </div>
         <div className="nav-actions">
+          <InstallApp />
           <ThemeToggle />
           {user ? <>
             <Link href="/account/profile" className="nav-account" title={`Account: ${user.displayName}`}><span className="user-avatar">{user.displayName.trim().slice(0, 1).toLocaleUpperCase() || "U"}</span><span className="nav-account-name">{user.displayName}</span></Link>
