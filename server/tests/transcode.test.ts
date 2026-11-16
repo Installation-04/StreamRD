@@ -11,7 +11,7 @@ import { signSession } from "../src/auth/jwt";
 import { accountProviderContext } from "../src/account-library";
 import { playAccountItem } from "../src/providers/account-library";
 import { ProviderError } from "../src/providers/types";
-import { convertibleUrl, decideMode, ffmpegArgs, guessMode, maxConversions, planPlayback, Probe, probeStream, registerStream } from "../src/transcode";
+import { convertibleUrl, decideMode, ffmpegArgs, guessMode, maxConversions, planPlayback, Probe, probeStream, registerStream, textSubtitles, activeConversions } from "../src/transcode";
 
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
 const play = vi.mocked(playAccountItem);
@@ -113,6 +113,42 @@ real("streams a converted MP4 that a browser can play, with AAC audio and untouc
   const file = join(dir, "out-audio.mp4"); writeFileSync(file, response.body);
   expect(response.body.subarray(4, 8).toString()).toBe("ftyp");
   expect(streams(file).map(stream => `${stream.codec_type}:${stream.codec_name}`).sort()).toEqual(["audio:aac", "video:h264"]);
+});
+
+real("lists a file's subtitle tracks and serves one as WebVTT, without converting the video", async () => {
+  writeFileSync(join(dir, "one.srt"), "1\n00:00:00,500 --> 00:00:02,000\nHello there\n\n");
+  writeFileSync(join(dir, "two.srt"), "1\n00:00:00,500 --> 00:00:02,000\nBonjour\n\n");
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=3:s=160x120:r=10", "-f", "lavfi", "-i", "sine=d=3", "-i", join(dir, "one.srt"), "-i", join(dir, "two.srt"), "-t", "3",
+    "-map", "0:v", "-map", "1:a", "-map", "2", "-map", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-c:s", "srt", "-metadata:s:s:0", "language=eng", "-metadata:s:s:1", "language=fre", "-metadata:s:s:1", "title=Doublage", join(dir, "subs.mkv")], { stdio: "ignore" });
+  const probe = await probeStream(`${base}/subs.mkv`);
+  expect(textSubtitles(probe).map(track => [track.index, track.language, track.title, track.codec])).toEqual([[0, "eng", null, "subrip"], [1, "fre", "Doublage", "subrip"]]);
+  expect(probe?.audioTracks).toHaveLength(1);
+  const id = registerStream(`${base}/subs.mkv`, "remux", "someone");
+  const second = await request(app).get(`/api/stream/${id}/subtitles/1`);
+  expect(second.status).toBe(200); expect(second.headers["content-type"]).toContain("text/vtt"); expect(second.text).toMatch(/^WEBVTT/); expect(second.text).toContain("Bonjour"); expect(second.text).not.toContain("Hello there");
+  expect((await request(app).get(`/api/stream/${id}/subtitles/5`)).status).toBe(404);   // no such track
+  expect((await request(app).get(`/api/stream/${"a".repeat(30)}/subtitles/0`)).status).toBe(404);   // no such stream
+  expect((await request(app).get(`/api/stream/${id}/subtitles/-1`)).status).toBe(400);
+  expect(activeConversions()).toBe(0);
+});
+
+real("lists a file's audio tracks and plays the chosen one, converted, from the next request on", async () => {
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=3:s=160x120:r=10", "-f", "lavfi", "-i", "sine=frequency=440:d=3", "-f", "lavfi", "-i", "sine=frequency=880:d=3", "-t", "3",
+    "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "10", "-c:a:0", "aac", "-c:a:1", "libmp3lame", "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=fre", join(dir, "dual.mkv")], { stdio: "ignore" });
+  const probe = await probeStream(`${base}/dual.mkv`);
+  expect(probe?.audioTracks?.map(track => [track.index, track.language, track.codec, track.channels])).toEqual([[0, "eng", "aac", 1], [1, "fre", "mp3", 1]]);
+  expect(ffmpegArgs("https://x.invalid/a.mkv", "remux", 0, 1)).toContain("0:a:1?");
+  expect(ffmpegArgs("https://x.invalid/a.mkv", "remux", 0)).toContain("0:a:0?");
+  const grab = (id: string) => request(app).get(`/api/stream/${id}`).buffer(true).parse((res, done) => { const chunks: Buffer[] = []; res.on("data", chunk => chunks.push(chunk)); res.on("end", () => done(null, Buffer.concat(chunks))); });
+  const id = registerStream(`${base}/dual.mkv`, "remux", "someone");
+  const first = join(dir, "dual-first.mp4"); writeFileSync(first, (await grab(id)).body);
+  expect(streams(first).find(stream => stream.codec_type === "audio")?.codec_name).toBe("aac");   // the first track's sound is copied as it is
+  expect((await request(app).post(`/api/stream/${id}/audio`).send({ track: 1 })).status).toBe(204);
+  const second = join(dir, "dual-second.mp4"); writeFileSync(second, (await grab(id)).body);
+  expect(streams(second).find(stream => stream.codec_type === "audio")?.codec_name).toBe("aac");   // another track is converted (a copy would have stayed mp3) so that a browser can play it
+  expect((await request(app).post(`/api/stream/${"a".repeat(30)}/audio`).send({ track: 1 })).status).toBe(404);
+  for (const body of [{ track: -1 }, { track: 1.5 }, { track: "1" }, { track: 1, extra: true }]) expect((await request(app).post(`/api/stream/${id}/audio`).send(body)).status, JSON.stringify(body)).toBe(400);
+  expect(activeConversions()).toBe(0);
 });
 
 real("re-encodes the video for formats a browser cannot decode, and can start part-way in", async () => {
