@@ -92,6 +92,7 @@ function prepareQbit(accessHost = '') {
   return ['--profile=' + path.join(configRoot, 'qbittorrent'), '--webui-port=8082'];
 }
 function proxy(port, webPort, apiPort) { gateways.push(createGateway({ port, webPort, apiPort, health })); }
+async function check(url) { try { const response = await fetch(url, { signal: AbortSignal.timeout(2000) }); await response.body?.cancel(); return response.ok; } catch { return false; } }
 async function health() {
   const endpoints = ['http://127.0.0.1:47821/api/health', 'http://127.0.0.1:3000/login', ...(phosphorEnabled ? ['http://127.0.0.1:61337/api/health', 'http://127.0.0.1:3100/login'] : [])];
   if (!(await Promise.all(endpoints.map(check))).every(Boolean)) return false;

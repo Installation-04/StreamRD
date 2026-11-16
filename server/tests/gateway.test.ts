@@ -54,3 +54,10 @@ it("answers /healthz for the container and sends the rest to the web app", async
   expect(JSON.parse((await get(port, "/healthz")).body)).toEqual({ ok: true });
   expect((await get(port, "/login")).body).toBe("seen /login");
 });
+
+it("start.cjs still defines what its front door is given to answer /healthz (health, and the check it calls)", async () => {
+  const fs = await import("node:fs"), path = await import("node:path");
+  const source = fs.readFileSync(path.resolve(__dirname, "../../infra/single-container/start.cjs"), "utf8");
+  for (const name of ["health", "check"]) expect(source, `${name}() is missing from start.cjs`).toMatch(new RegExp(`(?:async )?function ${name}\\(`));
+  expect(source).toContain("createGateway({ port, webPort, apiPort, health })");
+});
