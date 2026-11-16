@@ -47,8 +47,8 @@ async function ownedLibrary(req: Request) {
   return library;
 }
 /** Withhold a stale page if account bindings or item eligibility changed while decorating it. */
-async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[], limit: number | null) {
-  const freshWhere = await sharedMediaWhere(library, limit);
+async function assertCurrentSharedItems(library: Awaited<ReturnType<typeof visibleSharedLibrary>>, originalWhere: Prisma.AccountMediaWhereInput, itemIds: string[], limit: number | null, includeBroken = false) {
+  const freshWhere = await sharedMediaWhere(library, limit, includeBroken);
   if (JSON.stringify(freshWhere) !== JSON.stringify(originalWhere)) throw new AccountLibraryError("Shared library account changed. Refresh and try again.", 409);
   if (itemIds.length && await db.accountMedia.count({ where: { id: { in: itemIds }, AND: [freshWhere] } }) !== itemIds.length) throw new AccountLibraryError("Shared library items changed. Refresh and try again.", 409);
 }
@@ -176,7 +176,7 @@ for (const method of ["put", "delete"] as const) {
 sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const library = await visibleSharedLibrary(req.session!.sub, parse(id, req.params.id));
   const { limit, cursor, q, type, unwatched, attention } = parse(list, req.query), admin = req.session!.role === "admin";
-  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit);
+  const ageLimit = await viewingLimit(req.session!.sub), sourceWhere = await sharedMediaWhere(library, ageLimit, Boolean(attention && admin));   // only the administrator's "needs attention" view lists titles with a broken link
   const filters: Prisma.AccountMediaWhereInput = { AND: [sourceWhere, { isPrimary: true }, ...(q ? [{ name: { contains: q } }] : []), ...(type ? [{ type }] : []), ...(unwatched ? [await unwatchedWhere(req.session!.sub) ?? {}] : []), ...(attention && admin ? [await attentionWhere(library.sourceUserId)] : [])] };
   const scope = createHash("sha256").update(JSON.stringify([req.session!.sub, library.id, library.updatedAt.toISOString(), filters])).digest("hex").slice(0, 32);
   let after: z.infer<typeof cursorSchema> | undefined;
@@ -188,8 +188,8 @@ sharedLibrariesRouter.get("/:id/items", action(async (req, res) => {
   const [items, total] = await Promise.all([db.accountMedia.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 }), db.accountMedia.count({ where: filters })]);
   const page = items.slice(0, limit), last = page.at(-1), listed = await favoriteIds(req.session!.sub, page), seen = await watchedIds(req.session!.sub, page), views = (await accountMediaViews(page)).map((view, index) => ({ ...view, favorite: listed.has(page[index].id), watched: seen.has(page[index].id) }));
   await assertUnchangedSharedViewer(req.session!, library);
-  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit);
-  const needs = admin ? await attentionCounts(sourceWhere, library.sourceUserId) : undefined;
+  await assertCurrentSharedItems(library, sourceWhere, page.map(item => item.id), ageLimit, Boolean(attention && admin));
+  const needs = admin ? await attentionCounts(await sharedMediaWhere(library, ageLimit, true), library.sourceUserId) : undefined;
   res.json({ items: views, total, ...(needs ? { attention: needs } : {}), nextCursor: items.length > limit && last ? Buffer.from(JSON.stringify({ v: 1, id: last.id, at: last.createdAt.toISOString(), scope })).toString("base64url") : null });
 }));
 /** The title's trailer, when the public catalogue has one (a YouTube id the viewer's browser plays only after pressing Watch trailer). */
@@ -209,6 +209,55 @@ sharedLibrariesRouter.get("/:id/items/:itemId", action(async (req, res) => {
   await assertUnchangedSharedViewer(req.session!, library);
   await assertCurrentSharedItems(library, sourceWhere, [item.id], ageLimit);
   res.json(result);
+}));
+/** What this viewer has watched of a title's files: a mark for a finished file, a thin bar for one begun. The file keys stay on the server. */
+async function annotateFiles(userId: string, itemId: string, files: Array<{ token: string; name: string; size?: number; mediaKey?: string }>) {
+  const keys = files.map(file => file.mediaKey).filter((key): key is string => Boolean(key));
+  const rows = keys.length ? await db.sharedLibraryProgress.findMany({ where: { userId, itemId, mediaKey: { in: keys } }, select: { mediaKey: true, completed: true, positionSeconds: true, durationSeconds: true } }) : [];
+  const byKey = new Map(rows.map(row => [row.mediaKey, row]));
+  return files.map(({ mediaKey: key, ...file }) => {
+    const row = key ? byKey.get(key) : undefined;
+    return row?.completed ? { ...file, watched: true } : row && row.positionSeconds > 5 && row.durationSeconds > 0 ? { ...file, percent: Math.min(94, Math.max(1, Math.round(row.positionSeconds / row.durationSeconds * 100))) } : file;
+  });
+}
+/** The videos of a title with the viewer's marks, for the title page: nothing is started and no link is resolved. */
+sharedLibrariesRouter.get("/:id/items/:itemId/episodes", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
+  const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
+  const library = await assertSharedViewer(req.session!, libraryId);
+  const authorize = async () => {
+    const freshLibrary = await assertSharedViewer(req.session!, libraryId);
+    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
+    if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
+  };
+  const listed = await playImportedMedia(library.sourceUserId, itemId, undefined, authorize, true).catch(error => {
+    if (!(error instanceof AccountLibraryError)) throw error;
+    throw new AccountLibraryError(error.status === 404 || error.status === 422 ? "The episodes cannot be listed right now: this link stopped working." : "The episodes could not be listed: the provider did not answer.", error.status);
+  });
+  await authorize();
+  if (listed.pending || !listed.files) { res.json({ files: [], pending: Boolean(listed.pending), progress: listed.progress ?? 0 }); return; }
+  res.json({ files: await annotateFiles(req.session!.sub, itemId, listed.files) });
+}));
+/** Mark some of a title's episodes watched or unwatched for this viewer (an episode, a season, or all of them). The viewer sends the file choices the list gave; the keys stay on the server. */
+sharedLibrariesRouter.post("/:id/items/:itemId/episodes/watched", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
+  const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
+  const body = parse(z.object({ tokens: z.array(z.string().min(1).max(512)).min(1).max(400), watched: z.boolean() }).strict(), req.body ?? {});
+  const library = await assertSharedViewer(req.session!, libraryId);
+  const authorize = async () => {
+    const freshLibrary = await assertSharedViewer(req.session!, libraryId);
+    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
+    if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
+  };
+  const listed = await playImportedMedia(library.sourceUserId, itemId, undefined, authorize, true).catch(error => {
+    if (!(error instanceof AccountLibraryError)) throw error;
+    throw new AccountLibraryError("The episodes could not be marked right now: the provider did not answer.", error.status);
+  });
+  await authorize();
+  const chosen = new Set(body.tokens), keys = (listed.files ?? []).filter(file => chosen.has(file.token)).map(file => file.mediaKey).filter((key): key is string => Boolean(key));
+  if (!keys.length) throw new AccountLibraryError("Those episodes are no longer in this title; reload the page.", 409);
+  const userId = req.session!.sub;
+  if (body.watched) await db.$transaction(keys.map(mediaKey => db.sharedLibraryProgress.upsert({ where: { userId_itemId_mediaKey: { userId, itemId, mediaKey } }, create: { userId, itemId, mediaKey, activeSessionId: "marked", positionSeconds: 1, durationSeconds: 1, completed: true }, update: { completed: true, positionSeconds: 1, durationSeconds: 1, activeSessionId: "marked", lastSequence: -1, updatedAt: new Date() } })));
+  else await db.sharedLibraryProgress.deleteMany({ where: { userId, itemId, mediaKey: { in: keys } } });
+  res.json({ files: await annotateFiles(userId, itemId, listed.files ?? []) });
 }));
 sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
   const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
@@ -236,13 +285,7 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   if (!result.stream || !mediaKey) {
     // The episode list says what this viewer has watched: a mark for a finished file, a thin bar for one begun. The file keys stay on the server.
     if (result.files?.length) {
-      const keys = result.files.map(file => file.mediaKey).filter((key): key is string => Boolean(key));
-      const rows = keys.length ? await db.sharedLibraryProgress.findMany({ where: { userId: req.session!.sub, itemId, mediaKey: { in: keys } }, select: { mediaKey: true, completed: true, positionSeconds: true, durationSeconds: true } }) : [];
-      const byKey = new Map(rows.map(row => [row.mediaKey, row]));
-      res.json({ ...result, files: result.files.map(({ mediaKey: key, ...file }) => {
-        const row = key ? byKey.get(key) : undefined;
-        return row?.completed ? { ...file, watched: true } : row && row.positionSeconds > 5 && row.durationSeconds > 0 ? { ...file, percent: Math.min(94, Math.max(1, Math.round(row.positionSeconds / row.durationSeconds * 100))) } : file;
-      }) });
+      res.json({ ...result, files: await annotateFiles(req.session!.sub, itemId, result.files) });
       return;
     }
     res.json(result); return;

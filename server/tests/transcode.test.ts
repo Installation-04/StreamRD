@@ -188,8 +188,9 @@ it("tells a viewer what a dead link means for them, keeps the owner's instructio
   const mine = await request(app).post(url).set(auth(owner.token)).send({});
   expect(mine.status).toBe(404); expect(mine.body.error).toMatch(/no longer available in the provider account\. Rescan/);
   play.mockRejectedValue(new ProviderError("realdebrid", "upstream timeout", 504));
+  expect((await db.accountMedia.findUniqueOrThrow({ where: { id: media.id } })).health).toBe("broken");   // two refusals: the link is marked, and the title is gone for viewers
   const later = await request(app).post(url).set(auth(viewer.token)).send({});
-  expect(later.status).toBe(503); expect(later.body.error).toMatch(/provider did not answer\. Try again in a moment/);
+  expect(later.status).toBe(404);   // a page opened before that is told the title is no longer there, not asked to try again
   await new Promise(done => setTimeout(done, 100));
   const lines = await db.logEvent.findMany({ where: { type: "playback", level: "warn" }, orderBy: { createdAt: "asc" } });
   expect(lines).toHaveLength(3); expect(lines[0].message).toMatch(/^Could not play Gone Film \(2001\): This item is no longer available/); expect(lines[0].userId).toBe(viewer.id);

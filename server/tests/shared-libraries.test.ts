@@ -123,6 +123,53 @@ it("marks the episodes a viewer has finished or begun in the file list, for that
   const theirs = await request(app).post(playUrl(shared.id, film.id)).set(auth(other.token)).send({});
   expect(theirs.body.files.every((file: { watched?: boolean; percent?: number }) => file.watched === undefined && file.percent === undefined)).toBe(true);
 });
+it("lists a title's episodes for its page with the viewer's marks, asking only for the list and starting nothing", async () => {
+  const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member);
+  const files = [1, 2].map(n => ({ token: `t${n}`, name: `Show.S01E0${n}.mkv`, size: 100 + n, mediaKey: `key-${n}` }));
+  await db.sharedLibraryProgress.create({ data: { userId: member.id, itemId: film.id, mediaKey: "key-1", activeSessionId: "s", positionSeconds: 98, durationSeconds: 100, completed: true } });
+  play.mockResolvedValue({ selectionRequired: true, files });
+  const listed = await request(app).get(`${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes`).set(auth(member.token));
+  expect(listed.status).toBe(200);
+  expect(listed.body.files).toEqual([{ token: "t1", name: "Show.S01E01.mkv", size: 101, watched: true }, { token: "t2", name: "Show.S01E02.mkv", size: 102 }]);
+  expect(play.mock.calls.at(-1)?.[4]).toBe(true);
+  expect(JSON.stringify(listed.body)).not.toContain("key-");
+  expect((await db.sharedLibraryProgress.findMany({ where: { userId: member.id } })).length).toBe(1);
+  play.mockResolvedValue({ pending: true, progress: 40 });
+  expect((await request(app).get(`${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes`).set(auth(member.token))).body).toEqual({ files: [], pending: true, progress: 40 });
+});
+it("lets a viewer mark episodes watched or unwatched, for themselves only, from the file choices the list gave", async () => {
+  const owner = await user("admin"), member = await user(), other = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member); await grant(owner, shared.id, other);
+  const files = [1, 2, 3].map(n => ({ token: `t${n}`, name: `Show.S01E0${n}.mkv`, size: 100 + n, mediaKey: `key-${n}` }));
+  play.mockResolvedValue({ selectionRequired: true, files });
+  const url = `${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes/watched`;
+  const marked = await request(app).post(url).set(auth(member.token)).send({ tokens: ["t1", "t2"], watched: true });
+  expect(marked.status).toBe(200);
+  expect(marked.body.files.map((file: { watched?: boolean }) => Boolean(file.watched))).toEqual([true, true, false]);
+  expect(JSON.stringify(marked.body)).not.toContain("key-");
+  const theirs = await request(app).get(url.replace(/watched$/, "")).set(auth(other.token));
+  expect(theirs.body.files.some((file: { watched?: boolean }) => file.watched)).toBe(false);
+  const undone = await request(app).post(url).set(auth(member.token)).send({ tokens: ["t2"], watched: false });
+  expect(undone.body.files.map((file: { watched?: boolean }) => Boolean(file.watched))).toEqual([true, false, false]);
+  expect((await request(app).post(url).set(auth(member.token)).send({ tokens: ["nope"], watched: true })).status).toBe(409);
+  expect((await request(app).post(url).set(auth(member.token)).send({ tokens: [], watched: true })).status).toBe(400);
+});
+it("hides a title whose link is broken from viewers, and shows it again once the link works", async () => {
+  const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member);
+  const names = async () => (await request(app).get(`/api/shared-libraries/${shared.id}/items`).set(auth(member.token))).body.items.map((entry: { id: string }) => entry.id);
+  const detail = async () => (await request(app).get(`/api/shared-libraries/${shared.id}/items/${film.id}`).set(auth(member.token))).status;
+  expect(await names()).toContain(film.id); expect(await detail()).toBe(200);
+  await db.accountMedia.update({ where: { id: film.id }, data: { health: "broken", healthFailures: 2 } });
+  expect(await names()).not.toContain(film.id);   // gone from the list...
+  expect(await detail()).toBe(404);   // ...and from its own page
+  expect((await request(app).post(playUrl(shared.id, film.id)).set(auth(member.token)).send({})).status).toBe(404);
+  const count = async () => (await request(app).get("/api/shared-libraries").set(auth(member.token))).body.libraries[0].itemCount;
+  expect(await count()).toBe(0);   // and it is no longer counted
+  await db.accountMedia.update({ where: { id: film.id }, data: { health: "ok", healthFailures: 0 } });
+  expect(await names()).toContain(film.id); expect(await detail()).toBe(200); expect(await count()).toBe(1);   // back by itself
+});
 it("revokes access to lookup and future playback immediately without removing imports", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);

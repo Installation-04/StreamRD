@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, authFetch } from "@/lib/api";
+import ReleaseNotesList from "./ReleaseNotesList";
 import styles from "./SystemMaintenance.module.css";
 
 interface Backup { name: string; kind: "manual" | "pre-update" | "pre-restore" | "pre-upgrade" | "other"; sizeBytes: number; createdAt: string }
@@ -14,7 +15,7 @@ const size = (bytes: number) => bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFi
 const message = (reason: unknown, fallback: string) => reason instanceof ApiError && reason.status !== 401 && reason.status !== 403 ? reason.message : fallback;
 
 export default function SystemMaintenance() {
-  const [maintenance, setMaintenance] = useState<Maintenance | null>(null), [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [maintenance, setMaintenance] = useState<Maintenance | null>(null), [update, setUpdate] = useState<UpdateInfo | null>(null), [notesKey, setNotesKey] = useState(0);
   const [busy, setBusy] = useState(""), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [restoring, setRestoring] = useState<string | null>(null), [typed, setTyped] = useState(""), [confirmUpdate, setConfirmUpdate] = useState(false);
   const mounted = useRef(true);
@@ -25,7 +26,7 @@ export default function SystemMaintenance() {
   }, []);
   const checkUpdates = useCallback(async (refresh = false) => {
     setBusy("check"); setError("");
-    try { const next = await api<UpdateInfo>(`/api/admin/system/update${refresh ? "?refresh=1" : ""}`); if (mounted.current) setUpdate(next); }
+    try { const next = await api<UpdateInfo>(`/api/admin/system/update${refresh ? "?refresh=1" : ""}`); if (mounted.current) { setUpdate(next); if (refresh) setNotesKey(key => key + 1); } }
     catch (reason) { if (mounted.current) setError(message(reason, "Updates could not be checked.")); }
     finally { if (mounted.current) setBusy(""); }
   }, []);
@@ -82,6 +83,7 @@ export default function SystemMaintenance() {
       </dl>}
       {update?.error && <p className={styles.notice}>{update.error}</p>}
       {update?.updateAvailable && update.url && <p className={styles.copy}><a href={update.url} target="_blank" rel="noreferrer">Read the v{update.latest} release notes ↗</a></p>}
+      {update && update.checkEnabled && <ReleaseNotesList updateAvailable={update.updateAvailable} refreshKey={notesKey} />}
       {update?.updateAvailable && !update.canApply && <div className={styles.notice}>
         <strong>One click, once set up.</strong> This server runs without access to Docker, so it cannot replace itself with the new version. Run the installer again on the computer that runs StreamRD (<code style={{ overflowWrap: "anywhere" }}>{INSTALL_COMMAND}</code>; add <code>-s -- --media-manager</code> if you declined before): an <strong>Update</strong> button then appears here, with an automatic backup and an automatic rollback if the new version does not start. Until then, update by hand. In your install folder run:
         <pre style={{ margin: "8px 0", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>docker compose pull &amp;&amp; docker compose up -d</pre>

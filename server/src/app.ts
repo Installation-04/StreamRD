@@ -1,4 +1,5 @@
 import { addonsRouter } from "./addons";
+import { monitorRouter } from "./monitor";
 import { modulesRouter } from "./modules";
 import { prowlarrRouter } from "./prowlarr";
 import { musicRouter } from "./music";
@@ -58,6 +59,7 @@ export function createApp(): Express {
   app.use("/api/admin/prowlarr", prowlarrRouter);
   app.use("/api/admin/modules", modulesRouter);
   app.use("/api/admin/addons", addonsRouter);
+  app.use("/api/admin/monitor", monitorRouter);
   app.use("/api/admin/request-indexers", requestIndexersRouter);
   app.use("/api/auth", authRouter);
   // Only the administrator imports from a debrid account (v0.18.0); members request content instead. Earlier personal imports stay stored, hidden.

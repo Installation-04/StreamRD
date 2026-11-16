@@ -187,6 +187,14 @@ async function main() {
     });
 
     await step("a season pack offers its episodes, plays one and moves on to the next", async () => {
+      // The lab holds one season, so a second is added to the answer for the title: only what the player does with it is looked at here.
+      // (The server side of seasons is covered by its own tests, and the library page lists them from the same answer.)
+      await owner.page.route(/\/api\/shared-libraries\/[^/]+\/items\/[^/?]+(\?.*)?$/, async route => {
+        if (route.request().method() !== "GET") return route.fallback();
+        const response = await route.fetch(), body = await response.json(), here = body.item?.id;
+        const version = (id, from, current) => ({ id, quality: null, release: null, season: { from, to: from }, phase: "finished", health: "ok", createdAt: "2026-11-01T00:00:00.000Z", ...(current ? { current: true } : {}) });
+        await route.fulfill({ response, json: { ...body, versions: [version(here, 1, true), version("lab-season-two", 2, false)] } });
+      });
       await owner.open("TV Shows", "Example Show"); await owner.page.getByRole("button", { name: /play from server/i }).click();
       await until("the episode list", async () => /S01E03/.test(await owner.text()), 20_000);
       assert.doesNotMatch(await owner.text(), /\/Example\.Show/, "file names are shown without the provider's leading slash");
@@ -207,6 +215,16 @@ async function main() {
       assert.match(await owner.page.getByRole("tab", { name: /Season 1/ }).innerText(), /1\/3/, "the season shows how many episodes are watched");
       await owner.shot("episodes-watched");
       await owner.page.getByRole("button", { name: "Keep watching", exact: true }).click();
+      // At the end of the last episode of the season, the next season is offered and opens in the player.
+      await owner.page.getByRole("button", { name: "Videos", exact: true }).click();
+      await owner.page.getByRole("tabpanel", { name: "Season 1" }).getByRole("button", { name: /Episode 3\b/ }).click();
+      await until("episode 3", async () => { const now = await owner.video(); return now && now.at > 1 && /S01E03/.test(await owner.text()); }, 60_000, 500);
+      await owner.seek(0.93);
+      await until("the season to finish", async () => /Season finished/.test(await owner.text()), 45_000, 500);
+      await owner.shot("season-finished");
+      await owner.page.getByRole("button", { name: "Play season 2", exact: true }).click();
+      await until("the next season's player", async () => owner.page.url().endsWith("/lab-season-two"), 20_000, 300);
+      await owner.page.unroute(/\/api\/shared-libraries\/[^/]+\/items\/[^/?]+(\?.*)?$/);
     });
 
     await step("invitations are created for a child (kids' limit) and a friend", async () => {
@@ -254,6 +272,7 @@ async function main() {
       await until("the viewer's setup page", async () => /Server-managed playback/.test(await friend.text()), 20_000, 300);
       assert.doesNotMatch(await friend.text(), /private debrid library/i, "a viewer is not sent to import from a debrid account");
       await friend.page.goto(`${base}/discover`, { waitUntil: "networkidle" });
+      assert.equal(await friend.page.getByRole("link", { name: "Apps", exact: true }).count(), 0, "the Apps tab is for administrators only");
       // One search covers movies and shows, and a title is requested with one click on its card, as on a request page.
       await friend.page.getByLabel("Search movies or shows", { exact: true }).fill("Cosmos Laundromat");
       assert.equal(await friend.page.getByRole("combobox", { name: /^Media type/ }).inputValue(), "all", "the search covers movies and shows unless told otherwise");
@@ -293,7 +312,11 @@ async function main() {
       await owner.page.getByRole("button", { name: "Add indexer" }).click();
       await until("the indexer to be added", async () => /Indexer added\. Working/.test(await owner.text()), 30_000);
       await owner.page.goto(`${base}/admin/requests`, { waitUntil: "networkidle" });
-      await owner.page.getByRole("button", { name: "Review request" }).click();
+      // A waiting request can be approved or declined in one click from its card; choosing the release stays one step away.
+      await owner.page.getByRole("button", { name: /^Approve /, exact: false }).first().waitFor();
+      assert.ok(await owner.page.getByRole("button", { name: /^Decline / }).first().isVisible(), "a waiting request can be declined from its card");
+      await owner.shot("request-quick-actions");
+      await owner.page.getByRole("button", { name: "Choose release…" }).click();
       await owner.page.getByRole("button", { name: "Find releases" }).click();
       const page = await until("the releases", async () => { const now = await owner.text(); return /Best match/.test(now) ? now : null; }, 30_000);
       assert.match(page, /Cosmos\.Laundromat\.2015\.1080p\.WEB-DL\.H264\.AAC-LAB \/ ★ Best match/);
@@ -367,6 +390,36 @@ async function main() {
       await owner.shot("jellyfin-launch");
     });
 
+    await step("the Updates panel lists what is new and what was corrected in the releases after the installed one, as plain text", async () => {
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      const notes = owner.page.getByRole("region", { name: "Release notes" });
+      await notes.waitFor({ timeout: 20_000 });
+      const shown = await notes.innerText();
+      assert.match(shown, /What.s new in the 2 updates/, "both releases after the installed one are listed");
+      assert.match(shown, /v0\.99\.0.*The lab release/, "the newest comes first with its title");
+      assert.match(shown, /A lab feature that is new[\s\S]*A lab correction that was made/, "features and corrections are in the panel, without markup characters");
+      assert.doesNotMatch(shown, /\*\*/, "markdown is shown as plain text");
+      assert.ok(shown.indexOf("v0.99.0") < shown.indexOf("v0.98.0"), "newest first");
+      await owner.shot("update-notes");
+    });
+
+    await step("the Monitor page shows the output of the programs StreamRD runs in one place: pick one, filter it, copy or download it", async () => {
+      await owner.page.goto(`${base}/admin/monitor`, { waitUntil: "networkidle" });
+      const sources = owner.page.getByRole("navigation", { name: "Log sources" });
+      await sources.getByRole("button", { name: "StreamRD events" }).waitFor({ timeout: 20_000 });
+      assert.equal(await sources.getByRole("button", { name: "All apps" }).getAttribute("aria-pressed"), "true", "all apps are shown together to begin with");
+      await sources.getByRole("button", { name: "StreamRD events" }).click();
+      const pane = owner.page.getByRole("log", { name: "StreamRD events output" });
+      await until("the event log's lines", async () => /\[admin_action\]|\[login\]|\[system\]/.test(await pane.innerText()), 20_000, 300);
+      await owner.page.getByRole("searchbox", { name: "Filter" }).fill("zzz-no-such-word");
+      await until("the filter to match nothing", async () => /Nothing matches that filter/.test(await pane.innerText()), 10_000, 300);
+      await owner.page.getByRole("searchbox", { name: "Filter" }).fill("");
+      await until("the lines to come back", async () => /\[[a-z_]+\]/.test(await pane.innerText()), 10_000, 300);
+      const [file] = await Promise.all([owner.page.waitForEvent("download", { timeout: 10_000 }), owner.page.getByRole("button", { name: "Download", exact: true }).click()]);
+      assert.match(file.suggestedFilename(), /logs\.txt$/);
+      await owner.shot("monitor");
+    });
+
     await step("Jellyfin is checked for a newer version and updated from the System page, keeping how it was set, and the log box tells the story", async () => {
       await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
       const row = owner.page.locator('[data-module="jellyfin"]'), text = () => row.innerText().catch(() => "");
@@ -390,7 +443,25 @@ async function main() {
     });
 
     await step("An add-on (Sonarr) is installed from the marketplace page: its log follows the download, it opens, stops, starts again and is removed", async () => {
+      // The add-ons are one tab away from anywhere: an Apps tab in the top bar, for administrators, lit on its own pages and not on Admin's.
+      await owner.page.goto(`${base}/admin/system`, { waitUntil: "networkidle" });
+      const nav = owner.page.getByRole("navigation", { name: "Main navigation" });
+      assert.equal(await nav.getByRole("link", { name: "Apps", exact: true }).getAttribute("href"), "/admin/addons");
+      assert.equal(await nav.getByRole("link", { name: "Admin", exact: true }).getAttribute("aria-current"), "page", "Admin is lit on its own pages");
+      await nav.getByRole("link", { name: "Apps", exact: true }).click();
+      await owner.page.waitForURL(/\/admin\/addons$/);
+      assert.equal(await nav.getByRole("link", { name: "Apps", exact: true }).getAttribute("aria-current"), "page", "Apps is lit on the add-ons page");
+      assert.equal(await nav.getByRole("link", { name: "Admin", exact: true }).getAttribute("aria-current"), null, "Admin is not lit on the add-ons page");
+      await owner.shot("apps-tab");
       await owner.page.goto(`${base}/admin/addons`, { waitUntil: "networkidle" });
+      // Zilean and Zurg come from the installer: their cards say what state they are in and, when missing, the exact command that adds them.
+      for (const [name, command] of [["Zilean", "install.sh --zilean"], ["Zurg", "install.sh --zurg --rd-token"]]) {
+        const service = owner.page.getByRole("article", { name, exact: true });
+        await service.waitFor({ timeout: 20_000 });
+        assert.equal(await service.getByRole("status", { name: `${name} status` }).innerText(), "Not installed");
+        assert.match(await service.innerText(), new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      }
+      await owner.shot("addons-services");
       const card = owner.page.getByRole("article", { name: "Sonarr", exact: true }), status = () => card.getByRole("status", { name: "Sonarr status" }).innerText().catch(() => "");
       await until("the marketplace to list Sonarr", async () => (await status()) === "Not installed", 20_000, 300);
       for (const other of ["Radarr", "Lidarr", "Bazarr", "Seerr", "Tautulli", "Prowlarr", "FlareSolverr", "Maintainerr"]) assert.ok(await owner.page.getByRole("article", { name: other, exact: true }).isVisible(), `${other} is in the marketplace`);

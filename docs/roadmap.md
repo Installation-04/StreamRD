@@ -29,9 +29,14 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.27.1 | Root folders for Sonarr, Radarr and Lidarr, FlareSolverr in Prowlarr, Bazarr pointed at Sonarr and Radarr | S | none |
 | v0.28.0 | Music: search albums and request one with a click, through the Lidarr from Admin → Add-ons | M | none |
 | v0.28.1 | The episode list marks what you have watched: a check on each finished episode, a thin bar on one you began, and how many of a season are done | S | none |
+| v0.28.3 | A waiting request is approved or declined in one click from its card; choosing the release stays one step away | S | none |
+| v0.29.0 | Admin → Monitor: the logs of every program in one place; what's new and fixed shown in the Updates panel; an Apps tab; titles with a broken link hidden from viewers; Firefox streaming accepts more H.264 streams | M | none |
+| v0.30.0 | Zilean on by default and Zurg turned on by a Real-Debrid token in a new install; Zilean and Zurg cards on the Add-ons page with start/stop/restart and their logs | M | none |
+| v0.31.0 | Show page lists seasons and episodes with watched marks, Play per episode and Resume / Play next | S | none |
+| v0.32.0 | Mark an episode or a whole season watched or unwatched from the show page | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
-| next | TV shows keep going across seasons: continue with the next season's download when one ends | M | none |
+| v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |
 | next | Zilean and Zurg started and stopped from the page, and updated the same way; Phosphor and the bundled download client switched on and off from the page | M | none |
 
 Plex and Jellyfin stay in containers of their own, started from the page: they are large separate programs with their own releases.

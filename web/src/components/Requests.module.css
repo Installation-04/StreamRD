@@ -10,3 +10,5 @@
 .resultState[data-state="available"]{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,var(--border))}
 .resultState[data-state="attention"],.resultState[data-state="declined"]{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--border))}
 .cover{aspect-ratio:1}
+.reviewActions{display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0}
+.reviewActions+p{margin:0}
