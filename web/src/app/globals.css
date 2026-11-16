@@ -302,3 +302,6 @@ button { transition:background .16s,color .16s,transform .16s; }
 @media (min-width: 1800px) { :root { --wide: 1.25; } }
 @media (min-width: 2200px) { :root { --wide: 1.5; } body { zoom: 1.15; } }
 @media (min-width: 3000px) { :root { --wide: 1.7; } body { zoom: 1.5; } }
+
+/* Ten tabs do not fit beside the account controls on a laptop screen: the icons give way before a tab is cut off. */
+@media(max-width:1560px) { .nav-links>a>svg { display:none; } .nav-links>a { padding:9px 10px; } }

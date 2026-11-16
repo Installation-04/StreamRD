@@ -4,7 +4,8 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin"; printf '#!/bin/sh\nexit 0\n' > "$work/bin/docker"; chmod +x "$work/bin/docker"
-run() { PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start "$@" >/dev/null; }
+# Zilean is on by default for a new install (tested below); the other cases ask for it to be off first, and an option after it wins.
+run() { PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --no-zilean "$@" >/dev/null; }
 check() { grep -q "$2" "$1" || { echo "FAIL: $1 lacks: $2" >&2; exit 1; }; }
 absent() { ! grep -q "$2" "$1" || { echo "FAIL: $1 has: $2" >&2; exit 1; }; }
 
@@ -83,11 +84,23 @@ dr="$work/phosphor-before"; run --dir "$dr"
 sed -i '/^ENABLE_PHOSPHOR=/d' "$dr/.env"; sed -i 's/ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}/ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-true}/' "$dr/docker-compose.yml"
 absent "$dr/.env" ENABLE_PHOSPHOR; run --dir "$dr" --refresh-compose
 check "$dr/.env" '^ENABLE_PHOSPHOR=true$'; check "$dr/docker-compose.yml" 'ENABLE_PHOSPHOR: ${ENABLE_PHOSPHOR:-}'
-# Zilean is added to Phosphor, so asking for it with Phosphor off says so.
-zilean_note="$(PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/phosphor-zilean" --zilean 2>&1)"
-printf '%s' "$zilean_note" | grep -q 'Zilean is added to Phosphor, which is not running' || { echo "FAIL: Zilean without Phosphor was not explained" >&2; exit 1; }
-zilean_on="$(PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$work/phosphor-zilean-on" --zilean --phosphor 2>&1)"
-! printf '%s' "$zilean_on" | grep -q 'which is not running' || { echo "FAIL: Zilean with Phosphor on was told Phosphor is off" >&2; exit 1; }
+# Zilean and Zurg are on by default for a new install: Zilean always, Zurg when a Real-Debrid token is given (Linux). Each can be refused by name,
+# and an install that already exists is left as it is.
+raw() { PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start "$@" >/dev/null 2>&1; }
+dz="$work/zilean-default"; raw --dir "$dz" --no-media-manager
+check "$dz/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.zilean.yml$'; check "$dz/.env" '^ZILEAN_DB_PASSWORD=.'; [ -f "$dz/docker-compose.zilean.yml" ] || { echo "FAIL: no Zilean file on a first install" >&2; exit 1; }
+check "$dz/docker-compose.zilean.yml" 'ZILEAN_URL: http://zilean:8181'; absent "$dz/.env" zurg; [ ! -e "$dz/zurg/config.yml" ]   # no token, no Zurg
+dzo="$work/zilean-off"; raw --dir "$dzo" --no-media-manager --no-zilean; check "$dzo/.env" '^COMPOSE_FILE=docker-compose.yml$'; [ ! -e "$dzo/docker-compose.zilean.yml" ]
+# An install from before this changed is not given Zilean by running the installer again, and keeps it when it has it.
+raw --dir "$dzo" --no-media-manager; check "$dzo/.env" '^COMPOSE_FILE=docker-compose.yml$'
+raw --dir "$dz" --no-media-manager; check "$dz/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.zilean.yml$'
+# A token on a first install turns Zurg on with no other option. Here the machine cannot do the FUSE mount (no /dev/fuse in the sandbox, or no way to
+# become root), so the install carries on without it and says so, instead of stopping.
+if [ ! -e /dev/fuse ] || [ "$(id -u)" != 0 ]; then
+  dzz="$work/zurg-default"; zurg_out="$(PATH="$work/bin:$PATH" bash "$root/install.sh" --yes --no-start --dir "$dzz" --no-media-manager --rd-token testtokentesttoken 2>&1)" || { echo "FAIL: a token on a machine that cannot mount stopped the install" >&2; printf '%s\n' "$zurg_out" >&2; exit 1; }
+  printf '%s' "$zurg_out" | grep -q 'Zurg was not set up' || { echo "FAIL: skipping Zurg was not explained" >&2; exit 1; }
+  check "$dzz/.env" '^COMPOSE_FILE=docker-compose.yml:docker-compose.zilean.yml$'; [ ! -e "$dzz/docker-compose.zurg.yml" ]
+fi
 
 # ---- The host: what is missing is installed (Docker, the Compose plugin, curl, tar), unless told not to. ----------------------------------
 # Each case runs the real installer in a sandbox that has the system's tools but no Docker, package manager, sudo or init system of its own,

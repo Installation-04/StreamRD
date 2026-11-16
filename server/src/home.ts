@@ -114,7 +114,7 @@ export async function externalSections() {
 /** Administrators also see what they imported themselves, even before they put it in a library. */
 export async function librarySections(userId: string, role: string, limit: number | null = null) {
   const libraries = await db.sharedLibrary.findMany({ where: visibleSharedLibraryWhere(userId), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 100 });
-  const own = role === "admin" ? [{ AND: [{ userId }, await currentAccountMediaFilter(userId)] }] : [];
+  const own = role === "admin" ? [{ AND: [{ userId }, await currentAccountMediaFilter(userId), { health: { not: "broken" } }] }] : [];
   if (!libraries.length && !own.length) return { recentlyAdded: [], popularHere: [], myList: [] as Array<{ libraryId: string; item: Awaited<ReturnType<typeof accountMediaViews>>[number] & { favorite: boolean } }>, libraryFeatured: [] as Slide[] };
   const where = { phase: "finished", OR: [...await Promise.all(libraries.map(library => sharedMediaWhere(library, limit))), ...own] };
   const libraryOf = (item: { userId: string; type: string }) => libraries.find(library => library.sourceUserId === item.userId && (library.mediaType === "all" || library.mediaType === item.type))?.id ?? null;
