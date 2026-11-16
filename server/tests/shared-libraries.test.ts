@@ -155,6 +155,17 @@ it("lets a viewer mark episodes watched or unwatched, for themselves only, from 
   expect((await request(app).post(url).set(auth(member.token)).send({ tokens: ["nope"], watched: true })).status).toBe(409);
   expect((await request(app).post(url).set(auth(member.token)).send({ tokens: [], watched: true })).status).toBe(400);
 });
+it("tells the title page where this viewer stopped, only while a file is begun and not finished", async () => {
+  const owner = await user("admin"), member = await user(), other = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member); await grant(owner, shared.id, other);
+  const detail = async (who: { token: string }) => (await request(app).get(`/api/shared-libraries/${shared.id}/items/${film.id}`).set(auth(who.token))).body.item.resume;
+  expect(await detail(member)).toBeNull();
+  await db.sharedLibraryProgress.create({ data: { userId: member.id, itemId: film.id, mediaKey: "k", activeSessionId: "s", positionSeconds: 1500.7, durationSeconds: 6000, completed: false } });
+  expect(await detail(member)).toEqual({ positionSeconds: 1500, durationSeconds: 6000, percent: 25 });
+  expect(await detail(other)).toBeNull();
+  await db.sharedLibraryProgress.updateMany({ where: { userId: member.id }, data: { completed: true } });
+  expect(await detail(member)).toBeNull();
+});
 it("hides a title whose link is broken from viewers, and shows it again once the link works", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);
