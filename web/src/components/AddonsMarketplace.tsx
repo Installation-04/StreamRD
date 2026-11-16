@@ -120,7 +120,10 @@ export default function AddonsMarketplace() {
             {one.error && one.state === "absent" && <p className={styles.error} role="alert">The install did not finish: {one.error}</p>}
             {one.state === "absent" && one.installable && control && <div>
               <button type="button" className="btn btn-sm" disabled={Boolean(busy)} onClick={() => void install(one)}>{busy === `service:${one.name}:install` ? "Starting…" : one.error ? `Try installing ${one.label} again` : `Install ${one.label}`}</button>
-              <p className={styles.small}>Adds {one.label} and its database next to StreamRD, with their own storage. Nothing else on this machine is changed.</p>
+              <p className={styles.small}>{one.name === "zurg"
+                ? "Adds Zurg and the program that mounts your Real-Debrid library as a movies and a shows folder (Plex and Jellyfin started from here see it). It uses the Real-Debrid key stored in your account. Linux only: the machine needs FUSE and a shared mount."
+                : `Adds ${one.label} and its database next to StreamRD, with their own storage. Nothing else on this machine is changed.`}</p>
+              {one.error && <p className={styles.small}>If it cannot be installed from here, run this on the computer that runs StreamRD: <code>{one.command}</code> <button type="button" className="btn btn-sm btn-secondary" onClick={() => copy(one.command)}>Copy the command</button></p>}
             </div>}
             {one.state === "absent" && !(one.installable && control) && <div>
               <p className={styles.small}>The installer adds it, because it needs more than one container{one.name === "zurg" ? " and a mount on this machine" : ""}. On the computer that runs StreamRD, run:</p>

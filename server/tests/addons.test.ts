@@ -148,10 +148,10 @@ it("installs Zilean from the page: administrators only, only Zilean, and the car
   const card = async (name: string) => (await request(app).get("/api/admin/addons").set(auth(admin.token))).body.services.find((one: { name: string }) => one.name === name);
   expect((await request(app).post("/api/admin/addons/services/zilean/install")).status).toBe(401);
   expect((await request(app).post("/api/admin/addons/services/zilean/install").set(auth(member.token))).status).toBe(403);
-  expect((await request(app).post("/api/admin/addons/services/zurg/install").set(auth(admin.token))).status).toBe(404);   // Zurg is still the installer's
+  expect((await request(app).post("/api/admin/addons/services/zilean-db/install").set(auth(admin.token))).status).toBe(404);   // only the two services, not their parts
   expect((await request(app).post("/api/admin/addons/services/nothing/install").set(auth(admin.token))).status).toBe(404);
   expect(asked.some(line => line.includes("/install"))).toBe(false);
-  expect(await card("zilean")).toMatchObject({ state: "absent", installable: true, step: null, error: null }); expect(await card("zurg")).toMatchObject({ installable: false });
+  expect(await card("zilean")).toMatchObject({ state: "absent", installable: true, step: null, error: null }); expect(await card("zurg")).toMatchObject({ state: "absent", installable: true });
   jobs.zilean = { state: "installing", step: "Downloading the database" };
   const started = await request(app).post("/api/admin/addons/services/zilean/install").set(auth(admin.token));
   expect(started.status).toBe(202); expect(asked).toContain("POST /services/zilean/install");
@@ -160,4 +160,18 @@ it("installs Zilean from the page: administrators only, only Zilean, and the car
   expect(await card("zilean")).toMatchObject({ state: "absent", error: "The database did not become ready", step: null });
   delete jobs.zilean; services.zilean = "running"; services["zilean-db"] = "running";
   expect(await card("zilean")).toMatchObject({ state: "running", error: null, step: null });
+});
+
+it("installs Zurg from the page with the Real-Debrid key the administrator stored, and never without one", async () => {
+  const asked = await helper({}, { zilean: "absent", "zilean-db": "absent", zurg: "absent", "zurg-rclone": "absent" });
+  const install = () => request(app).post("/api/admin/addons/services/zurg/install").set(auth(admin.token));
+  expect((await request(app).post("/api/admin/addons/services/zurg/install")).status).toBe(401);
+  expect((await request(app).post("/api/admin/addons/services/zurg/install").set(auth(member.token))).status).toBe(403);
+  const none = await install(); expect(none.status).toBe(409); expect(none.body.error).toMatch(/Connect your Real-Debrid account/);
+  expect(asked.some(line => line.includes("/install"))).toBe(false);   // nothing is asked of the helper without a key
+  await db.debridConfig.upsert({ where: { userId: admin.id }, create: { userId: admin.id, realDebridToken: "STORED-REAL-DEBRID-KEY-0123456789" }, update: { realDebridToken: "STORED-REAL-DEBRID-KEY-0123456789" } });
+  const started = await install(); expect(started.status).toBe(202);
+  expect(asked).toContain(`POST /services/zurg/install {"token":"STORED-REAL-DEBRID-KEY-0123456789"}`);
+  expect(JSON.stringify(started.body)).not.toContain("STORED-REAL-DEBRID-KEY");   // the page never gets the key back
+  expect(JSON.stringify(await db.logEvent.findMany())).not.toContain("STORED-REAL-DEBRID-KEY");   // nor the log
 });

@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 export const HELPER = path.resolve(__dirname, "../../infra/single-container/media-manager.cjs");
 export const SELF_ID = "5f2c".repeat(16), REF = "ghcr.io/installation-04/streamrd:latest";
 export interface Box { id: string; name: string; image: string; running: boolean; alive: boolean; status: string; exitCode: number; finishedAt: string; spec: any; output: string[] }
-export interface EngineOptions { unchanged?: boolean; failStart?: boolean; failPull?: boolean; mounts?: Array<Record<string, unknown>>; networks?: Record<string, unknown>; networkDriver?: string; name?: string; securityOpt?: string[] }
+export interface EngineOptions { unchanged?: boolean; failStart?: boolean; exitOnStart?: string[]; failPull?: boolean; mounts?: Array<Record<string, unknown>>; networks?: Record<string, unknown>; networkDriver?: string; name?: string; securityOpt?: string[] }
 const IMAGE_DEFAULTS = { Env: ["PATH=/usr/bin", "NODE_VERSION=24"], Labels: { "org.opencontainers.image.version": "0.24.0" }, Cmd: ["node", "/opt/single-container/init.cjs"], Entrypoint: ["/usr/bin/tini", "--"], User: "node", Healthcheck: { Test: ["CMD", "node", "/opt/single-container/health.cjs"] } };
 
 export async function dockerEngine(opts: EngineOptions = {}) {
@@ -90,7 +90,7 @@ export async function dockerEngine(opts: EngineOptions = {}) {
         response.writeHead(200, { "Content-Type": "application/vnd.docker.multiplexed-stream" }); return response.end(Buffer.concat(frames));
       }
       if (request.method === "POST" && named[2] === "start") {
-        if ((opts.failStart && box.name === name && box.id !== SELF_ID) || failImages.has(box.image)) { box.status = "exited"; box.exitCode = 1; return reply(204); }
+        if ((opts.failStart && box.name === name && box.id !== SELF_ID) || (opts.exitOnStart ?? []).includes(box.name) || failImages.has(box.image)) { box.status = "exited"; box.exitCode = 1; return reply(204); }
         box.running = true; box.status = "running";
         if (box.spec.Labels?.["streamrd.role"] === "updater") runUpdater(box);
         return reply(204);

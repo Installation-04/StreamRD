@@ -6,6 +6,7 @@ import { asyncHandler } from "./http";
 import { requireAdmin, requireAuth } from "./auth/middleware";
 import { parseBody } from "./routes/helpers";
 import { dockerControl } from "./maintenance";
+import { accountProviderContext } from "./account-library";
 import { manager, ManagerError } from "./media-servers";
 import { removeProwlarr, requestProwlarr } from "./prowlarr";
 import { rateLimit } from "./util/rateLimit";
@@ -62,8 +63,8 @@ async function serviceStates(): Promise<{ states: Record<string, string>; jobs: 
   if (dockerControl().mode === "off") return null;
   try { const answer = await manager<{ services: Record<string, string>; jobs?: Record<string, ServiceJob> }>("GET", "/services"); return { states: answer.services, jobs: answer.jobs ?? {} }; } catch { return null; }
 }
-/** What can be installed from the page: Zilean (a database and the program) can; Zurg needs a mount of the machine's own and is still the installer's. */
-const INSTALLABLE: readonly string[] = ["zilean"];
+/** What can be installed from the page: Zilean (a database and the program) and Zurg (the program and the rclone mount; the Real-Debrid key is the administrator's stored one). */
+const INSTALLABLE: readonly string[] = ["zilean", "zurg"];
 
 export async function addonsView() {
   const [stored, status, states] = await Promise.all([readStored(), helperStatus(), serviceStates()]), control = dockerControl();
@@ -91,8 +92,15 @@ addonsRouter.get("/", guard(async (_req, res) => { res.json(await addonsView());
 /** Install Zilean (its database and the program) next to StreamRD. It takes a while (two images), so the answer is at once and the page watches the state. */
 addonsRouter.post("/services/:service/install", limit, guard(async (req, res) => {
   const name = req.params.service as string;
-  if (!(name in SERVICES) || !INSTALLABLE.includes(name)) { res.status(404).json({ error: "This one is installed with the installer (see the command on its card)." }); return; }
-  await manager("POST", `/services/${name}/install`);
+  if (!(name in SERVICES) || !INSTALLABLE.includes(name)) { res.status(404).json({ error: "That cannot be installed from here." }); return; }
+  // Zurg needs the Real-Debrid key: the one this administrator already stored for StreamRD, sent to the helper over the local channel and written only to Zurg's private config file.
+  let token: string | undefined;
+  if (name === "zurg") {
+    const mine = await accountProviderContext(req.session!.sub, "realdebrid");
+    if (!mine.configured || !mine.enabled) { res.status(409).json({ error: "Connect your Real-Debrid account first (My account → Debrid): Zurg uses the key stored there." }); return; }
+    token = mine.creds.apiKey;
+  }
+  await manager("POST", `/services/${name}/install`, token ? { token } : undefined);
   void logEvent("info", "admin_action", `Installing ${SERVICES[name as ServiceName].label}`, { userId: req.session!.sub }).catch(() => undefined);
   res.status(202).json(await addonsView());
 }));
