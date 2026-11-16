@@ -334,6 +334,63 @@ function createManager(config) {
     for (const source of await logSources()) if (source.state !== 'absent') merged.push(...(await readSource(source.id, tail) || []));
     return merged.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0).slice(-tail);
   }
+  // ---- Zilean from the page. The installer makes Zilean and its database with a Compose file; here the same two containers (same names, the same
+  // settings) are made through Docker, on StreamRD's own network, where StreamRD finds Zilean by name. Nothing is made if either already exists.
+  const serviceJobs = {};   // in-flight installs: { state: 'installing' | 'failed', step, error? }
+  const ZILEAN_DB = ['postgres', '17.2-alpine'], ZILEAN_APP = ['ipromknight/zilean', 'latest'];
+  const volume = (source, target) => ({ Type: 'volume', Source: source, Target: target });
+  async function waitHealthy(container, seconds) {
+    for (let waited = 0; waited < seconds; waited += 3) {
+      const response = await docker('GET', `/containers/${container}/json`);
+      if (response.json?.State?.Health?.Status === 'healthy') return true;
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    return false;
+  }
+  async function installZilean(network, job) {
+    let password = '';
+    const old = await docker('GET', '/containers/zilean-db/json');   // a database left behind keeps its password: its data is protected by it
+    if (old.status === 200) password = String((old.json?.Config?.Env || []).find(entry => entry.startsWith('POSTGRES_PASSWORD='))?.slice(18) || '');
+    if (!password) password = crypto.randomBytes(18).toString('base64url');
+    for (const [image, tag, label] of [[...ZILEAN_DB, 'the database'], [...ZILEAN_APP, 'Zilean']]) {
+      if ((await docker('GET', `/images/${encodeURIComponent(`${image}:${tag}`)}/json`)).status === 200) continue;
+      job.step = `Downloading ${label}`; await pullImage(image, tag, say => { job.step = say; });
+    }
+    const labels = { 'streamrd.managed': 'true', 'streamrd.service': 'zilean' }, restart = { Name: 'unless-stopped' };
+    const net = alias => ({ NetworkingConfig: { EndpointsConfig: { [network]: { Aliases: [alias] } } } });
+    job.step = 'Starting the database';
+    if (old.status !== 200) {   // a database left behind (zilean-db without zilean) is started as it is: its data and its password stay
+      const db = await docker('POST', '/containers/create?name=zilean-db', { Image: `${ZILEAN_DB[0]}:${ZILEAN_DB[1]}`, Labels: labels,
+        Env: ['PGDATA=/var/lib/postgresql/data/pgdata', 'POSTGRES_USER=postgres', `POSTGRES_PASSWORD=${password}`, 'POSTGRES_DB=zilean'],
+        Healthcheck: { Test: ['CMD-SHELL', 'pg_isready -U postgres -d zilean'], Interval: 10e9, Timeout: 5e9, Retries: 10 },
+        HostConfig: { Mounts: [volume('streamrd-zilean-db', '/var/lib/postgresql/data')], ShmSize: 2 * 1024 ** 3, RestartPolicy: restart }, ...net('zilean-db') });
+      if (db.status !== 201) throw new Error(`The database could not be created (${db.status}${db.json?.message ? `: ${String(db.json.message).slice(0, 160)}` : ''})`);
+    }
+    const dbStart = await docker('POST', '/containers/zilean-db/start');
+    if (![204, 304].includes(dbStart.status)) throw new Error(`The database could not be started (${dbStart.status})`);
+    job.step = 'Waiting for the database'; if (!(await waitHealthy('zilean-db', 120))) throw new Error('The database did not become ready in two minutes. Its log is in Admin → Monitor');
+    job.step = 'Starting Zilean';
+    const app = await docker('POST', '/containers/create?name=zilean', { Image: `${ZILEAN_APP[0]}:${ZILEAN_APP[1]}`, Labels: labels, Tty: true,
+      Env: [`Zilean__Database__ConnectionString=Host=zilean-db;Database=zilean;Username=postgres;Password=${password};Timeout=30;CommandTimeout=3600`],
+      Healthcheck: { Test: ['CMD', 'curl', '-f', 'http://localhost:8181/healthchecks/ping'], Interval: 30e9, Timeout: 10e9, Retries: 10 },
+      HostConfig: { Mounts: [volume('streamrd-zilean-data', '/app/data'), volume('streamrd-zilean-tmp', '/tmp')], RestartPolicy: restart }, ...net('zilean') });
+    if (app.status !== 201) throw new Error(`Zilean could not be created (${app.status}${app.json?.message ? `: ${String(app.json.message).slice(0, 160)}` : ''})`);
+    const appStart = await docker('POST', '/containers/zilean/start');
+    if (![204, 304].includes(appStart.status)) throw new Error(`Zilean could not be started (${appStart.status})`);
+  }
+  async function installService(name) {
+    if (name !== 'zilean') throw Object.assign(new Error('That service cannot be installed from here yet'), { status: 404 });
+    if (serviceJobs[name] && serviceJobs[name].state !== 'failed') return serviceJobs[name];
+    if ((await stateOfContainer('zilean')) !== 'absent') throw Object.assign(new Error('Zilean is already installed here'), { status: 409 });
+    const where = await layout();
+    if (!where.network) throw Object.assign(new Error('Zilean is added next to StreamRD on its own Docker network (the one the installer makes). This StreamRD does not run on one, so it cannot be reached by name. Use install.sh --zilean'), { status: 409 });
+    const job = serviceJobs[name] = { state: 'installing', step: 'Starting' };
+    (async () => {
+      try { await installZilean(where.network, job); delete serviceJobs[name]; }
+      catch (error) { serviceJobs[name] = { state: 'failed', step: '', error: redact(error instanceof Error ? error.message : 'The install failed').slice(0, 300) }; }
+    })();
+    return job;
+  }
   async function stop(name) { delete jobs[name]; note(name, 'Stop requested'); const response = await docker('POST', `/containers/${containerName(name)}/stop`); if (![204, 304, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
   async function remove(name) { delete jobs[name]; note(name, 'Remove requested'); const response = await docker('DELETE', `/containers/${containerName(name)}?force=true`); if (![204, 404].includes(response.status)) throw new Error(`Docker answered ${response.status}`); }
 
@@ -609,7 +666,9 @@ function createManager(config) {
         if (request.method !== 'POST') return send(405, { error: 'Method not allowed' });
         const result = startRestart(); return send(result.restarting ? 202 : 409, result.restarting ? result : { error: result.reason });
       }
-      if (request.method === 'GET' && url.pathname === '/services') { const states = {}; for (const name of SERVICES) states[name] = await stateOfContainer(name); return send(200, { services: states }); }
+      if (request.method === 'GET' && url.pathname === '/services') { const states = {}; for (const name of SERVICES) states[name] = await stateOfContainer(name); return send(200, { services: states, jobs: serviceJobs }); }
+      const install = /^\/services\/([a-z]+)\/install$/.exec(url.pathname);
+      if (install) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); return send(202, { job: await installService(install[1]) }); }
       const service = /^\/services\/([a-z]+)\/(start|stop|restart)$/.exec(url.pathname);
       if (service) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await controlService(service[1], service[2]); return send(200, { ok: true }); }
       if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });

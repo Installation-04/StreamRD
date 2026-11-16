@@ -57,17 +57,20 @@ export const SERVICES = {
   zurg: { label: "Zurg", blurb: "Shows your Real-Debrid library as real files (a movies and a shows folder) that Plex and Jellyfin can read. Linux only; it mounts a folder on the machine.", containers: ["zurg", "zurg-rclone"], command: "bash install.sh --zurg --rd-token YOUR_REAL_DEBRID_TOKEN", home: "https://github.com/debridmediamanager/zurg-testing", licence: "see its page" },
 } as const;
 export type ServiceName = keyof typeof SERVICES;
-async function serviceStates(): Promise<Record<string, string> | null> {
+interface ServiceJob { state: "installing" | "failed"; step?: string; error?: string }
+async function serviceStates(): Promise<{ states: Record<string, string>; jobs: Record<string, ServiceJob> } | null> {
   if (dockerControl().mode === "off") return null;
-  try { return (await manager<{ services: Record<string, string> }>("GET", "/services")).services; } catch { return null; }
+  try { const answer = await manager<{ services: Record<string, string>; jobs?: Record<string, ServiceJob> }>("GET", "/services"); return { states: answer.services, jobs: answer.jobs ?? {} }; } catch { return null; }
 }
+/** What can be installed from the page: Zilean (a database and the program) can; Zurg needs a mount of the machine's own and is still the installer's. */
+const INSTALLABLE: readonly string[] = ["zilean"];
 
 export async function addonsView() {
   const [stored, status, states] = await Promise.all([readStored(), helperStatus(), serviceStates()]), control = dockerControl();
   return {
     control: { mode: control.mode, reason: control.reason }, groups: GROUPS,
-    services: (Object.keys(SERVICES) as ServiceName[]).map(name => { const one = SERVICES[name], mine = states?.[one.containers[0]] ?? (states ? "absent" : "unknown");
-      return { name, label: one.label, blurb: one.blurb, command: one.command, home: one.home, licence: one.licence, state: mine, parts: one.containers.map(part => ({ name: part, state: states?.[part] ?? (states ? "absent" : "unknown") })) }; }),
+    services: (Object.keys(SERVICES) as ServiceName[]).map(name => { const one = SERVICES[name], job = states?.jobs[name], mine = job?.state === "installing" ? "installing" : states?.states[one.containers[0]] ?? (states ? "absent" : "unknown");
+      return { name, label: one.label, blurb: one.blurb, command: one.command, home: one.home, licence: one.licence, state: mine, installable: INSTALLABLE.includes(name), step: job?.state === "installing" ? job.step ?? null : null, error: job?.state === "failed" ? job.error ?? null : null, parts: one.containers.map(part => ({ name: part, state: states?.states[part] ?? (states ? "absent" : "unknown") })) }; }),
     addons: NAMES.map(name => {
       const entry = CATALOG[name], found = status?.[name];
       return { name, label: entry.label, group: entry.group, blurb: entry.blurb, home: entry.home, licence: entry.licence, ui: entry.ui, needs: entry.needs ?? null,
@@ -85,6 +88,14 @@ const guard = (run: Parameters<typeof asyncHandler>[0]) => asyncHandler(async (r
 const limit = rateLimit({ windowMs: 60_000, max: 30 });
 addonsRouter.get("/", guard(async (_req, res) => { res.json(await addonsView()); }));
 /** Install it, or start it again: made from the same fixed specification each time, so its settings under config/ carry over. */
+/** Install Zilean (its database and the program) next to StreamRD. It takes a while (two images), so the answer is at once and the page watches the state. */
+addonsRouter.post("/services/:service/install", limit, guard(async (req, res) => {
+  const name = req.params.service as string;
+  if (!(name in SERVICES) || !INSTALLABLE.includes(name)) { res.status(404).json({ error: "This one is installed with the installer (see the command on its card)." }); return; }
+  await manager("POST", `/services/${name}/install`);
+  void logEvent("info", "admin_action", `Installing ${SERVICES[name as ServiceName].label}`, { userId: req.session!.sub }).catch(() => undefined);
+  res.status(202).json(await addonsView());
+}));
 /** Start, stop or restart Zilean or Zurg (with what they need), when the installer has put them there. */
 addonsRouter.post("/services/:service/:action", limit, guard(async (req, res) => {
   const name = req.params.service as string, action = req.params.action as string;

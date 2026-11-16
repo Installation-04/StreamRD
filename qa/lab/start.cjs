@@ -51,11 +51,9 @@ function videos() {
 }
 function secret(name) { const file = path.join(data, name); if (!fs.existsSync(file)) fs.writeFileSync(file, crypto.randomBytes(32).toString("hex"), { mode: 0o600 }); return fs.readFileSync(file, "utf8").trim(); }
 function gateway() {
-  // The product's own gateway: the proxy() function of the single container's start script, run as it is.
-  const source = fs.readFileSync(path.join(root, "infra", "single-container", "start.cjs"), "utf8");
-  const body = source.slice(source.indexOf("function proxy("), source.indexOf("async function check("));
-  const gateways = [], health = async () => true; // eslint-disable-line no-unused-vars
-  eval(body); proxy(ports.gateway, ports.web, ports.api); // eslint-disable-line no-eval, no-undef
+  // The product's own gateway: the file the single container's start script uses (infra/single-container/gateway.cjs), run as it is.
+  const { createGateway } = require(path.join(root, "infra", "single-container", "gateway.cjs"));
+  createGateway({ port: ports.gateway, webPort: ports.web, apiPort: ports.api, health: async () => true });
 }
 async function ready(url) { for (let attempt = 0; attempt < 120; attempt++) { try { const response = await fetch(url); if (response.ok) return; } catch { /* not yet */ } await new Promise(done => setTimeout(done, 500)); } throw Error(`${url} did not come up`); }
 

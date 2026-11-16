@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { dockerEngine, Engine, EngineOptions, HELPER, REF, SELF_ID } from "./docker-engine";
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 const { createManager, containerIdFrom, hostPath, SERVERS } = require(HELPER) as {
@@ -418,4 +418,42 @@ it("shows the state of Zilean and Zurg and starts, stops or restarts them with w
   expect(docker.calls.some(line => line.includes("not-a-service"))).toBe(false);
   expect((await call("GET", "/services/zilean/stop")).status).toBe(405);
   expect((await call("POST", "/services/zilean/stop", undefined, null)).status).toBe(401);
+});
+
+it("installs Zilean and its database from the page: same names as the installer, on StreamRD's network, one password for both, nothing when it is already there", async () => {
+  await start(); const { json, call } = await helper();
+  expect((await call("POST", "/services/not-a-service/install")).status).toBe(404);
+  expect((await call("POST", "/services/zurg/install")).status).toBe(404);   // only Zilean can be installed from here (so far)
+  expect((await call("POST", "/services/zilean/install", undefined, null)).status).toBe(401);
+  expect((await call("GET", "/services/zilean/install")).status).toBe(405);
+  const first = await call("POST", "/services/zilean/install"); expect(first.status).toBe(202);
+  await vi.waitFor(async () => { const view = await json("GET", "/services"); expect(view.jobs).toEqual({}); expect(view.services).toMatchObject({ zilean: "running", "zilean-db": "running" }); }, { timeout: 15_000, interval: 50 });
+  const db = docker.find("zilean-db")!.spec, app = docker.find("zilean")!.spec;
+  expect(db.Image).toBe("postgres:17.2-alpine"); expect(app.Image).toBe("ipromknight/zilean:latest");
+  expect(Object.keys(app.NetworkingConfig.EndpointsConfig)).toEqual(["streamrd_default"]); expect(app.NetworkingConfig.EndpointsConfig.streamrd_default.Aliases).toEqual(["zilean"]);
+  expect(db.NetworkingConfig.EndpointsConfig.streamrd_default.Aliases).toEqual(["zilean-db"]);
+  const password = String(db.Env.find((entry: string) => entry.startsWith("POSTGRES_PASSWORD=")).slice(18));
+  expect(password).toMatch(/^[A-Za-z0-9_-]{24}$/); expect(app.Env).toEqual([expect.stringContaining(`Host=zilean-db;Database=zilean;Username=postgres;Password=${password};`)]);
+  expect(db.HostConfig.Mounts[0]).toMatchObject({ Type: "volume", Target: "/var/lib/postgresql/data" }); expect(db.HostConfig.RestartPolicy).toEqual({ Name: "unless-stopped" });
+  expect(app.HostConfig.Mounts.map((mount: { Target: string }) => mount.Target)).toEqual(["/app/data", "/tmp"]); expect(app.Labels).toMatchObject({ "streamrd.managed": "true", "streamrd.service": "zilean" });
+  const made = docker.calls.filter(line => line === "POST /containers/create"); expect(made).toHaveLength(2);   // the database, then Zilean
+  expect(docker.calls.filter(line => /^POST \/containers\/zilean(-db)?\/start$/.test(line))).toEqual(["POST /containers/zilean-db/start", "POST /containers/zilean/start"]);
+  expect((await call("POST", "/services/zilean/install")).status).toBe(409);   // already there: nothing is made again
+  expect(docker.calls.filter(line => line === "POST /containers/create")).toHaveLength(2);
+  expect(JSON.stringify(await json("GET", "/logs/read?source=svc:zilean&tail=5"))).not.toContain(password);
+});
+
+it("keeps a database that was left behind, with its password, when Zilean is installed again", async () => {
+  await start(); const { json, call } = await helper();
+  docker.boxes.push({ id: "d".repeat(64), name: "zilean-db", image: "sha256:db", running: false, alive: true, status: "exited", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec: { Image: "postgres:17.2-alpine", Env: ["POSTGRES_PASSWORD=kept-password-123"], HostConfig: {} }, output: [] });
+  expect((await call("POST", "/services/zilean/install")).status).toBe(202);
+  await vi.waitFor(async () => expect((await json("GET", "/services")).services).toMatchObject({ zilean: "running", "zilean-db": "running" }), { timeout: 15_000, interval: 50 });
+  expect(docker.calls.filter(line => line === "POST /containers/create")).toHaveLength(1);   // only Zilean: the database is started as it was
+  expect(docker.find("zilean")!.spec.Env[0]).toContain("Password=kept-password-123;");
+});
+
+it("says why Zilean cannot be installed when StreamRD is not on a network of its own, and reports a failed download", async () => {
+  await start({ networks: { bridge: { Aliases: [], IPAddress: "172.17.0.2" } } }); const plain = await helper();
+  const refused = await plain.call("POST", "/services/zilean/install"); expect(refused.status).toBe(409); expect(((await refused.json()) as { error: string }).error).toMatch(/own Docker network.*install\.sh --zilean/);
+  expect(docker.boxes.some(box => box.name === "zilean")).toBe(false);
 });

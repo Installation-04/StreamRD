@@ -24,7 +24,7 @@ examples) and only removes them after you confirm. Removed names are skipped by 
 [Zilean](https://github.com/iPromKnight/zilean) keeps a searchable copy of Debrid Media Manager's public hash lists and
 serves it as a Torznab feed, which Phosphor can search like Jackett or Prowlarr.
 
-**On by default for a new install** (since v0.30.0). Refuse it with `--no-zilean`; add it to an install that already exists with:
+**From the page** (since v0.38.0): Admin → Add-ons → **Install Zilean** adds it, with its database, to an install that does not have it; StreamRD finds it by name, with nothing to set. **On by default for a new install** (since v0.30.0). Refuse it with `--no-zilean`; add it to an install that already exists with:
 
 ```bash
 bash install.sh --zilean          # re-running is safe
