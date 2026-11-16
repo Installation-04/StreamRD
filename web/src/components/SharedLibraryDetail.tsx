@@ -9,6 +9,7 @@ import { AccountMedia, accountMediaName, safeMediaUrl } from "@/lib/account-libr
 import { imdbLink, metadataSourceLink, PROVIDER_LABELS } from "@/lib/metadata";
 import { SharedLibrary, TitleVersion } from "@/lib/shared-libraries";
 import { FavoriteToggle, MATCH_TO_FIX, TrailerButton, WatchedToggle } from "@/components/LibraryCard";
+import EpisodeBrowser from "@/components/EpisodeBrowser";
 import styles from "@/app/library/[id]/detail.module.css";
 
 export default function SharedLibraryDetail() {
@@ -78,6 +79,7 @@ export default function SharedLibraryDetail() {
         </div>}
       </div>
     </section>
+    {item.type === "series" && <EpisodeBrowser libraryId={id} itemId={item.id} />}
     <section className={styles.details} aria-label="Shared title information"><div><p className={styles.eyebrow}>THE STORY, WITH MORE CONTEXT</p><h2>{metadata?.cast.length ? "Cast" : "Part of your server’s collection"}</h2>{metadata?.cast.length ? <div className={styles.cast}>{metadata.cast.map((person, index) => <span key={`${person}-${index}`}><i aria-hidden="true">{person.split(" ").filter(Boolean).map(part => part[0]).slice(0, 2).join("")}</i>{person}</span>)}</div> : <p className={styles.copy}>The server owner can add artwork, cast and details through automatic metadata matching. You can watch without configuring a personal provider account.</p>}</div><aside className={styles.source}><p className={styles.eyebrow}>WHERE THIS TITLE LIVES</p><h2>Shared collection</h2><dl><div><dt>Playback</dt><dd>Managed by your server</dd></div><div><dt>Library</dt><dd>{library?.name ?? "Shared library"}</dd></div><div><dt>Imported</dt><dd>{Number.isNaN(Date.parse(item.createdAt)) ? "Not recorded" : new Date(item.createdAt).toLocaleDateString()}</dd></div>{metadata && <div><dt>Metadata</dt><dd>{PROVIDER_LABELS[metadata.provider]}</dd></div>}{metadata?.imdbId && <div><dt>IMDb ID</dt><dd>{metadata.imdbId}</dd></div>}</dl><div className={styles.sourceLinks}>{imdb && <a href={imdb} target="_blank" rel="noreferrer">View IMDb ↗</a>}{source && source !== imdb && <a href={source} target="_blank" rel="noreferrer">Metadata source ↗</a>}</div></aside></section>
     {metadata && <footer className={styles.attribution}>{metadata.provider === "tmdb" && <img src="/metadata/tmdb.svg" alt="TMDB" width={94} height={24} />}<p>{metadata.provider === "tmdb" ? "This product uses the TMDB API but is not endorsed or certified by TMDB." : metadata.provider === "free" ? "Metadata from Cinemeta, which serves IMDb-linked data. No account is used." : "IMDb-linked metadata supplied by OMDb."} Metadata and artwork belong to their respective providers and rights holders.</p></footer>}
   </main>;

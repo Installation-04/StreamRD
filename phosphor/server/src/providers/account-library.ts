@@ -188,7 +188,7 @@ function url(provider: ProviderId, value: unknown): string {
   try { const parsed = new URL(String(value)); if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error(); return parsed.href; }
   catch { throw error(provider, "The provider did not return a usable video link.", 422); }
 }
-function choices(provider: ProviderId, creds: ProviderCredentials, reference: string, files: File[], token?: string): { file?: File; result?: AccountPlayResult } {
+function choices(provider: ProviderId, creds: ProviderCredentials, reference: string, files: File[], token?: string, listOnly = false): { file?: File; result?: AccountPlayResult } {
   const candidates = files.filter(file => file.link && VIDEO.test(file.name));
   if (!candidates.length) throw error(provider, "No selected video files are available in this account item. Review it in the provider dashboard.", 422);
   if (candidates.length > 100) throw error(provider, "This item contains more than 100 videos; choose a smaller item in the provider dashboard.", 422);
@@ -199,11 +199,12 @@ function choices(provider: ProviderId, creds: ProviderCredentials, reference: st
     return { file: selected };
   }
   const main = candidates.filter(file => !/(?:^|[\/ ._-])(?:sample|trailer)(?:$|[\/ ._-])/i.test(file.name));
-  if (candidates.length === 1 || main.length === 1) return { file: main.length === 1 ? main[0] : candidates[0] };
-  return { result: { selectionRequired: true, files: candidates.map(file => ({ token: sign(file), name: file.name, ...(file.size === undefined ? {} : { size: file.size }) })) } };
+  if (!listOnly && (candidates.length === 1 || main.length === 1)) return { file: main.length === 1 ? main[0] : candidates[0] };
+  const shown = listOnly && main.length ? main : candidates;
+  return { result: { selectionRequired: true, files: shown.map(file => ({ token: sign(file), name: file.name, ...(file.size === undefined ? {} : { size: file.size }) })) } };
 }
 /** Resolve signed links only on an owner's explicit play action; never persists them. */
-export async function playAccountItem(provider: ProviderId, creds: ProviderCredentials, providerRef: string, fileToken?: string): Promise<AccountPlayResult> {
+export async function playAccountItem(provider: ProviderId, creds: ProviderCredentials, providerRef: string, fileToken?: string, listOnly = false): Promise<AccountPlayResult> {
   const ctx = context(provider, creds); let reference = providerRef;
   if (provider === "premiumize") reference = providerRef.startsWith("file:") ? providerRef.slice(5) : "";
   if (!id(reference)) throw error(provider, "This account item reference is invalid; rescan the account library.", 400);
@@ -250,7 +251,7 @@ export async function playAccountItem(provider: ProviderId, creds: ProviderCrede
   }
   if (phase === "error") throw error(provider, "This account item is not currently available for playback; review it in the provider dashboard.", 422);
   if (phase !== "finished") return { pending: true, progress: percent };
-  const selected = choices(provider, creds, providerRef, files, fileToken); if (selected.result) return selected.result;
+  const selected = choices(provider, creds, providerRef, files, fileToken, listOnly); if (selected.result) return selected.result;
   const file = selected.file!; let stream: Record<string, unknown>;
   if (file.direct) stream = { url: file.link };
   else if (provider === "realdebrid") {
