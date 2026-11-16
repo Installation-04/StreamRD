@@ -12,6 +12,8 @@ import { FavoriteToggle, MATCH_TO_FIX, TrailerButton, WatchedToggle } from "@/co
 import EpisodeBrowser from "@/components/EpisodeBrowser";
 import styles from "@/app/library/[id]/detail.module.css";
 
+const clock = (seconds: number) => { const total = Math.max(0, Math.floor(seconds)), h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), sec = total % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`; };
+
 export default function SharedLibraryDetail() {
   const { id, itemId } = useParams<{ id: string; itemId: string }>(), { user, loading: authLoading } = useAuth(), router = useRouter();
   const [library, setLibrary] = useState<SharedLibrary | null>(null);
@@ -56,7 +58,7 @@ export default function SharedLibraryDetail() {
         {item.tags?.length ? <ul className={styles.tags} aria-label="Video and audio formats">{item.tags.map(tag => <li key={`${tag.kind}-${tag.label}`} className={`${styles.tag} ${tag.kind === "resolution" ? styles.tagResolution : tag.kind === "hdr" ? styles.tagHdr : ""}`} data-kind={tag.kind}>{tag.label}</li>)}</ul> : null}
         {metadata?.genres.length ? <p className={styles.genres}>{metadata.genres.join(" · ")}</p> : null}
         <p className={styles.overview}>{metadata?.description || "This title is part of a collection shared with you by the server. Your server handles the connection when you press Play."}</p>
-        <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" onClick={() => router.push(`/play/${encodeURIComponent(id)}/${encodeURIComponent(item.id)}`)}>▶ Play from server</button><FavoriteToggle libraryId={id} item={item} onChange={favorite => setItem(current => current ? { ...current, favorite } : current)} /><TrailerButton libraryId={id} item={item} /><WatchedToggle libraryId={id} item={item} onChange={watched => setItem(current => current ? { ...current, watched } : current)} /></div>
+        <div className={styles.actions}><button type="button" className="btn" aria-label="Play from server" onClick={() => router.push(`/play/${encodeURIComponent(id)}/${encodeURIComponent(item.id)}`)}>{item.type === "movie" && item.resume ? `▶ Resume ${clock(item.resume.positionSeconds)}` : "▶ Play from server"}</button>{item.type === "movie" && item.resume && <button type="button" className="btn btn-secondary" onClick={() => router.push(`/play/${encodeURIComponent(id)}/${encodeURIComponent(item.id)}?restart=1`)}>Start over</button>}<FavoriteToggle libraryId={id} item={item} onChange={favorite => setItem(current => current ? { ...current, favorite } : current)} /><TrailerButton libraryId={id} item={item} /><WatchedToggle libraryId={id} item={item} onChange={watched => setItem(current => current ? { ...current, watched } : current)} /></div>
         {item.type === "series" && versions.length > 1 && versions.some(version => version.season) && <section aria-label="Seasons" className={styles.seasons}>
           <h2>Seasons</h2>
           <ul>{[...versions].sort((a, b) => (a.season?.from ?? 99) - (b.season?.from ?? 99) || (b.createdAt > a.createdAt ? 1 : -1)).map(version => <li key={version.id}>
