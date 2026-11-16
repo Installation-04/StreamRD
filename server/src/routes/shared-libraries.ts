@@ -237,6 +237,28 @@ sharedLibrariesRouter.get("/:id/items/:itemId/episodes", rateLimit({ windowMs: 6
   if (listed.pending || !listed.files) { res.json({ files: [], pending: Boolean(listed.pending), progress: listed.progress ?? 0 }); return; }
   res.json({ files: await annotateFiles(req.session!.sub, itemId, listed.files) });
 }));
+/** Mark some of a title's episodes watched or unwatched for this viewer (an episode, a season, or all of them). The viewer sends the file choices the list gave; the keys stay on the server. */
+sharedLibrariesRouter.post("/:id/items/:itemId/episodes/watched", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
+  const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
+  const body = parse(z.object({ tokens: z.array(z.string().min(1).max(512)).min(1).max(400), watched: z.boolean() }).strict(), req.body ?? {});
+  const library = await assertSharedViewer(req.session!, libraryId);
+  const authorize = async () => {
+    const freshLibrary = await assertSharedViewer(req.session!, libraryId);
+    const item = await db.accountMedia.findFirst({ where: { id: itemId, AND: [await sharedMediaWhere(freshLibrary, await viewingLimit(req.session!.sub))] }, select: { id: true } });
+    if (!item || freshLibrary.sourceUserId !== library.sourceUserId) throw new AccountLibraryError("Library item not found.", 404);
+  };
+  const listed = await playImportedMedia(library.sourceUserId, itemId, undefined, authorize, true).catch(error => {
+    if (!(error instanceof AccountLibraryError)) throw error;
+    throw new AccountLibraryError("The episodes could not be marked right now: the provider did not answer.", error.status);
+  });
+  await authorize();
+  const chosen = new Set(body.tokens), keys = (listed.files ?? []).filter(file => chosen.has(file.token)).map(file => file.mediaKey).filter((key): key is string => Boolean(key));
+  if (!keys.length) throw new AccountLibraryError("Those episodes are no longer in this title; reload the page.", 409);
+  const userId = req.session!.sub;
+  if (body.watched) await db.$transaction(keys.map(mediaKey => db.sharedLibraryProgress.upsert({ where: { userId_itemId_mediaKey: { userId, itemId, mediaKey } }, create: { userId, itemId, mediaKey, activeSessionId: "marked", positionSeconds: 1, durationSeconds: 1, completed: true }, update: { completed: true, positionSeconds: 1, durationSeconds: 1, activeSessionId: "marked", lastSequence: -1, updatedAt: new Date() } })));
+  else await db.sharedLibraryProgress.deleteMany({ where: { userId, itemId, mediaKey: { in: keys } } });
+  res.json({ files: await annotateFiles(userId, itemId, listed.files ?? []) });
+}));
 sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_000, max: 60 }), action(async (req, res) => {
   const libraryId = parse(id, req.params.id), itemId = parse(id, req.params.itemId);
   const body = parse(z.object({ fileToken: z.string().min(1).max(512).optional() }).strict(), req.body ?? {});

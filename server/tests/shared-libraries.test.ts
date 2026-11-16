@@ -138,6 +138,23 @@ it("lists a title's episodes for its page with the viewer's marks, asking only f
   play.mockResolvedValue({ pending: true, progress: 40 });
   expect((await request(app).get(`${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes`).set(auth(member.token))).body).toEqual({ files: [], pending: true, progress: 40 });
 });
+it("lets a viewer mark episodes watched or unwatched, for themselves only, from the file choices the list gave", async () => {
+  const owner = await user("admin"), member = await user(), other = await user(), [film] = await imports(owner), shared = await library(owner);
+  await grant(owner, shared.id, member); await grant(owner, shared.id, other);
+  const files = [1, 2, 3].map(n => ({ token: `t${n}`, name: `Show.S01E0${n}.mkv`, size: 100 + n, mediaKey: `key-${n}` }));
+  play.mockResolvedValue({ selectionRequired: true, files });
+  const url = `${playUrl(shared.id, film.id).replace(/\/play$/, "")}/episodes/watched`;
+  const marked = await request(app).post(url).set(auth(member.token)).send({ tokens: ["t1", "t2"], watched: true });
+  expect(marked.status).toBe(200);
+  expect(marked.body.files.map((file: { watched?: boolean }) => Boolean(file.watched))).toEqual([true, true, false]);
+  expect(JSON.stringify(marked.body)).not.toContain("key-");
+  const theirs = await request(app).get(url.replace(/watched$/, "")).set(auth(other.token));
+  expect(theirs.body.files.some((file: { watched?: boolean }) => file.watched)).toBe(false);
+  const undone = await request(app).post(url).set(auth(member.token)).send({ tokens: ["t2"], watched: false });
+  expect(undone.body.files.map((file: { watched?: boolean }) => Boolean(file.watched))).toEqual([true, false, false]);
+  expect((await request(app).post(url).set(auth(member.token)).send({ tokens: ["nope"], watched: true })).status).toBe(409);
+  expect((await request(app).post(url).set(auth(member.token)).send({ tokens: [], watched: true })).status).toBe(400);
+});
 it("hides a title whose link is broken from viewers, and shows it again once the link works", async () => {
   const owner = await user("admin"), member = await user(), [film] = await imports(owner), shared = await library(owner);
   await grant(owner, shared.id, member);

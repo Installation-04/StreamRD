@@ -7,7 +7,8 @@
 .tabs button small { font-size:11px;opacity:.65; }
 .tabs .on { border-color:var(--accent,currentColor);background:color-mix(in srgb,var(--accent,currentColor) 16%,transparent); }
 .list { list-style:none;margin:0;padding:0;display:grid;gap:4px; }
-.list a { display:flex;align-items:center;gap:14px;padding:9px 12px;border-radius:10px;color:inherit;text-decoration:none; }
+.list li { display:flex;align-items:center;gap:4px; }
+.list a { flex:1;min-width:0;display:flex;align-items:center;gap:14px;padding:9px 12px;border-radius:10px;color:inherit;text-decoration:none; }
 .list a:hover,.list a:focus-visible { background:color-mix(in srgb,var(--accent,currentColor) 12%,transparent); }
 .num { width:2.2em;text-align:right;font-variant-numeric:tabular-nums;opacity:.6; }
 .title { flex:1;display:flex;flex-direction:column;min-width:0; }
@@ -18,3 +19,10 @@
 .play { opacity:.55; }
 .bar { width:70px;height:4px;border-radius:2px;background:rgba(255,255,255,.18);overflow:hidden; }
 .bar i { display:block;height:100%;background:var(--accent,currentColor); }
+.seasonActions { display:flex;gap:14px;flex-wrap:wrap;margin:0 0 8px; }
+.linkish { background:none;border:0;padding:0;color:var(--accent,inherit);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline; }
+.linkish:disabled { opacity:.5;cursor:default; }
+.check,.uncheck { width:30px;height:30px;border-radius:50%;border:1px solid var(--border,rgba(255,255,255,.25));background:transparent;color:inherit;font-size:14px;cursor:pointer; }
+.check { background:var(--accent,currentColor);color:var(--bg,#000);border-color:transparent; }
+.uncheck { opacity:.35; }.uncheck:hover,.uncheck:focus-visible { opacity:1; }
+.check:disabled,.uncheck:disabled { cursor:default; }
