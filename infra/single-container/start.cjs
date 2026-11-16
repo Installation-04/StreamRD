@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
+const { createGateway } = require('./gateway.cjs');
 // DATA_DIR holds downloads and media. CONFIG_DIR holds databases, secrets and the download client's settings;
 // when it is not set (the original layout) everything lives under DATA_DIR, so existing volumes keep working.
 const root = process.env.DATA_DIR || '/data';
@@ -90,23 +91,7 @@ function prepareQbit(accessHost = '') {
   fs.writeFileSync(file, config, { mode: 0o600 }); fs.chmodSync(file, 0o600);
   return ['--profile=' + path.join(configRoot, 'qbittorrent'), '--webui-port=8082'];
 }
-function proxy(port, webPort, apiPort) {
-  const server = http.createServer(async (req, res) => {
-    if (req.url === '/healthz') {
-      const ok = await health(); res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ ok })); return;
-    }
-    const target = req.url === '/api' || req.url.startsWith('/api/') ? apiPort : webPort;
-    const upstream = http.request({ host: '127.0.0.1', port: target, path: req.url, method: req.method, headers: { ...req.headers, host: req.headers.host || `127.0.0.1:${target}`, 'x-forwarded-host': req.headers.host || '', 'x-forwarded-proto': process.env.TRUST_PROXY === 'true' && /^(https|http)$/.test(req.headers['x-forwarded-proto'] || '') ? req.headers['x-forwarded-proto'] : req.socket.encrypted ? 'https' : 'http' } }, response => {
-      res.writeHead(response.statusCode, { 'x-content-type-options': 'nosniff', 'x-frame-options': 'SAMEORIGIN', 'referrer-policy': 'same-origin', ...response.headers }); response.pipe(res);
-      response.on('error', () => res.destroy());
-    });
-    upstream.setTimeout(30000, () => upstream.destroy());
-    upstream.on('error', () => { if (!res.headersSent) res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Service is starting or unavailable' })); });
-    req.on('aborted', () => upstream.destroy()); res.on('close', () => { if (!res.writableFinished) upstream.destroy(); }); req.pipe(upstream);
-  });
-  server.listen(port, '0.0.0.0'); gateways.push(server);
-}
-async function check(url) { try { const response = await fetch(url, { signal: AbortSignal.timeout(2000) }); await response.body?.cancel(); return response.ok; } catch { return false; } }
+function proxy(port, webPort, apiPort) { gateways.push(createGateway({ port, webPort, apiPort, health })); }
 async function health() {
   const endpoints = ['http://127.0.0.1:47821/api/health', 'http://127.0.0.1:3000/login', ...(phosphorEnabled ? ['http://127.0.0.1:61337/api/health', 'http://127.0.0.1:3100/login'] : [])];
   if (!(await Promise.all(endpoints.map(check))).every(Boolean)) return false;
