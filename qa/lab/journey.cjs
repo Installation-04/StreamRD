@@ -455,13 +455,12 @@ async function main() {
       await owner.shot("apps-tab");
       await owner.page.goto(`${base}/admin/addons`, { waitUntil: "networkidle" });
       // Zilean and Zurg come from the installer: their cards say what state they are in and, when missing, the exact command that adds them.
-      // Zilean has an Install button here (v0.38.0); Zurg still comes from the installer, with its command.
-      for (const [name, command] of [["Zilean", null], ["Zurg", "install.sh --zurg --rd-token"]]) {
+      // Both have an Install button (Zilean since v0.38.0, Zurg since v0.39.0); the installer's command shows only after an install did not work.
+      for (const name of ["Zilean", "Zurg"]) {
         const service = owner.page.getByRole("article", { name, exact: true });
         await service.waitFor({ timeout: 20_000 });
         assert.equal(await service.getByRole("status", { name: `${name} status` }).innerText(), "Not installed");
-        if (command) assert.match(await service.innerText(), new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-        else assert.ok(await service.getByRole("button", { name: `Install ${name}`, exact: true }).isVisible(), `${name} can be installed from its card`);
+        assert.ok(await service.getByRole("button", { name: `Install ${name}`, exact: true }).isVisible(), `${name} can be installed from its card`);
       }
       await owner.shot("addons-services");
       const card = owner.page.getByRole("article", { name: "Sonarr", exact: true }), status = () => card.getByRole("status", { name: "Sonarr status" }).innerText().catch(() => "");

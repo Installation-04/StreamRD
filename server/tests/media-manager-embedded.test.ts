@@ -423,7 +423,7 @@ it("shows the state of Zilean and Zurg and starts, stops or restarts them with w
 it("installs Zilean and its database from the page: same names as the installer, on StreamRD's network, one password for both, nothing when it is already there", async () => {
   await start(); const { json, call } = await helper();
   expect((await call("POST", "/services/not-a-service/install")).status).toBe(404);
-  expect((await call("POST", "/services/zurg/install")).status).toBe(404);   // only Zilean can be installed from here (so far)
+  expect((await call("POST", "/services/zilean-db/install")).status).toBe(404);   // only Zilean and Zurg can be installed from here, not their parts
   expect((await call("POST", "/services/zilean/install", undefined, null)).status).toBe(401);
   expect((await call("GET", "/services/zilean/install")).status).toBe(405);
   const first = await call("POST", "/services/zilean/install"); expect(first.status).toBe(202);
@@ -456,4 +456,50 @@ it("says why Zilean cannot be installed when StreamRD is not on a network of its
   await start({ networks: { bridge: { Aliases: [], IPAddress: "172.17.0.2" } } }); const plain = await helper();
   const refused = await plain.call("POST", "/services/zilean/install"); expect(refused.status).toBe(409); expect(((await refused.json()) as { error: string }).error).toMatch(/own Docker network.*install\.sh --zilean/);
   expect(docker.boxes.some(box => box.name === "zilean")).toBe(false);
+});
+
+it("installs Zurg and its mount from the page with the token it is given: the installer's files and containers, the token only in a private file", async () => {
+  await start(); const { json, call, settled } = await helper({ mountSettleMs: 20 });
+  const token = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOP";
+  expect((await call("POST", "/services/zurg/install")).status).toBe(400);   // no token
+  for (const bad of ["short", `${token}\nzurg: evil`, `${token} # x`, 12345, { a: 1 }]) expect((await call("POST", "/services/zurg/install", { token: bad })).status, JSON.stringify(bad)).toBe(400);
+  expect(docker.boxes.some(box => box.name === "zurg")).toBe(false);
+  expect((await call("POST", "/services/zurg/install", { token }, null)).status).toBe(401);
+  expect((await call("POST", "/services/zurg/install", { token })).status).toBe(202);
+  await vi.waitFor(async () => { const view = await json("GET", "/services"); expect(view.jobs).toEqual({}); expect(view.services).toMatchObject({ zurg: "running", "zurg-rclone": "running" }); }, { timeout: 15_000, interval: 50 });
+  const app = docker.find("zurg")!.spec, mount = docker.find("zurg-rclone")!.spec;
+  expect(app.Image).toBe("ghcr.io/debridmediamanager/zurg-public:latest"); expect(mount.Image).toBe("rclone/rclone:latest");
+  expect(app.NetworkingConfig.EndpointsConfig.streamrd_default.Aliases).toEqual(["zurg"]); expect(mount.NetworkingConfig.EndpointsConfig.streamrd_default.Aliases).toEqual(["zurg-rclone"]);
+  expect(app.HostConfig.Mounts[0]).toEqual({ Type: "bind", Source: "/home/owner/streamrd/config/zurg/config.yml", Target: "/app/config.yml" });
+  expect(mount.HostConfig.Mounts[0]).toEqual({ Type: "bind", Source: "/home/owner/streamrd/mnt/zurg", Target: "/data", BindOptions: { Propagation: "rshared", CreateMountpoint: true } });
+  expect(mount.HostConfig).toMatchObject({ CapAdd: ["SYS_ADMIN"], SecurityOpt: ["apparmor:unconfined"], Devices: [{ PathOnHost: "/dev/fuse", PathInContainer: "/dev/fuse", CgroupPermissions: "rwm" }] });
+  expect(mount.Cmd.slice(0, 3)).toEqual(["mount", "zurg:", "/data"]);
+  const file = path.join(folders, "config", "zurg", "config.yml"), text = fs.readFileSync(file, "utf8");
+  expect(text).toContain(`token: ${token}\n`); expect(text).toMatch(/directories:\n {2}shows:/); expect(text).toContain("/\\.(mkv|mp4|m4v|avi|mov|ts|m2ts|webm|mpg|mpeg|wmv)$/i");
+  expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+  expect(fs.readFileSync(path.join(folders, "config", "zurg", "rclone.conf"), "utf8")).toContain("url = http://zurg:9999/dav/");
+  expect(docker.calls.filter(line => /^POST \/containers\/zurg(-rclone)?\/start$/.test(line))).toEqual(["POST /containers/zurg/start", "POST /containers/zurg-rclone/start"]);   // Zurg, then its mount
+  expect(JSON.stringify(docker.boxes.map(box => box.spec))).not.toContain(token);   // never in a container's settings, only in the private file
+  expect(JSON.stringify(await json("GET", "/logs/read?source=svc:zurg&tail=5"))).not.toContain(token);
+  expect((await call("POST", "/services/zurg/install", { token })).status).toBe(409);   // already there
+  // the media servers launched from now on are shown the mount, as with the installer's
+  expect((await call("POST", "/servers/jellyfin/launch", { port: 8096 })).status).toBe(202); await settled("jellyfin");
+  expect(mountsOf("streamrd-jellyfin")).toContainEqual(expect.objectContaining({ Source: "/home/owner/streamrd/mnt/zurg", Target: "/mnt/zurg", ReadOnly: true, BindOptions: { Propagation: "rslave" } }));
+});
+
+it("keeps an existing Zurg config (and its edits) when Zurg is installed again, and says why a mount that stops was not made", async () => {
+  await start({ exitOnStart: ["zurg-rclone"] }); const { json, call } = await helper({ mountSettleMs: 20 });   // rclone ends at once: no FUSE
+  const token = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOP", dir = path.join(folders, "config", "zurg");
+  fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, "config.yml"), "zurg: v1\ntoken: MY-EDITED-CONFIG-TOKEN-123456\n");
+  expect((await call("POST", "/services/zurg/install", { token })).status).toBe(202);
+  await vi.waitFor(async () => { const view = await json("GET", "/services"); expect(view.jobs.zurg?.state).toBe("failed"); }, { timeout: 15_000, interval: 50 });
+  expect((await json("GET", "/services")).jobs.zurg.error).toMatch(/mount stopped.*FUSE.*install\.sh --zurg/);
+  expect(fs.readFileSync(path.join(dir, "config.yml"), "utf8")).toContain("MY-EDITED-CONFIG-TOKEN-123456");   // not overwritten
+});
+
+it("does not install Zurg from the page when the helper is not inside StreamRD or StreamRD has no network of its own", async () => {
+  await start({ networks: { bridge: { Aliases: [], IPAddress: "172.17.0.2" } } }); const plain = await helper({ mountSettleMs: 20 });
+  const refused = await plain.call("POST", "/services/zurg/install", { token: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOP" });
+  expect(refused.status).toBe(409); expect(((await refused.json()) as { error: string }).error).toMatch(/own Docker network.*install\.sh --zurg/);
+  expect(docker.boxes.some(box => box.name === "zurg")).toBe(false);
 });
