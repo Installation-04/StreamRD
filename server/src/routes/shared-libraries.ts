@@ -14,7 +14,7 @@ import { viewingLimit } from "../restrictions";
 import { versionViews } from "../versions";
 import { favoriteIds, favoriteItems, MAX_FAVORITES, setFavorite } from "../favorites";
 import { setWatched, unwatchedWhere, watchedIds } from "../watched";
-import { planPlayback, registerStream } from "../transcode";
+import { planPlayback, registerStream, textSubtitles } from "../transcode";
 import { trailerFor } from "../home";
 import { attentionCounts, attentionWhere } from "../attention";
 import { ageForRating, syncAccountRating } from "../ratings";
@@ -304,8 +304,11 @@ sharedLibrariesRouter.post("/:id/items/:itemId/play", rateLimit({ windowMs: 60_0
   });
   // A browser cannot play every file. When this one needs converting the viewer gets a stream id of ours instead of the provider link for the <video>.
   const plan = await planPlayback(result.stream.url, result.stream.filename).catch(() => ({ mode: "direct" as const, probe: null, reason: "error" }));
-  const playback = plan.mode === "direct" ? { mode: "direct" as const, reason: plan.reason, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null }
-    : { mode: plan.mode, url: `/api/stream/${registerStream(result.stream.url, plan.mode, userId)}`, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null };
+  // The stream id stands for the link: the player plays it when the file is converted, and asks it for subtitles either way.
+  const subtitles = textSubtitles(plan.probe), streamId = plan.mode !== "direct" ? registerStream(result.stream.url, plan.mode, userId) : subtitles.length ? registerStream(result.stream.url, "remux", userId) : null;
+  const tracks: { subtitleId?: string; subtitles?: Array<{ index: number; language: string | null; title: string | null; default: boolean }> } = subtitles.length && streamId ? { subtitleId: streamId, subtitles: subtitles.map(track => ({ index: track.index, language: track.language, title: track.title, default: track.default })) } : {};
+  const playback = plan.mode === "direct" ? { mode: "direct" as const, reason: plan.reason, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null, ...tracks }
+    : { mode: plan.mode, reason: undefined as string | undefined, url: `/api/stream/${streamId}`, durationSeconds: plan.probe?.durationSeconds ?? 0, video: plan.probe?.video ?? null, audio: plan.probe?.audio ?? null, ...tracks };
   // Each play is in the log with what the server decided and why: who, which title, and how the file reaches the browser. No link, no file path.
   const HOW = { direct: "as it is", remux: "repackaged", audio: "audio converted", video: "picture and audio converted" } as const;
   const WHY: Record<string, string> = { off: "conversion is turned off or the link cannot be read by the server", "ffmpeg-missing": "ffmpeg is not installed", "video-off": "it needs its picture converted and that is turned off (TRANSCODE_VIDEO)", error: "the file could not be examined" };

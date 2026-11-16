@@ -11,7 +11,7 @@ import { signSession } from "../src/auth/jwt";
 import { accountProviderContext } from "../src/account-library";
 import { playAccountItem } from "../src/providers/account-library";
 import { ProviderError } from "../src/providers/types";
-import { convertibleUrl, decideMode, ffmpegArgs, guessMode, maxConversions, planPlayback, Probe, probeStream, registerStream } from "../src/transcode";
+import { convertibleUrl, decideMode, ffmpegArgs, guessMode, maxConversions, planPlayback, Probe, probeStream, registerStream, textSubtitles, activeConversions } from "../src/transcode";
 
 vi.mock("../src/providers/account-library", () => ({ scanAccountPage: vi.fn(), playAccountItem: vi.fn() }));
 const play = vi.mocked(playAccountItem);
@@ -113,6 +113,23 @@ real("streams a converted MP4 that a browser can play, with AAC audio and untouc
   const file = join(dir, "out-audio.mp4"); writeFileSync(file, response.body);
   expect(response.body.subarray(4, 8).toString()).toBe("ftyp");
   expect(streams(file).map(stream => `${stream.codec_type}:${stream.codec_name}`).sort()).toEqual(["audio:aac", "video:h264"]);
+});
+
+real("lists a file's subtitle tracks and serves one as WebVTT, without converting the video", async () => {
+  writeFileSync(join(dir, "one.srt"), "1\n00:00:00,500 --> 00:00:02,000\nHello there\n\n");
+  writeFileSync(join(dir, "two.srt"), "1\n00:00:00,500 --> 00:00:02,000\nBonjour\n\n");
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=3:s=160x120:r=10", "-f", "lavfi", "-i", "sine=d=3", "-i", join(dir, "one.srt"), "-i", join(dir, "two.srt"), "-t", "3",
+    "-map", "0:v", "-map", "1:a", "-map", "2", "-map", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-c:s", "srt", "-metadata:s:s:0", "language=eng", "-metadata:s:s:1", "language=fre", "-metadata:s:s:1", "title=Doublage", join(dir, "subs.mkv")], { stdio: "ignore" });
+  const probe = await probeStream(`${base}/subs.mkv`);
+  expect(textSubtitles(probe).map(track => [track.index, track.language, track.title, track.codec])).toEqual([[0, "eng", null, "subrip"], [1, "fre", "Doublage", "subrip"]]);
+  expect(probe?.audioTracks).toHaveLength(1);
+  const id = registerStream(`${base}/subs.mkv`, "remux", "someone");
+  const second = await request(app).get(`/api/stream/${id}/subtitles/1`);
+  expect(second.status).toBe(200); expect(second.headers["content-type"]).toContain("text/vtt"); expect(second.text).toMatch(/^WEBVTT/); expect(second.text).toContain("Bonjour"); expect(second.text).not.toContain("Hello there");
+  expect((await request(app).get(`/api/stream/${id}/subtitles/5`)).status).toBe(404);   // no such track
+  expect((await request(app).get(`/api/stream/${"a".repeat(30)}/subtitles/0`)).status).toBe(404);   // no such stream
+  expect((await request(app).get(`/api/stream/${id}/subtitles/-1`)).status).toBe(400);
+  expect(activeConversions()).toBe(0);
 });
 
 real("re-encodes the video for formats a browser cannot decode, and can start part-way in", async () => {
