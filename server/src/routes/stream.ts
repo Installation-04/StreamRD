@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rateLimit } from "../util/rateLimit";
 import { asyncHandler } from "../http";
-import { alignedStart, reportStreamProblem, streamConverted, streamStatus } from "../transcode";
+import { alignedStart, reportStreamProblem, streamConverted, streamStatus, subtitleVtt } from "../transcode";
 
 /**
  * Converted playback. The path carries an unguessable, short-lived id handed out by an authorised play request (see transcode.ts), so a
@@ -39,4 +39,12 @@ streamRouter.post("/:id/problem", rateLimit({ windowMs: 60_000, max: 12 }), asyn
   const id = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).safeParse(req.params.id), parsed = problem.safeParse(req.body ?? {});
   if (!id.success || !parsed.success) { res.status(400).json({ error: "Invalid report." }); return; }
   res.status(reportStreamProblem(id.data, parsed.data) ? 204 : 404).end();
+}));
+/** One text subtitle track of the video as WebVTT, for the player's subtitle menu. The track number counts the file's subtitle tracks from 0. */
+streamRouter.get("/:id/subtitles/:track", rateLimit({ windowMs: 60_000, max: 40 }), asyncHandler(async (req, res) => {
+  const id = z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).safeParse(req.params.id), track = z.coerce.number().int().min(0).max(100).safeParse(req.params.track);
+  if (!id.success || !track.success) { res.status(400).json({ error: "Invalid subtitle request." }); return; }
+  const vtt = await subtitleVtt(id.data, track.data);
+  if (vtt === null) { res.status(404).json({ error: "This subtitle track is not available." }); return; }
+  res.type("text/vtt").setHeader("Cache-Control", "private, max-age=3600"); res.send(vtt);
 }));

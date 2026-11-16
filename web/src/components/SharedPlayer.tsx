@@ -18,6 +18,12 @@ const HIDE_MS = 3200, NEXT_SECONDS = 10;
 type Playback = NonNullable<AccountPlayResult["playback"]>;
 const CONVERSION: Record<string, string> = { remux: "Repackaged for your browser", audio: "Audio converted for your browser", video: "Converted for your browser" };
 /** A provider lists the files of a torrent as paths ("/Show.S01E01.mkv", "Folder/Film.mkv"); viewers see the name. */
+/** "English", or "English — Commentary"; the code itself when the browser does not know the language. */
+function subtitleLabel(track: { index: number; language: string | null; title: string | null }): string {
+  let name = track.language ? track.language.toUpperCase() : `Track ${track.index + 1}`;
+  if (track.language) { try { name = new Intl.DisplayNames(undefined, { type: "language" }).of(track.language) ?? name; } catch { /* the code stays */ } }
+  return track.title && track.title.toLowerCase() !== name.toLowerCase() ? `${name} — ${track.title}` : name;
+}
 const fileLabel = (name: string) => name.replace(/^[\\/]+/, "").split(/[\\/]/).filter(Boolean).slice(-2).join(" / ") || name;
 const clock = (seconds: number) => { const total = Math.max(0, Math.floor(seconds)), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`; };
 
@@ -224,13 +230,30 @@ export default function SharedPlayer() {
   const sizeOf = (size: number | undefined) => typeof size === "number" && size > 0 ? `${(size / 1024 ** 3).toFixed(2)} GB` : "Video";
   const subtitle = [item?.year ?? item?.metadata?.year, item?.metadata?.contentRating, stream?.filename, converted ? CONVERSION[forceVideo ? "video" : converted.mode] : null].filter(Boolean).join(" · ");
   const source = stream ? converted ? `${API_BASE}${converted.url}?start=${startAt}${forceVideo ? "&video=1" : ""}` : stream.url : "", shownTotal = converted ? converted.durationSeconds : position.total, shownAt = Math.min(scrub ?? (converted ? base + position.at : position.at), shownTotal > 0 ? shownTotal : Infinity);
+  // Subtitles: the chosen track is fetched as WebVTT and added to the video as a text track (a blob, so the video needs no cross-origin setting).
+  const [subtitleIndex, setSubtitle] = useState(-1), subtitleTracks = playback?.subtitles ?? [], subtitleId = playback?.subtitleId;
+  useEffect(() => { setSubtitle(-1); }, [subtitleId]);
   const playKey = useMse && converted ? `mse:${converted.url}:${forceVideo}` : source;
-  useEffect(() => { setBuffering(true); }, [playKey]);   // a stream just opened is buffering until it plays
+  useEffect(() => { setBuffering(true); }, [playKey]);
+  useEffect(() => {
+    const element = video.current; if (!element) return;
+    element.querySelectorAll("track[data-subtitle]").forEach(node => node.remove());
+    if (subtitleIndex < 0 || !subtitleId) return;
+    const controller = new AbortController(); let blob = "";
+    fetch(`${API_BASE}/api/stream/${encodeURIComponent(subtitleId)}/subtitles/${subtitleIndex}`, { signal: controller.signal }).then(response => response.ok ? response.text() : Promise.reject(new Error("no subtitles"))).then(text => {
+      if (controller.signal.aborted || !video.current) return;
+      blob = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
+      const node = document.createElement("track"); node.kind = "subtitles"; node.dataset.subtitle = "1"; node.src = blob; node.default = true; node.label = "Subtitles";
+      video.current.appendChild(node); node.track.mode = "showing";
+    }).catch(() => { if (!controller.signal.aborted) setSubtitle(-1); });
+    return () => { controller.abort(); if (blob) URL.revokeObjectURL(blob); video.current?.querySelectorAll("track[data-subtitle]").forEach(node => node.remove()); };
+  }, [subtitleIndex, subtitleId, playKey, stream]);   // a stream just opened is buffering until it plays
   if (authLoading || !user) return <div className={styles.page}><p role="status" className={styles.status}>Checking your account…</p></div>;
   return <div ref={root} className={`${styles.page} ${visible || paused || !stream ? "" : styles.idle}`} onMouseMove={wake} onTouchStart={wake} onFocus={wake}>
     <header className={styles.bar}>
       <button type="button" className={styles.back} aria-label="Close player" onClick={leave}><Icon name="chevron" size={22} style={{ transform: "rotate(180deg)" }} /></button>
       <div className={styles.titles}><strong>{name || "Opening…"}</strong>{subtitle && <span>{subtitle}</span>}</div>
+      {stream && subtitleTracks.length > 0 && <label className={styles.bar_button}>Subtitles <select aria-label="Subtitles" value={subtitleIndex} onChange={event => setSubtitle(Number(event.target.value))}><option value={-1}>Off</option>{subtitleTracks.map(track => <option key={track.index} value={track.index}>{subtitleLabel(track)}</option>)}</select></label>}
       {files.length > 1 && stream && <button type="button" className={styles.bar_button} onClick={() => { video.current?.pause(); saveProgress(true); setChoosing(true); }}>Videos</button>}
       <button type="button" className={styles.bar_button} aria-label="Fullscreen (F)" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.().catch(() => undefined); }}>⛶</button>
     </header>

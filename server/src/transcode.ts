@@ -15,7 +15,12 @@ import { runtime } from "./runtime-settings";
  * and ffmpeg is given only the https link the server itself resolved. ffmpeg runs with a protocol allow-list and without a shell.
  */
 export type Mode = "direct" | "remux" | "audio" | "video";
-export interface Probe { formats: string[]; video: string | null; audio: string | null; pixFmt: string | null; durationSeconds: number; width: number; height: number }
+/** A subtitle or audio track of a file: `index` counts among the tracks of its kind (0 is the first subtitle), the way ffmpeg's `0:s:N` does. */
+export interface Track { index: number; language: string | null; title: string | null; codec: string; default: boolean }
+export interface Probe { formats: string[]; video: string | null; audio: string | null; pixFmt: string | null; durationSeconds: number; width: number; height: number; audioTracks?: Track[]; subtitles?: Track[] }
+/** Subtitles that are text (they can be sent as WebVTT). Picture subtitles (Blu-ray PGS, DVD) cannot, and are left out. */
+const TEXT_SUBTITLES = new Set(["subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text", "subviewer", "microdvd"]);
+export const textSubtitles = (probe: Probe | null | undefined): Track[] => (probe?.subtitles ?? []).filter(track => TEXT_SUBTITLES.has(track.codec)).slice(0, 40);
 export interface Plan { mode: Mode; probe: Probe | null; reason?: string }
 
 // These are choices in Admin → Server (runtime-settings.ts); the environment variables of the same names are their starting values.
@@ -50,13 +55,15 @@ const run = (command: string, args: string[], timeoutMs: number) => new Promise<
 /** Reads the container, codecs and length of a link with ffprobe; null when it cannot be read or ffprobe is missing. */
 export async function probeStream(url: string, timeoutMs = 15_000): Promise<Probe | null> {
   const safe = convertibleUrl(url); if (!safe) return null;
-  const { code, out } = await run(ffprobeBin(), ["-v", "error", "-protocol_whitelist", PROTOCOLS, "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,pix_fmt,width,height", "-of", "json", safe], timeoutMs);
+  const { code, out } = await run(ffprobeBin(), ["-v", "error", "-protocol_whitelist", PROTOCOLS, "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,pix_fmt,width,height:stream_tags=language,title:stream_disposition=default", "-of", "json", safe], timeoutMs);
   if (code !== 0) return null;
   try {
-    const data = JSON.parse(out) as { format?: { format_name?: string; duration?: string }; streams?: Array<{ codec_type?: string; codec_name?: string; pix_fmt?: string; width?: number; height?: number }> };
+    const data = JSON.parse(out) as { format?: { format_name?: string; duration?: string }; streams?: Array<{ codec_type?: string; codec_name?: string; pix_fmt?: string; width?: number; height?: number; tags?: { language?: string; title?: string }; disposition?: { default?: number } }> };
     const video = data.streams?.find(stream => stream.codec_type === "video"), audio = data.streams?.find(stream => stream.codec_type === "audio");
+    const tracks = (kind: string): Track[] => (data.streams ?? []).filter(stream => stream.codec_type === kind).map((stream, index) => ({
+      index, language: /^[a-z]{2,3}$/i.test(stream.tags?.language ?? "") ? stream.tags!.language!.toLowerCase() : null, title: (stream.tags?.title ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 80) || null, codec: stream.codec_name ?? "", default: stream.disposition?.default === 1 }));
     const duration = Number.parseFloat(data.format?.duration ?? "");
-    return { formats: (data.format?.format_name ?? "").split(",").map(part => part.trim()).filter(Boolean), video: video?.codec_name ?? null, audio: audio?.codec_name ?? null, pixFmt: video?.pix_fmt ?? null,
+    return { audioTracks: tracks("audio"), subtitles: tracks("subtitle"), formats: (data.format?.format_name ?? "").split(",").map(part => part.trim()).filter(Boolean), video: video?.codec_name ?? null, audio: audio?.codec_name ?? null, pixFmt: video?.pix_fmt ?? null,
       durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : 0, width: video?.width ?? 0, height: video?.height ?? 0 };
   } catch { return null; }
 }
@@ -215,4 +222,15 @@ export function streamConverted(id: string, startSeconds: number, res: Response,
   });
   res.on("close", () => { if (child.exitCode === null) { child.kill("SIGKILL"); } release(); if (entry.stop === stop) entry.stop = undefined; });
   return true;
+}
+
+/**
+ * One text subtitle track of a registered stream as WebVTT, or null when the id is unknown, the track is not there or ffmpeg could not read it.
+ * Not a conversion of the video: ffmpeg reads the file's subtitle track only, so it does not count against the conversion limit.
+ */
+export async function subtitleVtt(id: string, track: number): Promise<string | null> {
+  const entry = streams.get(id); if (!entry || entry.expires < Date.now() || !Number.isInteger(track) || track < 0 || track > 100) return null;
+  const url = convertibleUrl(entry.url); if (!url) return null;
+  const { code, out } = await run(ffmpegBin(), ["-v", "error", "-nostdin", "-protocol_whitelist", PROTOCOLS, "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", "-i", url, "-map", `0:s:${track}`, "-f", "webvtt", "pipe:1"], 90_000);
+  return code === 0 && out.startsWith("WEBVTT") ? out : null;
 }
