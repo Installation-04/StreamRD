@@ -30,6 +30,12 @@ function audioLabel(track: { index: number; language: string | null; title: stri
   const kind = [layout, track.codec ? track.codec.toUpperCase() : ""].filter(Boolean).join(" ");
   return kind ? `${base} (${kind})` : base;
 }
+/** The language the viewer last chose for the sound and for the subtitles ("off" for none), kept in this browser only: it is a convenience, the player works without it. */
+type LanguagePreference = { audio?: string; subtitles?: string };
+function readPreference(): LanguagePreference {
+  try { const raw = JSON.parse(localStorage.getItem("streamrd.player.language") ?? "{}") as LanguagePreference; return { audio: typeof raw.audio === "string" ? raw.audio.slice(0, 8) : undefined, subtitles: typeof raw.subtitles === "string" ? raw.subtitles.slice(0, 8) : undefined }; } catch { return {}; }
+}
+function savePreference(change: LanguagePreference) { try { localStorage.setItem("streamrd.player.language", JSON.stringify({ ...readPreference(), ...change })); } catch { /* not kept; the choice still applies to this video */ } }
 const fileLabel = (name: string) => name.replace(/^[\\/]+/, "").split(/[\\/]/).filter(Boolean).slice(-2).join(" / ") || name;
 const clock = (seconds: number) => { const total = Math.max(0, Math.floor(seconds)), h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60; return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s).padStart(2, "0")}`; };
 
@@ -52,6 +58,7 @@ export default function SharedPlayer() {
   const [stream, setStream] = useState<NonNullable<AccountPlayResult["stream"]> | null>(null), [videoError, setVideoError] = useState(false), [ended, setEnded] = useState(false), [countdown, setCountdown] = useState<number | null>(null);
   const [visible, setVisible] = useState(true), [paused, setPaused] = useState(true), [position, setPosition] = useState({ at: 0, total: 0 });
   const [playback, setPlayback] = useState<Playback | null>(null), [startAt, setStartAt] = useState(0), [scrub, setScrub] = useState<number | null>(null);
+  const initialAudio = useRef(0);   // the track asked for before this video opened (the remembered language)
   const [audioIndex, setAudio] = useState(0), [audioEpoch, setAudioEpoch] = useState(0);   // the chosen audio track, and a counter that opens the stream again
   const converted = playback && playback.mode !== "direct" && playback.url ? playback : null;
   const [reason, setReason] = useState("");
@@ -146,7 +153,15 @@ export default function SharedPlayer() {
       if (result.stream && url) {
         const resumeAt = restarting.current ? 0 : result.resumeSeconds ?? 0; restarting.current = false;
         session.current = result.progressSessionId ? { id: result.progressSessionId, sequence: 0, sentAt: Date.now(), resume: resumeAt, position: 0, duration: 0 } : null;
-        setStream({ ...result.stream, url }); setPlayback(result.playback ?? null); setStartAt(result.playback?.url && result.playback.mode !== "direct" && (resumeAt) > 5 ? Math.floor(resumeAt) : 0); setChoosing(false); setCurrent(fileToken ?? null); return;
+        // The language last chosen for the sound: when this video has it as another track, the server is asked for it before the video opens.
+        let shown = result.playback ?? null;
+        const wanted = readPreference().audio, found = wanted && shown?.audioTracks ? shown.audioTracks.find(track => track.language === wanted) : undefined;
+        if (shown?.streamId && found && found.index > 0) {
+          try { await api(`/api/stream/${encodeURIComponent(shown.streamId)}/audio`, { method: "POST", signal: controller.signal, body: JSON.stringify({ track: found.index }) }); initialAudio.current = found.index; shown = { ...shown, mode: shown.mode === "video" ? "video" : "audio", url: `/api/stream/${shown.streamId}` }; }
+          catch { /* the first track plays */ }
+          if (controller.signal.aborted || !mounted.current) return;
+        }
+        setStream({ ...result.stream, url }); setPlayback(shown); setStartAt(shown?.url && shown.mode !== "direct" && (resumeAt) > 5 ? Math.floor(resumeAt) : 0); setChoosing(false); setCurrent(fileToken ?? null); return;
       }
       throw new Error("No playable video was returned. The torrent may need a video file selected by the server owner.");
     } catch (reason) { if (!controller.signal.aborted && mounted.current) setPlayError(reason instanceof Error ? reason.message : "The stream could not be resolved. Try again."); }
@@ -242,16 +257,20 @@ export default function SharedPlayer() {
   // Audio: the server plays the chosen track from now on; the player then opens the stream again at the second it is at (a file that was playing
   // as it is becomes a converted stream, because a browser cannot switch the audio track of a video it plays itself).
   const audioTracks = playback?.audioTracks ?? [];
-  useEffect(() => { setAudio(0); setAudioEpoch(0); }, [streamId]);
+  useEffect(() => { setAudio(initialAudio.current); initialAudio.current = 0; setAudioEpoch(0); }, [streamId]);
   async function chooseAudio(track: number) {
     if (!streamId || track === audioIndex) return;
     const element = video.current, at = Math.max(0, Math.floor(converted ? baseRef.current + (element?.currentTime ?? 0) : element?.currentTime ?? 0));
     try { await api(`/api/stream/${encodeURIComponent(streamId)}/audio`, { method: "POST", body: JSON.stringify({ track }) }); } catch { return; }
-    saveProgress(true); setAudio(track); setStartAt(at);
+    saveProgress(true); setAudio(track); setStartAt(at); savePreference({ audio: audioTracks.find(entry => entry.index === track)?.language ?? undefined });
     if (converted) setAudioEpoch(count => count + 1);
     else setPlayback(current => current ? { ...current, mode: "audio", url: `/api/stream/${streamId}` } : current);
   }
-  useEffect(() => { setSubtitle(-1); }, [streamId]);
+  useEffect(() => {
+    const wanted = readPreference().subtitles, found = wanted && wanted !== "off" ? subtitleTracks.find(track => track.language === wanted) : undefined;
+    setSubtitle(found ? found.index : -1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamId]);
   const playKey = useMse && converted ? `mse:${converted.url}:${forceVideo}:${audioEpoch}` : `${source}#${audioEpoch}`;
   useEffect(() => { setBuffering(true); }, [playKey]);
   useEffect(() => {
@@ -273,7 +292,7 @@ export default function SharedPlayer() {
       <button type="button" className={styles.back} aria-label="Close player" onClick={leave}><Icon name="chevron" size={22} style={{ transform: "rotate(180deg)" }} /></button>
       <div className={styles.titles}><strong>{name || "Opening…"}</strong>{subtitle && <span>{subtitle}</span>}</div>
       {stream && audioTracks.length > 1 && <label className={styles.bar_button}>Audio <select aria-label="Audio" value={audioIndex} onChange={event => void chooseAudio(Number(event.target.value))}>{audioTracks.map(track => <option key={track.index} value={track.index}>{audioLabel(track)}</option>)}</select></label>}
-      {stream && subtitleTracks.length > 0 && <label className={styles.bar_button}>Subtitles <select aria-label="Subtitles" value={subtitleIndex} onChange={event => setSubtitle(Number(event.target.value))}><option value={-1}>Off</option>{subtitleTracks.map(track => <option key={track.index} value={track.index}>{subtitleLabel(track)}</option>)}</select></label>}
+      {stream && subtitleTracks.length > 0 && <label className={styles.bar_button}>Subtitles <select aria-label="Subtitles" value={subtitleIndex} onChange={event => { const index = Number(event.target.value); setSubtitle(index); savePreference({ subtitles: index < 0 ? "off" : subtitleTracks.find(track => track.index === index)?.language ?? undefined }); }}><option value={-1}>Off</option>{subtitleTracks.map(track => <option key={track.index} value={track.index}>{subtitleLabel(track)}</option>)}</select></label>}
       {files.length > 1 && stream && <button type="button" className={styles.bar_button} onClick={() => { video.current?.pause(); saveProgress(true); setChoosing(true); }}>Videos</button>}
       <button type="button" className={styles.bar_button} aria-label="Fullscreen (F)" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen?.().catch(() => undefined); }}>⛶</button>
     </header>
