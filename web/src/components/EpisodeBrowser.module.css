@@ -1,5 +1,6 @@
 .box { margin:22px 0 0;padding:18px 20px;border-radius:14px;border:1px solid var(--border,rgba(255,255,255,.12));background:color-mix(in srgb,var(--bg) 70%,transparent); }
 .top { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px; }
+.actions { display:flex;gap:8px;flex-wrap:wrap; }
 .top h2 { margin:0;font-size:15px;letter-spacing:.04em;text-transform:uppercase;opacity:.8; }
 .note { margin:8px 0;font-size:14px;opacity:.8; }
 .tabs { display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px; }
