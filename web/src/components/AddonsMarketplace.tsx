@@ -78,6 +78,10 @@ export default function AddonsMarketplace() {
     await api(`/api/admin/addons/services/${one.name}/${action}`, { method: "POST" });
     return `${one.label} ${action === "start" ? "started" : action === "stop" ? "stopped" : "restarted"}.`;
   });
+  const removeService = (one: Service) => {
+    if (!window.confirm(`Remove ${one.label}? Its settings and data are kept, so installing it again picks up where it was.`)) return;
+    void run(`service:${one.name}:remove`, async () => { await api(`/api/admin/addons/services/${one.name}`, { method: "DELETE" }); return `${one.label} removed. Its settings were kept.`; });
+  };
   const install = (one: Service) => run(`service:${one.name}:install`, async () => {
     await api(`/api/admin/addons/services/${one.name}/install`, { method: "POST" });
     return `${one.label} is being installed. This takes a few minutes: two programs are downloaded.`;
@@ -115,6 +119,7 @@ export default function AddonsMarketplace() {
               {one.state === "stopped" && <button type="button" className="btn btn-sm" disabled={Boolean(busy)} onClick={() => void service(one, "start")}>Start</button>}
               {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "restart")}>Restart</button>}
               {one.state === "running" && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => void service(one, "stop")}>Stop</button>}
+              {one.installable && <button type="button" className="btn btn-sm btn-secondary" disabled={Boolean(busy)} onClick={() => removeService(one)}>Remove</button>}
             </div>}
             {installing && <p className={styles.small} role="status">{one.step ?? "Installing…"}</p>}
             {one.error && one.state === "absent" && <p className={styles.error} role="alert">The install did not finish: {one.error}</p>}

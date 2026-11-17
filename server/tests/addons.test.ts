@@ -162,6 +162,16 @@ it("installs Zilean from the page: administrators only, only Zilean, and the car
   expect(await card("zilean")).toMatchObject({ state: "running", error: null, step: null });
 });
 
+it("removes Zilean or Zurg from the page: administrators only, only the two services, and the helper is asked", async () => {
+  const asked = await helper({}, { zilean: "running", "zilean-db": "running", zurg: "absent", "zurg-rclone": "absent" });
+  expect((await request(app).delete("/api/admin/addons/services/zilean")).status).toBe(401);
+  expect((await request(app).delete("/api/admin/addons/services/zilean").set(auth(member.token))).status).toBe(403);
+  expect((await request(app).delete("/api/admin/addons/services/nothing").set(auth(admin.token))).status).toBe(404);
+  expect(asked.some(line => line.startsWith("DELETE /services"))).toBe(false);
+  expect((await request(app).delete("/api/admin/addons/services/zilean").set(auth(admin.token))).status).toBe(200);
+  expect(asked).toContain("DELETE /services/zilean");
+});
+
 it("installs Zurg from the page with the Real-Debrid key the administrator stored, and never without one", async () => {
   const asked = await helper({}, { zilean: "absent", "zilean-db": "absent", zurg: "absent", "zurg-rclone": "absent" });
   const install = () => request(app).post("/api/admin/addons/services/zurg/install").set(auth(admin.token));
