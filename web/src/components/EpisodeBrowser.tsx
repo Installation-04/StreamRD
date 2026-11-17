@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { episodeOf, groupEpisodes } from "@/lib/episodes";
@@ -17,6 +18,7 @@ export function episodeTitle(name: string): string {
 
 /** The seasons and episodes of a title on its own page, the way a media server shows them: a tab per season, a row per episode with what the viewer has watched, and one button for what to watch next. */
 export default function EpisodeBrowser({ libraryId, itemId }: { libraryId: string; itemId: string }) {
+  const router = useRouter();
   const [files, setFiles] = useState<EpisodeFile[] | null>(null), [note, setNote] = useState(""), [tab, setTab] = useState<number | null>(null), [marking, setMarking] = useState(false);
   useEffect(() => {
     const controller = new AbortController(); setFiles(null); setNote("");
@@ -44,7 +46,10 @@ export default function EpisodeBrowser({ libraryId, itemId }: { libraryId: strin
   return <section className={styles.box} aria-label="Episodes">
     <div className={styles.top}>
       <h2>Episodes</h2>
-      <Link className="btn" href={href(target.file.token)}>▶ {begun ? "Resume" : unseen && unseen !== ordered[0] ? "Play next" : unseen ? "Play" : "Play again"} {label(target)}</Link>
+      <div className={styles.actions}>
+        <Link className="btn" href={href(target.file.token)}>▶ {begun ? "Resume" : unseen && unseen !== ordered[0] ? "Play next" : unseen ? "Play" : "Play again"} {label(target)}</Link>
+        {ordered.length > 1 && <button type="button" className="btn btn-secondary" title="Play an episode picked at random, one you have not watched if there is one" onClick={() => { const pool = ordered.filter(entry => !entry.file.watched), from = pool.length ? pool : ordered, pick = from[Math.floor(Math.random() * from.length)]; router.push(href(pick.file.token)); }}>Shuffle</button>}
+      </div>
     </div>
     {note && <p className={styles.note} role="status">{note}</p>}
     <div role="tablist" aria-label="Seasons" className={styles.tabs}>

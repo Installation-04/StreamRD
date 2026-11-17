@@ -43,6 +43,10 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.38.0 | Install Zilean from the Add-ons page (database + Zilean through the Docker helper) | M | none |
 | v0.39.0 | Install Zurg from the Add-ons page with the stored Real-Debrid key (zurg + rclone mount; Plex/Jellyfin from the page see it) | M | none |
 | v0.40.0 | Install StreamRD as an app (Windows, Android, Mac): own window, own icon, same site | S | none |
+| v0.41.0 | Remove Zilean or Zurg from the Add-ons page (settings and data kept) | S | none |
+| v0.42.0 | Shuffle button on a show page: plays a random episode, one not yet watched if there is one | S | none |
+| v0.43.0 | Start of services inside the StreamRD container: the supervisor core and the plan (docs/in-container-services.md); nothing uses it yet | M | none |
+| v0.44.0 | StreamRD and Phosphor are licensed under GPL-3.0 (same as DUMB), from this version on | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |
