@@ -443,6 +443,19 @@ it("installs Zilean and its database from the page: same names as the installer,
   expect(JSON.stringify(await json("GET", "/logs/read?source=svc:zilean&tail=5"))).not.toContain(password);
 });
 
+it("removes Zilean or Zurg from the page: the program before its database or mount, settings kept, and not while an install runs", async () => {
+  await start(); const { json, call } = await helper();
+  expect((await call("DELETE", "/services/not-a-service")).status).toBe(404);
+  expect((await call("DELETE", "/services/zilean", undefined, null)).status).toBe(401);
+  expect((await call("POST", "/services/zilean/install")).status).toBe(202);
+  await vi.waitFor(async () => { const view = await json("GET", "/services"); expect(view.jobs).toEqual({}); expect(view.services).toMatchObject({ zilean: "running", "zilean-db": "running" }); }, { timeout: 15_000, interval: 50 });
+  docker.calls.length = 0;
+  expect((await call("DELETE", "/services/zilean")).status).toBe(200);
+  expect(docker.calls.filter(line => line.startsWith("DELETE "))).toEqual(["DELETE /containers/zilean", "DELETE /containers/zilean-db"]);
+  expect((await json("GET", "/services")).services).toMatchObject({ zilean: "absent", "zilean-db": "absent" });
+  expect((await call("DELETE", "/services/zilean")).status).toBe(200);   // already gone: nothing to do, no error
+});
+
 it("keeps a database that was left behind, with its password, when Zilean is installed again", async () => {
   await start(); const { json, call } = await helper();
   docker.boxes.push({ id: "d".repeat(64), name: "zilean-db", image: "sha256:db", running: false, alive: true, status: "exited", exitCode: 0, finishedAt: "0001-01-01T00:00:00Z", spec: { Image: "postgres:17.2-alpine", Env: ["POSTGRES_PASSWORD=kept-password-123"], HostConfig: {} }, output: [] });

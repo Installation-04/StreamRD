@@ -320,6 +320,16 @@ function createManager(config) {
       if (![204, 304, 404].includes(response.status)) throw Object.assign(new Error(`Docker could not ${action} ${container} (${response.status})`), { status: 502 });
     }
   }
+  // Removes the containers (the program first, then its database or mount). What is kept in the settings and data folders stays, so installing again picks up where it was.
+  async function removeService(name) {
+    const set = SERVICE_SETS[name]; if (!set) throw Object.assign(new Error('Unknown service'), { status: 404 });
+    if (serviceJobs[name]?.state === 'installing') throw Object.assign(new Error('It is still being installed. Remove it once that finishes.'), { status: 409 });
+    delete serviceJobs[name];
+    for (const container of [...set].reverse()) {
+      const response = await docker('DELETE', `/containers/${encodeURIComponent(container)}?force=true`);
+      if (![204, 404].includes(response.status)) throw Object.assign(new Error(`Docker could not remove ${container} (${response.status})`), { status: 502 });
+    }
+  }
   async function readSource(id, tail) {
     const kind = /^(core|app|svc):([a-z0-9-]{1,30})$/.exec(id);
     if (!kind) return null;
@@ -744,6 +754,8 @@ directories:
       if (request.method === 'GET' && url.pathname === '/services') { const states = {}; for (const name of SERVICES) states[name] = await stateOfContainer(name); return send(200, { services: states, jobs: serviceJobs }); }
       const install = /^\/services\/([a-z]+)\/install$/.exec(url.pathname);
       if (install) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); return send(202, { job: await installService(install[1], await readBody(request)) }); }
+      const gone = /^\/services\/([a-z]+)$/.exec(url.pathname);
+      if (gone && request.method === 'DELETE') { await removeService(gone[1]); return send(200, { ok: true }); }
       const service = /^\/services\/([a-z]+)\/(start|stop|restart)$/.exec(url.pathname);
       if (service) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await controlService(service[1], service[2]); return send(200, { ok: true }); }
       if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });

@@ -138,7 +138,7 @@ pass). For a new debrid provider, follow
 
 ## License
 
-MIT — see the repository root [LICENSE](../LICENSE).
+GPL-3.0 — see the repository root [LICENSE](../LICENSE).
 
 ## Screenshots and external media libraries
 

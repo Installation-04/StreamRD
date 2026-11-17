@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Installation-04/StreamRD/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Installation-04/StreamRD?style=flat-square&color=ff8a1f"></a>
   <a href="https://github.com/Installation-04/StreamRD/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Installation-04/StreamRD/ci.yml?branch=main&style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Installation-04/StreamRD?style=flat-square"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/Installation-04/StreamRD?style=flat-square"></a>
   <a href="https://github.com/Installation-04/StreamRD/pkgs/container/streamrd"><img alt="Container image" src="https://img.shields.io/badge/ghcr.io-streamrd-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
 </p>
 
@@ -267,4 +267,8 @@ endorsed or certified by TMDB.*
 
 ## 📄 License
 
-[MIT](LICENSE).
+StreamRD and Phosphor are licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0), the same licence as [DUMB](https://github.com/I-am-PUID-0/DUMB). You may use, change and share them, and anything you distribute that is built from them has to stay under the same licence with its source available.
+
+Versions up to and including v0.43.0 were released under the MIT licence; anyone who received those keeps that licence for them. From v0.44.0 on the code is GPL-3.0.
+
+The programs StreamRD installs for you (Zurg, Zilean, Jellyfin, Plex, Sonarr and the rest) are separate programs by other people, each under its own licence.

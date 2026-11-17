@@ -11,4 +11,4 @@ Regenerate with FFmpeg and libx264:
 ffmpeg -f lavfi -i color=c=0x264460:s=160x90:r=10:d=1 -an -c:v libx264 -profile:v baseline -pix_fmt yuv420p -movflags +faststart account-video.mp4
 ```
 
-The fixture is provided under the repository's MIT license.
+The fixture is provided under the repository's GPL-3.0 license.
