@@ -28,6 +28,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createSupervisor } = require('./supervisor.cjs');
 
 // The catalog. Everything about a container is written here and nowhere else: the caller picks a name from it, a port and whether it starts
 // with the machine, never an image, a folder, a user or a setting. Each entry says:
@@ -138,6 +139,12 @@ function specFor(name, options, config, layout) {
 }
 
 function createManager(config) {
+  // Programs that run inside this container as ordinary processes (see supervisor.cjs). Never as root unless a definition says so (root: true).
+  const supervisor = createSupervisor(config.supervisor || {});
+  for (const definition of config.supervised || []) {
+    const { root, ...rest } = definition;
+    supervisor.register(root === true || !config.embedded ? rest : { uid: config.appUid, gid: config.appGid, ...rest });
+  }
   const jobs = {}; // in-flight launches: { state: 'pulling' | 'starting' | 'failed', error? }
   const deploy = Object.fromEntries(Object.keys(SERVERS).map(key => [key, []])); // what the manager did for each server, oldest first
   const note = (name, message) => { const list = deploy[name]; list.push({ time: new Date().toISOString(), message: redact(message).slice(0, 300) }); if (list.length > LOG_LINES) list.splice(0, list.length - LOG_LINES); };
@@ -306,6 +313,7 @@ function createManager(config) {
     for (const [id, lines] of Object.entries(counts).sort()) sources.push({ id, state: 'running', lines });
     for (const name of Object.keys(SERVERS)) sources.push({ id: `app:${name}`, state: (jobs[name] ? jobs[name].state : (await inspect(name)).state) || 'absent' });
     for (const name of SERVICES) sources.push({ id: `svc:${name}`, state: await stateOfContainer(name) });
+    for (const [name, one] of Object.entries(supervisor.status())) sources.push({ id: `sup:${name}`, label: one.label, state: one.state });
     return sources;
   }
   /** Start, stop or restart one of the installer's optional services (each is a pair: the program and what it needs). Only these four containers. */
@@ -331,7 +339,7 @@ function createManager(config) {
     }
   }
   async function readSource(id, tail) {
-    const kind = /^(core|app|svc):([a-z0-9-]{1,30})$/.exec(id);
+    const kind = /^(core|app|svc|sup):([a-z0-9-]{1,30})$/.exec(id);
     if (!kind) return null;
     if (kind[1] === 'core') return (await coreLines(Math.min(tail * 8, 2000))).filter(line => line.source === id).slice(-tail);
     if (kind[1] === 'app' && SERVERS[kind[2]]) {
@@ -339,6 +347,7 @@ function createManager(config) {
       const notes = (deploy[kind[2]] || []).map(entry => ({ time: entry.time, source: id, text: `[deploy] ${entry.message}` }));
       return [...notes, ...lines].sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0).slice(-tail);
     }
+    if (kind[1] === 'sup' && supervisor.status()[kind[2]]) return supervisor.logs(kind[2], tail).map(entry => ({ time: entry.time, source: id, text: redact(entry.text).slice(0, 600) }));
     if (kind[1] === 'svc' && SERVICES.includes(kind[2])) return (await output(kind[2], tail, true)).map(raw => { const { time, text } = stampOf(raw); return { time, source: id, text: redact(text).slice(0, 600) }; });
     return null;
   }
@@ -756,6 +765,9 @@ directories:
       if (install) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); return send(202, { job: await installService(install[1], await readBody(request)) }); }
       const gone = /^\/services\/([a-z]+)$/.exec(url.pathname);
       if (gone && request.method === 'DELETE') { await removeService(gone[1]); return send(200, { ok: true }); }
+      if (request.method === 'GET' && url.pathname === '/supervisor') return send(200, { services: supervisor.status() });
+      const supervised = /^\/supervisor\/([a-z][a-z0-9-]{0,40})\/(start|stop|restart)$/.exec(url.pathname);
+      if (supervised) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await supervisor[supervised[2]](supervised[1]); return send(200, { services: supervisor.status() }); }
       const service = /^\/services\/([a-z]+)\/(start|stop|restart)$/.exec(url.pathname);
       if (service) { if (request.method !== 'POST') return send(405, { error: 'Method not allowed' }); await controlService(service[1], service[2]); return send(200, { ok: true }); }
       if (request.method === 'GET' && url.pathname === '/logs/sources') return send(200, { sources: await logSources() });
@@ -802,7 +814,7 @@ directories:
       send(status, { error: status === 502 ? 'Docker could not be reached' : error.message });
     }
   });
-  return { server, status, update: doUpdate, updateState: () => upd, updateView, swapNow, self };
+  return { server, supervisor, status, update: doUpdate, updateState: () => upd, updateView, swapNow, self };
 }
 
 module.exports = { createManager, SERVERS, foldersOf, containerIdFrom, hostPath, ownLayout, fixedLayout };
@@ -828,6 +840,9 @@ if (require.main === module) {
       const manager = createManager({ embedded: true, socketPath, token, tz, dirs: { config: process.env.CONFIG_DIR || data, data }, appUid: own('APP_UID'), appGid: own('APP_GID'),
         selfName: process.env.STREAMRD_CONTAINER || '', selfId: containerIdFrom(mountinfo), hostname: os.hostname() });
       manager.server.listen(Number(process.env.PORT) || 8099, '127.0.0.1', () => say('Docker helper listening inside the container'));
+      // When the container is told to stop, the programs it runs for the owner are asked to stop first, in the order their dependencies need.
+      let leaving = false;
+      for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => { if (leaving) return; leaving = true; manager.supervisor.stopAll().finally(() => process.exit(0)); });
     } else {
       const hostDir = need('HOST_INSTALL_DIR');
       if (!path.isAbsolute(hostDir) || hostDir.includes('..') || /[\0\n\r]/.test(hostDir)) { console.error('HOST_INSTALL_DIR must be an absolute path'); process.exit(1); }
