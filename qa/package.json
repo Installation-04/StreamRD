@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/browser-qa",
-  "version": "0.43.0",
+  "version": "0.44.0",
   "private": true,
   "license": "GPL-3.0-only",
   "description": "Disposable production-image browser journeys for both community apps",

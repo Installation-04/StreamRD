@@ -2,7 +2,7 @@
 
 **Goal.** One container, one port, one compose file. StreamRD installs and runs the programs a debrid media setup needs (Zurg and its mount, Zilean and its database, then media servers and library tools) as ordinary processes inside its own container, so they all see the same files and the Real-Debrid mount with no Docker socket and no mount-sharing tricks. The page keeps a guided setup, status, logs and each program's own page.
 
-**Where the idea comes from.** The all-in-one design of DUMB (https://github.com/I-am-PUID-0/DUMB). That project is GPL-3.0 and StreamRD is MIT, so this is a fresh implementation of the idea; **no DUMB code is copied**.
+**Where the idea comes from.** The all-in-one design of DUMB (https://github.com/I-am-PUID-0/DUMB). From v0.44.0 StreamRD is GPL-3.0, the same licence as DUMB, so code from DUMB may be reused where it helps, as long as its copyright notices stay and it is credited. Until now (v0.43.0 and earlier, MIT) this was a fresh implementation and **no DUMB code was copied**.
 
 ## Pieces
 1. **Supervisor** (`infra/single-container/supervisor.cjs`): a registry of services, start order from dependencies, readiness checks, restarts with a limit, logs with secrets hidden. Knows nothing about any one program.
