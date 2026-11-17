@@ -11,6 +11,7 @@ import { manager, ManagerError } from "./media-servers";
 import { removeProwlarr, requestProwlarr } from "./prowlarr";
 import { rateLimit } from "./util/rateLimit";
 import { linkAddons, loginFor, SERVARR_NAMES, ServarrName } from "./addon-links";
+import { forgetNeighbour } from "./requests/finder";
 
 /**
  * The add-on marketplace: programs people usually run next to a media server, each started from a fixed specification by the Docker
@@ -110,6 +111,15 @@ addonsRouter.post("/services/:service/:action", limit, guard(async (req, res) =>
   if (!(name in SERVICES) || !["start", "stop", "restart"].includes(action)) { res.status(404).json({ error: "Unknown service." }); return; }
   await manager("POST", `/services/${name}/${action}`);
   void logEvent("info", "admin_action", `${action === "start" ? "Started" : action === "stop" ? "Stopped" : "Restarted"} ${SERVICES[name as ServiceName].label}`, { userId: req.session!.sub }).catch(() => undefined);
+  res.json(await addonsView());
+}));
+/** Remove Zilean or Zurg (the programs and, for Zilean, its database container). Their settings and data folders stay. */
+addonsRouter.delete("/services/:service", limit, guard(async (req, res) => {
+  const name = req.params.service as string;
+  if (!(name in SERVICES)) { res.status(404).json({ error: "Unknown service." }); return; }
+  await manager("DELETE", `/services/${name}`);
+  if (name === "zilean") forgetNeighbour();
+  void logEvent("info", "admin_action", `Removed ${SERVICES[name as ServiceName].label}`, { userId: req.session!.sub }).catch(() => undefined);
   res.json(await addonsView());
 }));
 addonsRouter.post("/:addon/launch", limit, guard(async (req, res) => {
