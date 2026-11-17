@@ -22,12 +22,13 @@ const CORE: Record<string, string> = { "core:streamrd-api": "StreamRD server", "
   "core:phosphor-api": "Phosphor server", "core:phosphor-web": "Phosphor web" };
 const SERVICE: Record<string, string> = { zilean: "Zilean", "zilean-db": "Zilean database", zurg: "Zurg", "zurg-rclone": "Zurg mount (rclone)" };
 const MEDIA: Record<string, string> = { jellyfin: "Jellyfin", plex: "Plex" };
-interface Found { id: string; state: string; lines?: number }
+interface Found { id: string; state: string; lines?: number; label?: string }
 export interface Source { id: string; label: string; group: "StreamRD" | "Add-ons" | "Media servers" | "Services"; state: string; lines?: number }
 function describe(found: Found): Source | null {
   const [kind, name] = found.id.split(":");
   if (kind === "core") return { id: found.id, label: CORE[found.id] ?? name, group: "StreamRD", state: found.state, lines: found.lines };
   if (kind === "app") { const label = MEDIA[name] ?? CATALOG[name]?.label; return label ? { id: found.id, label, group: MEDIA[name] ? "Media servers" : "Add-ons", state: found.state } : null; }
+  if (kind === "sup" && found.label) return { id: found.id, label: found.label.slice(0, 60), group: "Services", state: found.state };
   if (kind === "svc" && SERVICE[name]) return { id: found.id, label: SERVICE[name], group: "Services", state: found.state };
   return null;
 }
@@ -44,7 +45,7 @@ monitorRouter.get("/sources", limit, asyncHandler(async (_req, res) => {
   res.json({ control: control.mode, note, sources: [EVENTS, ...found] });
 }));
 
-const query = z.object({ source: z.string().regex(/^(all|events|(core|app|svc):[a-z0-9-]{1,30})$/).default("all"), tail: z.coerce.number().int().min(1).max(1000).default(200), q: z.string().trim().max(200).optional() }).strict();
+const query = z.object({ source: z.string().regex(/^(all|events|(core|app|svc|sup):[a-z0-9-]{1,30})$/).default("all"), tail: z.coerce.number().int().min(1).max(1000).default(200), q: z.string().trim().max(200).optional() }).strict();
 monitorRouter.get("/logs", limit, asyncHandler(async (req, res) => {
   const parsed = parseBody(query, req.query, res); if (!parsed) return;
   const needle = parsed.q?.toLowerCase();

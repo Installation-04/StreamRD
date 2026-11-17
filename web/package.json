@@ -1,6 +1,6 @@
 {
   "name": "@streamrd/web",
-  "version": "0.44.0",
+  "version": "0.45.0",
   "private": true,
   "license": "GPL-3.0-only",
   "description": "StreamRD web client: user UI and admin dashboard.",

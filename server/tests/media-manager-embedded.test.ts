@@ -2,6 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { afterEach, expect, it, vi } from "vitest";
 import { dockerEngine, Engine, EngineOptions, HELPER, REF, SELF_ID } from "./docker-engine";
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
@@ -454,6 +455,40 @@ it("removes Zilean or Zurg from the page: the program before its database or mou
   expect(docker.calls.filter(line => line.startsWith("DELETE "))).toEqual(["DELETE /containers/zilean", "DELETE /containers/zilean-db"]);
   expect((await json("GET", "/services")).services).toMatchObject({ zilean: "absent", "zilean-db": "absent" });
   expect((await call("DELETE", "/services/zilean")).status).toBe(200);   // already gone: nothing to do, no error
+});
+
+const idle = (extra = "") => ({ command: process.execPath, args: ["-e", `${extra};setInterval(()=>{},1000)`] });
+it("runs programs inside the container for the page: lists them, starts and stops them in order, and shows their log with secrets hidden", async () => {
+  await start();
+  const { json, call } = await helper({ supervisor: { readyMs: 4000, readyEveryMs: 30, settleMs: 100, graceMs: 500 }, supervised: [
+    { name: "base", label: "The base", ...idle("console.log('base up')") },
+    { name: "tool", label: "The tool", dependsOn: ["base"], secrets: ["HUSH-HUSH-VALUE"], ...idle("console.log('key HUSH-HUSH-VALUE')") }] });
+  expect((await json("GET", "/supervisor")).services).toMatchObject({ base: { state: "stopped", label: "The base" }, tool: { state: "stopped", dependsOn: ["base"] } });
+  expect((await call("GET", "/supervisor", undefined, null)).status).toBe(401);
+  expect((await call("POST", "/supervisor/nothing/start")).status).toBe(404);
+  expect((await call("GET", "/supervisor/tool/start")).status).toBe(405);
+  expect((await call("POST", "/supervisor/tool/start")).status).toBe(200);   // starting the tool starts what it needs first
+  expect((await json("GET", "/supervisor")).services).toMatchObject({ base: { state: "running" }, tool: { state: "running" } });
+  const sources = (await json("GET", "/logs/sources")).sources.filter((entry: { id: string }) => entry.id.startsWith("sup:"));
+  expect(sources).toEqual([{ id: "sup:base", label: "The base", state: "running" }, { id: "sup:tool", label: "The tool", state: "running" }]);
+  const lines = (await json("GET", "/logs/read?source=sup:tool&tail=20")).lines.map((line: { text: string }) => line.text).join("\n");
+  expect(lines).toContain("key [hidden]"); expect(lines).not.toContain("HUSH-HUSH");
+  expect((await json("GET", "/logs/read?source=sup:ghost&tail=5")).error).toBeTruthy();
+  expect((await call("POST", "/supervisor/base/stop")).status).toBe(200);   // the base takes the tool down first
+  expect((await json("GET", "/supervisor")).services).toMatchObject({ base: { state: "stopped" }, tool: { state: "stopped" } });
+});
+
+it("gives a program the container's unprivileged user, and root only when its definition says so", async () => {
+  await start();
+  const seen: Record<string, Record<string, unknown>> = {}, fake = (name: string) => (_command: string, _args: string[], options: Record<string, unknown>) => {
+    seen[name] = options; const child = new EventEmitter(); Object.assign(child, { pid: 1, stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { setImmediate(() => child.emit("exit", 0, null)); } }); return child; };
+  let current = "";
+  const { call } = await helper({ appUid: 1234, appGid: 4321, supervisor: { settleMs: 20, readyEveryMs: 10, spawn: (command: string, args: string[], options: Record<string, unknown>) => fake(current)(command, args, options) },
+    supervised: [{ name: "plain", command: "x" }, { name: "needsroot", root: true, command: "x" }, { name: "explicit", uid: 7, gid: 8, command: "x" }] });
+  for (const name of ["plain", "needsroot", "explicit"]) { current = name; expect((await call("POST", `/supervisor/${name}/start`)).status).toBe(200); }
+  expect(seen.plain).toMatchObject({ uid: 1234, gid: 4321 });
+  expect(seen.needsroot).not.toHaveProperty("uid");
+  expect(seen.explicit).toMatchObject({ uid: 7, gid: 8 });
 });
 
 it("keeps a database that was left behind, with its password, when Zilean is installed again", async () => {

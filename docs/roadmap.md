@@ -47,6 +47,7 @@ After the one-time install, nothing should need a command or a file on the serve
 | v0.42.0 | Shuffle button on a show page: plays a random episode, one not yet watched if there is one | S | none |
 | v0.43.0 | Start of services inside the StreamRD container: the supervisor core and the plan (docs/in-container-services.md); nothing uses it yet | M | none |
 | v0.44.0 | StreamRD and Phosphor are licensed under GPL-3.0 (same as DUMB), from this version on | S | none |
+| v0.45.0 | Programs run inside the container are listed, controlled and logged: supervisor API in the helper, shown in Admin → Monitor; they run as the unprivileged user | S | none |
 | next | Seerr, Tautulli and Maintainerr set up for the owner (they need a Plex or Jellyfin sign-in) | M | none |
 | next | Requests work like Seerr: one search for movies and shows, one click to request, a season and episode choice, plain statuses | M | none |
 | v0.28.2 | When a season ends, the player offers the next season's download (Play season 2) | S | none |

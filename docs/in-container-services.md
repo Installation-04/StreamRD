@@ -11,8 +11,8 @@
 4. **Guided setup page**: pick what you want ("my Real-Debrid library with Jellyfin"), see the plan, press Apply. Later.
 
 ## Order of work (each its own small release; nothing existing is removed)
-1. Supervisor core (this release). Not yet used by anything.
-2. Wire it to the Docker helper's API and the Monitor page.
+1. Supervisor core (v0.43.0). Done.
+2. Wire it to the Docker helper's API and the Monitor page (v0.45.0). Done; no program is registered yet.
 3. Release downloader, then Zurg and the rclone mount in the container.
 4. Zilean and its database.
 5. Jellyfin and Plex, then Prowlarr, Sonarr and Radarr, then Seerr and Bazarr.

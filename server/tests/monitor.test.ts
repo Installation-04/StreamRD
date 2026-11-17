@@ -16,7 +16,7 @@ async function helper() {
     const url = new URL(req.url!, "http://x");
     if (url.pathname === "/logs/sources") return void res.end(JSON.stringify({ sources: [
       { id: "core:streamrd-api", state: "running", lines: 12 }, { id: "core:qbittorrent", state: "running", lines: 3 }, { id: "app:sonarr", state: "running" }, { id: "app:radarr", state: "absent" },
-      { id: "app:plex", state: "stopped" }, { id: "svc:zurg", state: "running" }, { id: "svc:zilean", state: "absent" }, { id: "svc:unknown-thing", state: "running" }, { id: "app:nothing-known", state: "running" },
+      { id: "app:plex", state: "stopped" }, { id: "svc:zurg", state: "running" }, { id: "svc:zilean", state: "absent" }, { id: "svc:unknown-thing", state: "running" }, { id: "app:nothing-known", state: "running" }, { id: "sup:tool", label: "The tool", state: "running" }, { id: "sup:gone", state: "running" },
     ] }));
     if (url.pathname === "/logs/read") { const source = url.searchParams.get("source"); return void res.end(JSON.stringify({ source, lines: source === "all"
       ? [{ time: "2026-11-15T10:00:01.000000000Z", source: "svc:zurg", text: "mounted" }, { time: "2026-11-15T10:00:03.000000000Z", source: "core:streamrd-api", text: "listening" }]
@@ -43,6 +43,7 @@ it("lists what can be read, in plain words and groups, leaving out what is not i
     { id: "app:sonarr", label: "Sonarr", group: "Add-ons", state: "running" },
     { id: "app:plex", label: "Plex", group: "Media servers", state: "stopped" },
     { id: "svc:zurg", label: "Zurg", group: "Services", state: "running" },
+    { id: "sup:tool", label: "The tool", group: "Services", state: "running" },   // a program run inside the container; one with no name is left out
   ]);
 });
 
@@ -52,6 +53,7 @@ it("reads one program's output, filters it, and merges every program with Stream
   const one = await request(app).get("/api/admin/monitor/logs?source=svc:zurg&tail=50").set(auth(admin.token));
   expect(one.status).toBe(200); expect(one.body.lines.map((line: { text: string }) => line.text)).toEqual(["Mounted /mnt/zurg", "ERROR something failed"]);
   expect(asked).toContain("GET /logs/read?source=svc%3Azurg&tail=50");
+  expect((await request(app).get("/api/admin/monitor/logs?source=sup:tool&tail=5").set(auth(admin.token))).status).toBe(200);
   const filtered = await request(app).get("/api/admin/monitor/logs?source=svc:zurg&q=error").set(auth(admin.token));
   expect(filtered.body.lines).toHaveLength(1);
   const all = await request(app).get("/api/admin/monitor/logs?source=all&tail=10").set(auth(admin.token));

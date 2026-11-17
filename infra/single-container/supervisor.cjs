@@ -29,6 +29,7 @@ function createSupervisor(options = {}) {
     if (!NAME.test(definition.name || '')) throw Object.assign(new Error('A service name is lower-case letters, digits and dashes'), { status: 400 });
     if (typeof definition.command !== 'string' || !definition.command) throw Object.assign(new Error(`${definition.name} has no command`), { status: 400 });
     if (definition.args !== undefined && !(Array.isArray(definition.args) && definition.args.every(arg => typeof arg === 'string'))) throw Object.assign(new Error(`${definition.name}: args must be a list of text`), { status: 400 });
+    for (const key of ['uid', 'gid']) if (definition[key] !== undefined && !(Number.isInteger(definition[key]) && definition[key] >= 0)) throw Object.assign(new Error(`${definition.name}: ${key} must be a whole number`), { status: 400 });
     if (definition.dependsOn !== undefined && !(Array.isArray(definition.dependsOn) && definition.dependsOn.every(dep => NAME.test(dep)))) throw Object.assign(new Error(`${definition.name}: dependsOn must be a list of service names`), { status: 400 });
   }
   function register(definition) {
@@ -75,7 +76,9 @@ function createSupervisor(options = {}) {
     entry.state = 'starting'; entry.since = Date.now(); entry.error = undefined; entry.wanted = true;
     note(name, `starting ${definition.command}`);
     let child;
-    try { child = spawn(definition.command, definition.args, { cwd: definition.cwd, env: { ...process.env, ...(definition.env || {}) }, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    // A program runs as the user and group it is given (never root unless it is defined to), so a program from the internet cannot touch what only the container may.
+    const who = Number.isInteger(definition.uid) && Number.isInteger(definition.gid) && definition.uid >= 0 ? { uid: definition.uid, gid: definition.gid } : {};
+    try { child = spawn(definition.command, definition.args, { cwd: definition.cwd, env: { ...process.env, ...(definition.env || {}) }, stdio: ['ignore', 'pipe', 'pipe'], ...who }); }
     catch (error) { entry.state = 'failed'; entry.error = redactor(definition.secrets)(error.message); note(name, `could not start: ${entry.error}`); return null; }
     entry.child = child;
     for (const [stream, label] of [[child.stdout, 'out'], [child.stderr, 'err']]) {
@@ -112,6 +115,7 @@ function createSupervisor(options = {}) {
 
   /** Starts a service and, first, everything it depends on. */
   async function start(name) {
+    record(name);   // an unknown name is a 404 before anything else is looked at
     for (const each of order([name])) {
       const entry = record(each);
       if (entry.state === 'running') continue;
