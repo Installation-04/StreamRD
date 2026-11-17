@@ -1,6 +1,6 @@
 {
   "name": "@phosphor/server",
-  "version": "0.42.0",
+  "version": "0.43.0",
   "private": true,
   "license": "GPL-3.0-only",
   "description": "Phosphor backend: auth, multiservice debrid providers, Torznab indexer search, download queue.",
