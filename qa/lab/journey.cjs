@@ -83,6 +83,11 @@ async function main() {
   const owner = await person("owner"); let kid, friend; const links = {}; const ids = {};
 
   try {
+    await step("the site can be installed as an app: a manifest with icons that load, served without signing in", async () => {
+      const m = await (await fetch(`${base}/manifest.webmanifest`)).json();
+      if (m.display !== "standalone" || m.start_url !== "/") throw new Error(`manifest is wrong: ${JSON.stringify(m)}`);
+      for (const icon of m.icons) { const r = await fetch(`${base}${icon.src}`); if (!r.ok || !/image\/png/.test(r.headers.get("content-type") || "")) throw new Error(`icon ${icon.src} did not load (${r.status})`); }
+    });
     await step("a new server sends its first visitor to create the owner account", async () => {
       await owner.page.goto(base, { waitUntil: "networkidle" });
       await owner.page.getByRole("link", { name: /create the first account/i }).click();   // not "Sign in": nobody has an account yet
