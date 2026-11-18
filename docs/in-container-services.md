@@ -13,7 +13,7 @@
 ## Order of work (each its own small release; nothing existing is removed)
 1. Supervisor core (v0.43.0). Done.
 2. Wire it to the Docker helper's API and the Monitor page (v0.45.0). Done; no program is registered yet.
-3. Release downloader, then Zurg and the rclone mount in the container.
+3. Release downloader (v0.46.0, done; not used yet), then Zurg and the rclone mount in the container. rclone comes from the image (installed with the system packages) rather than being downloaded.
 4. Zilean and its database.
 5. Jellyfin and Plex, then Prowlarr, Sonarr and Radarr, then Seerr and Bazarr.
 6. Guided setup page.
